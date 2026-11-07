@@ -4,13 +4,13 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 
 from flask import Blueprint, g, jsonify, request
 
 from .cmu import normalize_cmu_email
 from .db import db
-from .models import SchedulePlan, SchedulePlanItem, SchedulePlanShareToken, User
+from .models import SchedulePlan, SchedulePlanItem, SchedulePlanShareToken, User, _utcnow
 from .permissions import require_login
 
 
@@ -18,10 +18,6 @@ bp = Blueprint("plans", __name__, url_prefix="/api/plans")
 
 SHARE_LINK_DAYS = 30
 SHARE_LINK_MAX_USES = 20
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _hash_share_token(raw_token: str) -> str:

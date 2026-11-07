@@ -272,6 +272,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `requirements_ai.json`, `requirements_gs.json` | Empty scaffolds for future majors. Unreferenced. |
 | `scrape_soc.py` | Scraper. |
 | `soc_parse.py`, `soc_departments.py` | Shared parsing helpers. |
+| `json_io.py` | Shared `load_json` and `save_json` helpers for the pipeline scripts. |
 | `reconcile_offerings.py` | Merges `soc.json` into `courses.json` (and `data_all_courses.json`): offerings, campus flags, units. |
 | `apply_mapping_overlays.py` | Applies `mapping_overlays.json` to the catalogs. |
 | `validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. |

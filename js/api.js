@@ -298,6 +298,8 @@ async function fetchMinorCourses() {
 }
 
 // ── Flags ────────────────────────────────────────────────────
+// GET /api/flags scopes by role: students see every flag except dismissed ones;
+// faculty and admins see all flags (faculty can pass "mine=1" for only their own).
 async function apiCreateFlag(flag)        { return apiFetch('/api/flags', { method: 'POST', body: flag }); }
 async function apiListFlags(query = '')   { return apiFetch('/api/flags' + (query ? '?' + query : '')); }
 async function apiUpdateFlag(id, patch)   { return apiFetch('/api/flags/' + encodeURIComponent(id), { method: 'PATCH', body: patch }); }

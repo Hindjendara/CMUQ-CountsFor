@@ -6,7 +6,6 @@ Run after reconcile_offerings.py so overlays survive daily SOC scrapes.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -14,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data"))
 
+from json_io import load_json, save_json  # noqa: E402
 from soc_parse import normalize_course_code  # noqa: E402
 
 OVERLAYS_PATH = Path(__file__).resolve().parent / "mapping_overlays.json"
@@ -153,17 +153,6 @@ EXPECTED_GENED_MAPPINGS = {
 }
 
 
-def _load_json(path: Path):
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _save_json(path: Path, data) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-
-
 def normalize_catalog_codes(courses: list[dict]) -> int:
     """Rewrite float / compact codes to canonical XX-YYY. Returns change count."""
     changed = 0
@@ -251,7 +240,7 @@ def apply_overlays_to_courses(courses: list[dict], overlays: list[dict]) -> dict
 
 
 def apply_file(catalog_path: Path, overlays: list[dict]) -> dict:
-    data = _load_json(catalog_path)
+    data = load_json(catalog_path)
     if isinstance(data, list):
         courses = data
         wrapper = None
@@ -259,7 +248,7 @@ def apply_file(catalog_path: Path, overlays: list[dict]) -> dict:
         courses = data["courses"]
         wrapper = data
     stats = apply_overlays_to_courses(courses, overlays)
-    _save_json(catalog_path, wrapper if wrapper is not None else courses)
+    save_json(catalog_path, wrapper if wrapper is not None else courses)
     stats["catalog"] = str(catalog_path)
     return stats
 
@@ -279,7 +268,7 @@ def query_is_igi_courses(courses: list[dict]) -> list[str]:
 
 
 def verify_modern_languages(catalog_path: Path) -> dict:
-    data = _load_json(catalog_path)
+    data = load_json(catalog_path)
     courses = data["courses"] if isinstance(data, dict) else data
     igi_codes = query_is_igi_courses(courses)
     missing = sorted(set(MODERN_LANGUAGE_CODES) - set(igi_codes))
@@ -305,7 +294,7 @@ def _course_paths_by_major(course: dict) -> dict[str, set[str]]:
 
 def verify_expected_geneds(catalog_path: Path) -> dict:
     """Verify spreadsheet audit mappings are present (additive overlays may add extras)."""
-    data = _load_json(catalog_path)
+    data = load_json(catalog_path)
     courses = data["courses"] if isinstance(data, dict) else data
     by_code = {c.get("course_code"): c for c in courses if c.get("course_code")}
     missing: list[str] = []
@@ -329,7 +318,7 @@ def verify_expected_geneds(catalog_path: Path) -> dict:
 
 
 def main() -> int:
-    overlays_doc = _load_json(OVERLAYS_PATH)
+    overlays_doc = load_json(OVERLAYS_PATH)
     overlays = overlays_doc.get("overlays") or []
     catalogs = [Path(p) for p in os.environ.get("CATALOG_PATHS", "").split(";") if p.strip()]
     if not catalogs:

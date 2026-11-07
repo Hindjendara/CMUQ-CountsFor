@@ -2,7 +2,6 @@
 """Merge SOC scrape output into data/courses.json offerings and campus flags."""
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -10,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data"))
 
+from json_io import load_json, save_json  # noqa: E402
 from soc_parse import (  # noqa: E402
     apply_campus_fix,
     build_offering,
@@ -24,19 +24,6 @@ SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
 COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(ROOT / "data" / "courses.json"))
 ALL_COURSES_PATH = os.environ.get("ALL_COURSES_PATH", str(ROOT / "data_all_courses.json"))
 
-
-def _load_json(path: str):
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _save_json(path: str, data) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-
-
-ALL_COURSES_PATH = os.environ.get("ALL_COURSES_PATH", str(ROOT / "data_all_courses.json"))
 
 
 def _semester_sort_key(code: str) -> tuple[int, int]:
@@ -202,8 +189,8 @@ def stub_course_from_soc(code: str, offerings: list[dict], meta: dict | None = N
 
 
 def reconcile_file(courses_path: str, soc_path: str) -> dict:
-    soc = _load_json(soc_path)
-    data = _load_json(courses_path)
+    soc = load_json(soc_path)
+    data = load_json(courses_path)
     if isinstance(data, list):
         courses = data
         wrapper = None
@@ -239,7 +226,7 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         existing_codes.add(code)
         added += 1
 
-    _save_json(courses_path, wrapper if wrapper is not None else courses)
+    save_json(courses_path, wrapper if wrapper is not None else courses)
     return {
         "courses_updated": updated,
         "courses_added": added,
