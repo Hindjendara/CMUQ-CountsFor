@@ -206,7 +206,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `backend/` | yes | Flask API. See [section 9](#9-backend-walkthrough). | Live |
 | `data/` | yes | Catalog JSON files and the scrape pipeline scripts. See [section 14](#14-data-pipeline-soc-scrape). | Live |
 | `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `app.html`, and every `?v=` tag in `index.html`. Run by the scrape workflow. | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `tests/profile.test.js` and `tests/data.test.js`, with an in-memory `localStorage`, plus the Node-only `tests/dash-guard.test.js`. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `tests/profile.test.js`, `tests/data.test.js` and `tests/utils.test.js`, with an in-memory `localStorage`, plus the Node-only `tests/dash-guard.test.js` and `tests/app-views.test.js`. | Live |
 | `tests/` | yes | Browser test page (`tests/test.html`) and JS unit tests. | Live |
 | `.github/workflows/` | yes | `scrape.yml`, `pages.yml`, `keepalive.yml`. | Live |
 | `render.yaml` | yes | Render Blueprint for the backend and database. | Live |
@@ -603,6 +603,8 @@ Token storage: `saveAuthToken(token, true)` puts the token in localStorage ("Kee
 
 One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "accounts unavailable" banner as soon as the server answers), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `enterGuestMode()`, `init()`.
 
+`probeSession()` sends a visitor with a valid session straight to `app.html`. Only when they have already typed into the form (`userIsEngaged()`, which uses `hasTypedText()` from `utils.js`) does it stay and show "You're already signed in." with a Continue link, so typed text is never thrown away. The "Keep me signed in" checkbox does not count: its value is always "on".
+
 `js/app.js` has no sign-in screens of its own (the old in-app copy was removed in November 2026). It redirects to `index.html` whenever a sign-in is needed.
 
 ### 8.7 `js/app.js` (about 5,825 lines): the `App` object
@@ -647,7 +649,7 @@ Admin tabs, in order (`ADMIN_TABS`): `courses` (Courses), `overview` (Overview),
 
 ### 8.8 State model and browser storage
 
-All UI state is fields on `App`; it is re-rendered by writing `innerHTML` strings. There is no virtual DOM and no reactive store. After changing state you call the relevant render function (`renderTree()`, `renderShell()`, `renderLeftEmpty()` and so on).
+All UI state is fields on `App`; it is re-rendered by writing `innerHTML` strings. There is no virtual DOM and no reactive store. After changing state you call the relevant render function (`renderTree()`, `renderShell()`, `renderLeftEmpty()` and so on). `renderShell()` replaces all of `#app`, so look up `#leftBody` (or any other element inside it) after calling it, never before: an element captured earlier is detached, and writing into it leaves the panel blank.
 
 Every browser storage key (found by searching `localStorage`, `sessionStorage`, `loadStore`, `saveStore`):
 
@@ -1114,11 +1116,11 @@ python -m pytest backend/tests -q
 # Data pipeline
 python -m pytest data/tests -q
 
-# Frontend (Node, runs tests/profile.test.js and tests/data.test.js like tests/test.html,
-# then the Node-only tests/dash-guard.test.js)
+# Frontend (Node, runs tests/profile.test.js, tests/data.test.js and tests/utils.test.js
+# like tests/test.html, then the Node-only tests/dash-guard.test.js and tests/app-views.test.js)
 node scripts/run-data-tests.js
 
-# Frontend in the browser (runs tests/profile.test.js and tests/data.test.js)
+# Frontend in the browser (runs tests/profile.test.js, tests/data.test.js and tests/utils.test.js)
 python3 -m http.server 8765
 # open http://localhost:8765/tests/test.html
 ```
@@ -1129,7 +1131,7 @@ python3 -m http.server 8765
 |---|---|
 | `backend/tests` | **116 passed, 6 failed** |
 | `data/tests` | 88 passed |
-| `node scripts/run-data-tests.js` | 105 passed, 1 failed (profile 46/46, data 59/60; counted after the runner started loading `profile.test.js` in November 2026) |
+| `node scripts/run-data-tests.js` | 123 passed, 1 failed on November 8, 2026 (profile 46/46, data 63/64, utils 5/5, dash guard 3/3, app views 6/6) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
@@ -1155,6 +1157,8 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `data/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list and `scripts/bump_cf_build.py`.
 - `tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
 - `tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also as `&mdash;`, `&ndash;` or `—`) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason: today only the four `LABEL_OVERRIDES` keys that must match requirement paths in the data.
+- `tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen.
+- `tests/utils.test.js` covers `hasTypedText()` (the landing page check for typed text).
 - `Testing/` (capital T) is not a test suite; it is the SOC mock server.
 
 There is no CI that runs the backend tests. Only the scrape workflow runs the two SOC parser test files.
@@ -1393,6 +1397,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 - Done in November 2026: `js/landing.js` no longer keeps its own copies of the backend URL, token storage, fetch wrapper, auth calls, `esc`, `showToast` or the CMU email check. It loads `js/api.js` and `js/utils.js` like the app. The frontend has one CMU email check (`normalizeCmuEmail` in `js/utils.js`) and the backend has one (`backend/cmu.py`).
 - Dead code: unused `users.reset_token_hash` and `reset_token_expires` columns (kept on purpose: dropping them is a schema change). The rest of the dead code found in the November 2026 audit was removed: the old in-app sign-in screens and their CSS, unused `App` methods, `isStudentRole`, `ROLE_GROUPS`, `FACULTY_GROUPS`, `getOnboardingUiGroup`, `apiUpdateDirectoryEntry`, `apiGetMyFlags`, the `API_BASE` and `GITHUB_RAW` course data fallbacks, `role_group_for`, `_can_manage_users`, `_ensure_staff_directory_table`, the `StaffDirectoryEntry` alias, the legacy `/api/directory/staff` routes, and about 170 CSS classes that nothing rendered.
 - Also removed in November 2026: `data_all_courses.json` (a 24 MB copy of `data/courses.json` that nothing read; the pipeline now writes only `data/courses.json`), the empty `data/requirements_ai.json` and `data/requirements_gs.json` placeholders, the stale `backend/schema.sql`, `data/scripts/inspect_mappings.py`, and the inline cached-CSS `<style>` block in `app.html` (its rules already live in `css/styles.css`). The partner fork may still carry `data_all_courses.json`.
+- Fixed on November 8, 2026: going home with a course or schedule open (guest Student and Faculty switch, "Back to home", the navbar logo from a schedule) left the main panel blank, because `renderLeftEmpty()` captured `#leftBody` before `renderShell()` replaced it. Also fixed: a signed-in visitor opening `index.html` saw "You're already signed in." instead of going to the app, because the "Keep me signed in" checkbox counted as typed input.
 - In-memory `_cache` in `api.js` and the 24 MB catalog download make first load slow (UX review items 4 to 12).
 - `cf_flags` local queue has no cap.
 

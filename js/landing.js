@@ -897,12 +897,14 @@
     return onLogin(event);
   }
 
+  // True when redirecting to the app would throw away text the user typed in
+  // the card. Only typed text counts (hasTypedText in utils.js): the "Keep me
+  // signed in" checkbox always has the value "on", and ticking it loses nothing
+  // when the session is already valid.
   function userIsEngaged() {
     const card = document.getElementById('landingCard');
     if (!card) return false;
-    return Array.prototype.some.call(card.querySelectorAll('input'), function (i) {
-      return (i.value || '').length > 0;
-    });
+    return hasTypedText(card.querySelectorAll('input, textarea'));
   }
 
   // Runs in the background after the panel is already on screen; must never

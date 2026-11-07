@@ -304,7 +304,9 @@ const App = {
       this.renderTree();
     } catch (err) {
       console.error(err);
-      if (body) body.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Failed to load data: ${esc(err.message)}</div></div>`;
+      // Look #leftBody up again: renderLeftEmpty() may have re-rendered the shell.
+      const failBody = document.getElementById('leftBody');
+      if (failBody) failBody.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Failed to load data: ${esc(err.message)}</div></div>`;
     }
   },
 
@@ -1768,15 +1770,19 @@ const App = {
   },
 
   renderLeftEmpty() {
-    const el = document.getElementById('leftBody');
-    if (!el) return;
+    // No main shell on screen (onboarding or login): leave that screen alone.
+    if (!document.getElementById('leftBody')) return;
     const wasPlan = this._homeView === 'plan';
     const hadCourse = !!this.selectedCourse;
     this._homeView = 'home';
     this._planDetailId = null;
     this._planCourseReturn = null;
     this.selectedCourse = null;
+    // renderShell() replaces all of #app, so look #leftBody up only after it.
+    // An element captured before it is detached and the panel would stay blank.
     if (wasPlan || hadCourse) this.renderShell();
+    const el = document.getElementById('leftBody');
+    if (!el) return;
     const explBtn = document.getElementById('exploreInlineBtn');
     if (explBtn) explBtn.style.display = 'none';
     el.innerHTML = this._renderHome();
