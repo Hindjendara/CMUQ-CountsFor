@@ -172,7 +172,7 @@ There are three different "base URLs" in `js/api.js`. Do not confuse them.
 
 ### 3.4 Authentication model
 
-- Two ways to prove identity: **email + password** (`/api/auth/register`, `/api/auth/login`) and **Google Sign-In** (`/api/auth/google`, verifies a Google ID token against `GOOGLE_CLIENT_ID`). A third, **legacy passwordless route `/api/auth/email` still exists and is a serious security hole** (see [21.1](#211-security-issues-fix-first)).
+- Two ways to prove identity: **email + password** (`/api/auth/register`, `/api/auth/login`) and **Google Sign-In** (`/api/auth/google`, verifies a Google ID token against `GOOGLE_CLIENT_ID`). The old passwordless route `/api/auth/email` was removed in November 2026.
 - After sign-in the server sets a signed Flask session cookie `cf_session` **and** returns an `auth_token` in the JSON body. The token is an `itsdangerous` signed `{"uid": id}` valid for 30 days (`backend/tokens.py`). The frontend stores it and sends `Authorization: Bearer <token>` on every call, because browsers often block third-party cookies between `github.io` and `onrender.com`.
 - Token storage: `sessionStorage['cf_auth_token']` by default, or `localStorage['cf_auth_token']` if the user ticked "Keep me signed in" on the landing page.
 - On every sign-in the backend recomputes the role from the directory (`_sync_directory_profile()` in `backend/auth.py`). This is the single most important rule to understand about roles. See [section 7](#7-signing-in-locally-and-making-yourself-admin).
@@ -480,18 +480,7 @@ curl -s -c /tmp/cf.jar -X POST -H 'Content-Type: application/json' \
 curl -s -b /tmp/cf.jar http://localhost:5050/api/me
 ```
 
-### 7.3 The legacy `/api/auth/email` route (local convenience only)
-
-`POST /api/auth/email` with `{"email": "..."}` signs in as that email **with no password**, creating the user if needed. It is handy for local testing:
-
-```bash
-curl -s -c /tmp/cf.jar -X POST -H 'Content-Type: application/json' \
-  -d '{"email":"someone@andrew.cmu.edu"}' http://localhost:5050/api/auth/email
-```
-
-The UI no longer calls it (`apiSignInWithEmail` in `js/api.js` is unused). **It is also live in production**, which means anyone can sign in as any person, including an admin, by knowing their email. See [21.1](#211-security-issues-fix-first). Remove it or put it behind a dev-only flag before doing anything else.
-
-### 7.4 Make yourself admin locally
+### 7.3 Make yourself admin locally
 
 Pick one:
 
@@ -530,7 +519,7 @@ EOF
 
 After any option, sign in again. `/api/me` should show `"role": "admin"`, `"role_group": "admin"`, `"is_admin": true`, and the navbar shows the **Admin** button.
 
-### 7.5 Password reset locally
+### 7.4 Password reset locally
 
 With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url`. Open it (it points to `index.html?token=...`), choose a new password. Without that flag and without an email provider the endpoint returns 503 and the UI offers Google recovery.
 
@@ -601,7 +590,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 |---|---|---|
 | Course data | `fetchAllCourses()`, `fetchMinorCourses()` | static files (see 3.3) |
 | Backend URL and token | `getBackendUrl()`, `isBackendConfigured()`, `getAuthToken()`, `saveAuthToken()`, `clearAuthToken()`, `getGoogleClientId()` | none |
-| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSignInWithEmail` (deprecated, unused), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
+| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
 | Admin console | `apiAdminOverview`, `apiAdminInsights(semester)`, `apiAdminActivity(query)` | `/api/admin/*` |
 | Course edits | `apiGetCourseOverrides` (10 s timeout), `apiAddCourse`, `apiEditCourse`, `apiArchiveCourse`, `apiRestoreCourse`, `apiRevertCourse` | `/api/courses/overrides` |
@@ -721,10 +710,9 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 - Passwords: Werkzeug `generate_password_hash` and `check_password_hash`. Minimum 8 characters.
 - `register`: CMU email only, checks `ALLOWED_EMAIL_DOMAIN`, rejects if the email already has a password (409). If the user exists without a password (for example signed in with Google before), it sets the password. Applies the directory, writes the session, returns the user plus `auth_token` (201).
 - `login`: email and password. Clear messages when the account has no password (`no_password_set`).
-- `forgot-password` and `reset-password`: see 6.1 and 7.5. Reset tokens are random, stored as SHA-256 hashes in `password_reset_tokens`, single use, expire after `RESET_TOKEN_MINUTES`. The response is the same whether or not the account exists.
+- `forgot-password` and `reset-password`: see 6.1 and 7.4. Reset tokens are random, stored as SHA-256 hashes in `password_reset_tokens`, single use, expire after `RESET_TOKEN_MINUTES`. The response is the same whether or not the account exists.
 - `set-password`: signed-in user sets a password without a token (Google recovery flow).
 - `google`: verifies the ID token with `google.oauth2.id_token.verify_oauth2_token`, requires `email_verified`, upserts by `google_sub` then by email.
-- `email`: legacy passwordless sign-in. See 21.1.
 - `logout`: clears the session (the frontend also clears the token).
 - `GET /api/me`: the user, plus a fresh `auth_token`.
 - `PATCH /api/me`: allowed fields `name`, `role`, `primary_program`, `minor_code`, `minor_codes`, `advisor_scope`, `department_scope`, `department`. Validates the whole resulting profile with `_validate_consistent_profile()`: students need a major in `CS IS BA BS AI GS`, no department, no advisor scope; faculty and admin need a valid department and program, no minors, no advisor scope. A non-admin can only set their own role to `student`; an admin cannot change their own role.
@@ -789,7 +777,6 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | POST | `/api/auth/forgot-password` | public | `auth.py` | Start password reset |
 | POST | `/api/auth/reset-password` | public | `auth.py` | Finish reset with token |
 | POST | `/api/auth/set-password` | login | `auth.py` | Set password without token (after Google sign-in) |
-| POST | `/api/auth/email` | public | `auth.py` | **Legacy passwordless sign-in. Insecure.** |
 | POST | `/api/auth/google` | public | `auth.py` | Google ID token sign-in |
 | POST | `/api/auth/logout` | public | `auth.py` | Clear session |
 | GET | `/api/me` | login (401 otherwise) | `auth.py` | Current user plus fresh token |
@@ -951,7 +938,7 @@ Store counts, not behaviour: no IP addresses, user agents, locations or per-pers
 
 ### 13.5 Recipes
 
-- **See it locally with data:** sign in a few test accounts through `POST /api/auth/email` and reload `app.html` a few times; each reload is an app open.
+- **See it locally with data:** create a few test accounts through **Create account** (or `POST /api/auth/register`) and reload `app.html` a few times; each reload is an app open.
 - **Add a new sign-in method:** call `mark_signed_in(user, "<method>")` in the new route before its commit, and add a label to `SIGN_IN_METHOD_LABELS` in `js/app.js`.
 - **Add a window (for example 365 days):** add it to `SIGN_IN_WINDOWS` in `backend/admin.py`; the switch buttons come from the API's `windows` list.
 
@@ -1134,11 +1121,12 @@ Known failures (all pre-date the admin page; the tests are stale, the code is th
 | `test_auth.py::test_google_signin_marks_seeded_faculty_complete` | Relies on a seed mechanism the tests no longer wire up (`TestConfig.SEED_USERS_PATH = ""` and the directory skips default files under `TESTING`), so the user stays a student. |
 | `test_auth.py::test_patch_me_accepts_consistent_advisor_minor` | Faculty roles may no longer have `advisor_scope`. |
 | `test_auth.py::test_google_signin_syncs_directory_role_on_relogin` | Monkeypatches `backend.auth.load_merged_directory`, which no longer exists there. |
-| `test_auth.py::test_email_signin_normalizes_cmu_domain` | Expects faculty recognition from a seed that is not loaded in tests. |
 | `test_auth.py::test_register_faculty_from_seed` | Same seed issue. |
 | `test_users.py::test_area_head_can_patch_user_role` | User management is now admin only (403). |
 | `test_users.py::test_seeded_professor_skips_incomplete_on_login` | Same seed issue. |
 | JS `annotateDoubleCounters: focused-dual marks courses fulfilling both programs` | Known stale test (also listed in `docs/archive/UX_REVIEW_2026-07-17.md` item 52). |
+
+A seventh failure, `test_auth.py::test_email_signin_normalizes_cmu_domain`, went away when the passwordless `/api/auth/email` route and its tests were removed.
 
 Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in a fixture, or by inserting `DirectoryEntry` rows) is a good first task for a new maintainer.
 
@@ -1368,16 +1356,15 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 
 ### 21.1 Security issues (fix first)
 
-1. **Passwordless sign-in in production.** `POST /api/auth/email` signs in as any CMU email with no proof of ownership, including directory admins (verified locally: it returns `role: admin` and a token for a seeded admin email). The route is live on `countsfor-summer-26.onrender.com` (it answers with a validation error for a non-CMU email). The UI no longer uses it. Delete the route (and its tests) or gate it behind a dev-only env flag.
-2. **Faculty can make themselves admin.** All `/api/directory/entries` write routes accept `role: "admin"` from any faculty user (verified locally: a professor upserted their own entry to admin and was admin after signing in again). Restrict admin grants (and probably all directory writes) to `ROLE_GROUP_ADMIN`.
-3. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
+1. **Faculty can make themselves admin.** All `/api/directory/entries` write routes accept `role: "admin"` from any faculty user (verified locally: a professor upserted their own entry to admin and was admin after signing in again). Restrict admin grants (and probably all directory writes) to `ROLE_GROUP_ADMIN`.
+2. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
 
 ### 21.2 Operational issues
 
 1. The scrape workflow on this repo failed every day from July 9 to November 3, 2026 because it never installed `pytest`. Fixed on November 3 (an "Install test runner" step in `scrape.yml`). Check the Actions tab after the next 12:00 UTC run; until a run succeeds, live data stays at the August 13, 2026 scrape (14.2).
 2. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
 3. Render service naming and ownership are unclear (15.2). Confirm in the dashboard; remove the stray `countsfor-backend` service and `countsfor-db` database if they still exist.
-4. 7 backend tests and 1 JS test fail (16.2). No CI runs the backend tests.
+4. 6 backend tests and 1 JS test fail (16.2). No CI runs the backend tests.
 5. `scripts/run-data-tests.js` does not load `tests/profile.test.js`.
 6. Email reset provider status in production unknown.
 
@@ -1385,7 +1372,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 
 - The no-dash rule (section 18) was fully applied to user-facing text on November 3, 2026. Check new strings before committing: `grep -n "[—–]" js/*.js *.html` should only find code comments.
 - Duplicate auth UIs in `js/landing.js` and `js/app.js`.
-- Dead code: `_ensure_staff_directory_table()` in `migrate.py`, `StaffDirectoryEntry` alias, unused `users.reset_token_hash` and `reset_token_expires` columns, `apiSignInWithEmail`, legacy `/api/directory/staff` routes, `API_BASE` and `GITHUB_RAW` fallbacks.
+- Dead code: `_ensure_staff_directory_table()` in `migrate.py`, `StaffDirectoryEntry` alias, unused `users.reset_token_hash` and `reset_token_expires` columns, legacy `/api/directory/staff` routes, `API_BASE` and `GITHUB_RAW` fallbacks.
 - `data_all_courses.json`: nothing in the app reads it, but `data/reconcile_offerings.py`, `data/apply_mapping_overlays.py`, a data test and `scrape.yml` still write or check it. Remove those references together, and sync the partner fork, if you want it gone.
 - `backend/schema.sql` covers 7 of 14 tables.
 - `index.html` `?v=` tags are not bumped by `bump_cf_build.py`.

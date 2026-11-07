@@ -8,7 +8,7 @@ from backend.app import create_app
 from backend.config import TestConfig
 from backend.db import db
 from backend.models import User
-from .conftest import login
+from .conftest import login, _make_user
 
 
 def _fake(email, sub):
@@ -370,43 +370,9 @@ def test_admin_directory_overrides_json_seed_role(tmp_path):
     assert r.get_json()["role"] == "admin"
 
 
-# ── CMU email sign-in ───────────────────────────────────────
+# ── Faculty directory recognition ───────────────────────────
 
-def test_email_signin_creates_student(client):
-    r = client.post("/api/auth/email", json={"email": "student1@andrew.cmu.edu"})
-    assert r.status_code == 200, r.get_json()
-    body = r.get_json()
-    assert body["email"] == "student1@andrew.cmu.edu"
-    assert body["role"] == "student"
-    assert body["profile_completed"] is False
-
-
-def test_email_signin_rejects_non_cmu(client):
-    r = client.post("/api/auth/email", json={"email": "user@gmail.com"})
-    assert r.status_code == 400
-    assert r.get_json()["error"] == "invalid_email"
-
-
-def test_email_signin_normalizes_cmu_domain(tmp_path):
-    seed = tmp_path / "seed_users.json"
-    seed.write_text(json.dumps([
-        {"email": "prof@andrew.cmu.edu", "name": "Prof", "role": "professor", "primary_program": "CS"},
-    ]))
-
-    class SeedConfig(TestConfig):
-        SEED_USERS_PATH = str(seed)
-
-    app = create_app(SeedConfig)
-    with app.test_client() as c:
-        r = c.post("/api/auth/email", json={"email": "prof@cmu.edu"})
-    body = r.get_json()
-    assert r.status_code == 200
-    assert body["email"] == "prof@andrew.cmu.edu"
-    assert body["role"] == "professor"
-    assert body["profile_completed"] is True
-
-
-def test_email_signin_faculty_from_directory_format(tmp_path):
+def test_google_signin_faculty_from_directory_format(tmp_path):
     seed = tmp_path / "faculty_directory.json"
     seed.write_text(json.dumps({
         "people": [
@@ -420,7 +386,9 @@ def test_email_signin_faculty_from_directory_format(tmp_path):
 
     app = create_app(SeedConfig)
     with app.test_client() as c:
-        r = c.post("/api/auth/email", json={"email": "hbouamor@andrew.cmu.edu"})
+        with patch("backend.auth.id_token.verify_oauth2_token",
+                   return_value=_fake("hbouamor@andrew.cmu.edu", "g-hb")):
+            r = c.post("/api/auth/google", json={"credential": "stub"})
     body = r.get_json()
     assert r.status_code == 200
     assert body["role"] == "professor"
@@ -607,10 +575,9 @@ def test_register_login_normalizes_cmu_domain(client, tmp_path):
     assert body["role_group"] == "faculty"
 
 
-def test_login_passwordless_user_gets_clear_error(client):
-    """Google/legacy users without password_hash need Create account, not generic 401."""
-    client.post("/api/auth/email", json={"email": "googleonly@andrew.cmu.edu", "name": "Google Only"})
-    client.post("/api/auth/logout")
+def test_login_passwordless_user_gets_clear_error(client, app):
+    """Users without password_hash need Create account, not generic 401."""
+    _make_user(app, "googleonly@andrew.cmu.edu", name="Google Only", google_sub=None)
     r = client.post("/api/auth/login", json={
         "email": "googleonly@andrew.cmu.edu",
         "password": "anypassword1",

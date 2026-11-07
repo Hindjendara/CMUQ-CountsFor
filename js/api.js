@@ -253,10 +253,6 @@ async function apiForgotPassword(email) {
 async function apiResetPassword(body) {
   return apiFetch('/api/auth/reset-password', { method: 'POST', body });
 }
-/** @deprecated use apiLogin */
-async function apiSignInWithEmail(email, name) {
-  return apiFetch('/api/auth/email', { method: 'POST', body: { email, name: name || undefined } });
-}
 async function apiLogout()  {
   const r = await apiFetch('/api/auth/logout', { method: 'POST' });
   clearAuthToken();

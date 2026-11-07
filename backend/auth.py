@@ -474,33 +474,6 @@ def set_password():
     return jsonify(ok=True, message="Password set. You can sign in with it next time.")
 
 
-# ── Legacy email sign-in (passwordless — deprecated) ─────────
-@bp.route("/auth/email", methods=["POST"])
-def email_signin():
-    """Body: { "email": "name@andrew.cmu.edu" [, "name": "Display Name"] }
-    Campus-only login for GH Pages when Google SSO is awkward. Faculty in the
-    seed file are recognized automatically; everyone else is a student."""
-    data = request.get_json(silent=True) or {}
-    email = normalize_cmu_email(data.get("email") or "")
-    if not email:
-        return jsonify(
-            error="invalid_email",
-            message="Enter a valid CMU email (@andrew.cmu.edu, @cmu.edu, or @qatar.cmu.edu).",
-        ), 400
-
-    if not _email_allowed(email):
-        allowed_domain = current_app.config.get("ALLOWED_EMAIL_DOMAIN") or "andrew.cmu.edu"
-        return jsonify(
-            error="domain_not_allowed",
-            message=f"Only {allowed_domain} accounts are allowed.",
-        ), 403
-
-    name = (data.get("name") or "").strip() or email.split("@", 1)[0].replace(".", " ").title()
-    user = _upsert_user_from_login(email, name, method="email_link")
-    _write_session(user)
-    return jsonify(_auth_payload(user))
-
-
 # ── Google Sign-In ───────────────────────────────────────────
 @bp.route("/auth/google", methods=["POST"])
 def google_signin():

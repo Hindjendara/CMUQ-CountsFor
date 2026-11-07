@@ -14,6 +14,16 @@ def _add_flag(client, user, code="15-122", **kw):
     return r.get_json()["id"]
 
 
+def _register(client, email, password="testpass12"):
+    """Sign in for real through the password registration route."""
+    client.post("/api/auth/logout")
+    return client.post("/api/auth/register", json={
+        "email": email,
+        "password": password,
+        "confirm_password": password,
+    })
+
+
 def test_admin_endpoints_require_admin(client, student, professor):
     for user in (student, professor):
         login(client, user)
@@ -130,9 +140,9 @@ def test_sign_ins_requires_admin(client, student, professor):
 
 
 def test_sign_in_and_visits_are_tracked(client, app, admin):
-    # A real sign-in through the email route records an event and a day row.
-    r = client.post("/api/auth/email", json={"email": "newkid@andrew.cmu.edu"})
-    assert r.status_code == 200
+    # A real sign-in (account registration) records an event and a day row.
+    r = _register(client, "newkid@andrew.cmu.edu")
+    assert r.status_code == 201, r.get_json()
     client.get("/api/me")
     client.get("/api/me")
 
@@ -145,17 +155,17 @@ def test_sign_in_and_visits_are_tracked(client, app, admin):
     assert kid["sign_ins"] == 1
     assert kid["visits"] == 2
     assert kid["days_active"] == 1
-    assert kid["last_method"] == "email_link"
+    assert kid["last_method"] == "register"
     assert kid["is_new"] is True
-    assert body["by_method"].get("email_link") == 1
+    assert body["by_method"].get("register") == 1
     assert body["totals"]["active_users"] >= 1
     assert body["daily"][-1]["users"] >= 1
     assert sum(body["by_hour"]) >= 1
 
 
 def test_overview_active_week_matches_sign_ins(client, app, admin):
-    client.post("/api/auth/email", json={"email": "a1@andrew.cmu.edu"})
-    client.post("/api/auth/email", json={"email": "a2@andrew.cmu.edu"})
+    _register(client, "a1@andrew.cmu.edu")
+    _register(client, "a2@andrew.cmu.edu")
     login(client, admin)
     overview = client.get("/api/admin/overview").get_json()
     sign_ins = client.get("/api/admin/sign-ins").get_json()
