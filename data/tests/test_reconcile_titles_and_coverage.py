@@ -127,6 +127,60 @@ def test_soc_ingested_offered_follows_offerings(tmp_path):
     assert rows["85-211"]["offered"] == ["S25"], "catalog rows keep their history"
 
 
+def test_reused_number_keeps_existing_previous_course_name(tmp_path):
+    soc = {"semesters": {"F26": {"courses": [soc_course("54229", "Trial by Combat")]}}}
+    row = catalog_row("54-229", "Oswald: The Return", previous_course_name="Hamlet Machine")
+    stats, rows, _ = run_reconcile(tmp_path, soc, [row])
+    assert rows["54-229"]["course_name"] == "Trial by Combat"
+    assert rows["54-229"]["previous_course_name"] == "Hamlet Machine"
+    assert stats["reused_numbers"] == ["54-229: Oswald: The Return -> Trial by Combat"]
+
+
+def test_return_to_previous_course_name_is_not_a_reuse(tmp_path):
+    soc = {"semesters": {"S27": {"courses": [soc_course("06799", "Graduate Teaching Experience")]}}}
+    row = catalog_row("06-799", "Problems in Chemical Engineering",
+                      previous_course_name="Graduate Teaching Experience")
+    stats, rows, _ = run_reconcile(tmp_path, soc, [row])
+    assert rows["06-799"]["course_name"] == "Graduate Teaching Experience"
+    assert rows["06-799"]["previous_course_name"] == "Graduate Teaching Experience"
+    assert stats["reused_numbers"] == []
+
+
+def test_semester_order_is_spring_summer_fall(tmp_path):
+    soc = {"semesters": {
+        "S26": {"courses": [soc_course("21090", "Spring Title")]},
+        "M26": {"courses": [soc_course("21090", "Summer Title")]},
+        "F25": {"courses": [soc_course("21090", "Fall Title")]},
+    }}
+    _, meta = offerings_from_soc(soc)
+    assert meta["21-090"]["title"] == "Summer Title", "M26 is newer than S26"
+    stub = catalog_row("21-090", "Summer Title", offered=[], soc_ingested=True)
+    _, rows, _ = run_reconcile(tmp_path, soc, [stub])
+    assert rows["21-090"]["offered"] == ["F25", "S26", "M26"]
+
+
+def test_tba_placeholder_title_falls_back_to_older_title():
+    soc = {"semesters": {
+        "S27": {"courses": [
+            soc_course("54425", "Production Prep: TBA 5 : Directing"),
+            soc_course("54463", "Production Prep: TBA 7 : Directing"),
+        ]},
+        "F26": {"courses": [soc_course("54425", "Production Prep: Fool For Love : Directing")]},
+    }}
+    _, meta = offerings_from_soc(soc)
+    assert meta["54-425"]["title"] == "Production Prep: Fool For Love"
+    assert meta["54-463"]["title"] == "Production Prep: TBA 7", "used when there is nothing else"
+
+
+def test_soc_ingested_offered_keeps_semesters_outside_soc_json(tmp_path):
+    soc = {"semesters": {"F26": {"courses": [soc_course("85110", "Cognitive Psychology")]}}}
+    stub = catalog_row("85-110", "Cognitive Psychology", offered=["S24", "S26"], soc_ingested=True)
+    gone = catalog_row("62-318", "Gone", offered=["F26"], soc_ingested=True)
+    _, rows, _ = run_reconcile(tmp_path, soc, [stub, gone])
+    assert rows["85-110"]["offered"] == ["S24", "S26", "F26"]
+    assert rows["62-318"]["offered"] == [], "F26 is in soc.json and the row is not"
+
+
 def test_new_stub_uses_cleaned_title(tmp_path):
     soc = {"semesters": {"S27": {"courses": [soc_course("85716", "Graduate Research Communication : research presentation")]}}}
     _, rows, _ = run_reconcile(tmp_path, soc, [])

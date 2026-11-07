@@ -214,6 +214,18 @@ def clean_soc_title(title: str | None) -> str | None:
     return t
 
 
+_TBA_TOKEN_RE = re.compile(r"\bTBA\b", re.IGNORECASE)
+
+
+def is_placeholder_title(title: str | None) -> bool:
+    """True for a cleaned title that still holds a "TBA" placeholder.
+
+    Production Prep courses are listed as "Production Prep: TBA 5" until the
+    show is chosen. Such a title is used only when no semester has another.
+    """
+    return bool(title) and bool(_TBA_TOKEN_RE.search(title))
+
+
 def expected_campus_for_course(course_number: str, title: str | None = None) -> str | None:
     """Return forced campus for known mis-tagged courses."""
     num = code_to_course_number(course_number)

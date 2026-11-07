@@ -18,6 +18,7 @@ from soc_parse import (  # noqa: E402
     code_to_course_number,
     course_number_to_code,
     is_cancelled_section,
+    is_placeholder_title,
     normalize_course_code,
     parse_soc_units,
     titles_match,
@@ -31,7 +32,9 @@ COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(ROOT / "data" / "courses.
 def _semester_sort_key(code: str) -> tuple[int, int]:
     if not code or len(code) < 3:
         return (0, 0)
-    season_rank = {"F": 3, "S": 2, "M": 1, "N": 0}
+    # Within a year: spring (S), then summer (M), then fall (F), as in
+    # sortSemesters in js/data.js.
+    season_rank = {"S": 1, "M": 2, "F": 3, "N": 0}
     try:
         year = 2000 + int(code[1:3])
     except ValueError:
@@ -43,6 +46,7 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
     """course_code -> offerings and course_code -> SOC metadata across all semesters."""
     by_code: dict[str, list[dict]] = {}
     meta_by_code: dict[str, dict] = {}
+    placeholders: dict[str, str] = {}
     semesters = soc.get("semesters") or {}
 
     for sem_code in sorted(semesters.keys(), key=_semester_sort_key, reverse=True):
@@ -56,12 +60,16 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
             # Semesters are walked newest first, so the first value seen wins:
             # an older semester only fills a field the newer ones left empty.
             # "title" is the cleaned title (clean_soc_title), None if no
-            # semester has a usable one.
+            # semester has a usable one. A "TBA" placeholder title is kept
+            # aside and used only when no semester has another title.
             prev = meta_by_code.setdefault(
                 code, {"title": None, "units": None, "department": None}
             )
-            if prev["title"] is None:
-                prev["title"] = clean_soc_title(title)
+            cleaned = clean_soc_title(title)
+            if is_placeholder_title(cleaned):
+                placeholders.setdefault(code, cleaned)
+            elif prev["title"] is None:
+                prev["title"] = cleaned
             if prev["units"] is None and parse_soc_units(units) is not None:
                 prev["units"] = units
             if prev["department"] is None and dept:
@@ -77,6 +85,9 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
                 off["campus"] = apply_campus_fix(num, title, off.get("campus"))
                 if off["campus"]:
                     by_code.setdefault(code, []).append(off)
+    for code, title in placeholders.items():
+        if meta_by_code[code]["title"] is None:
+            meta_by_code[code]["title"] = title
     return by_code, meta_by_code
 
 
@@ -93,17 +104,26 @@ def adopt_soc_title(course: dict, meta: dict | None) -> dict:
     The SOC is the rule for names. When cleaning leaves nothing usable (for
     example "tba This Section Cancelled") the catalog name is kept.
     titles_match only detects a reused number: the old name goes into
-    previous_course_name for review. Requirement mappings are never touched.
+    previous_course_name for review, unless the row already has one (the
+    first recorded name is kept). A SOC title that matches the stored
+    previous_course_name is a return to that name, not a reuse.
+    Requirement mappings are never touched.
 
-    Returns {"changed": bool, "reused": bool}.
+    Returns {"changed": bool, "reused": bool, "replaced": str}.
     """
     soc_title = clean_soc_title((meta or {}).get("title"))
     if not soc_title:
-        return {"changed": False, "reused": False}
+        return {"changed": False, "reused": False, "replaced": ""}
     catalog_name = (course.get("course_name") or "").strip()
-    reused = bool(catalog_name) and not titles_match(catalog_name, soc_title)
+    previous = (course.get("previous_course_name") or "").strip()
+    reused = (
+        bool(catalog_name)
+        and not titles_match(catalog_name, soc_title)
+        and not (previous and titles_match(previous, soc_title))
+    )
     if reused:
-        course["previous_course_name"] = catalog_name
+        if not previous:
+            course["previous_course_name"] = catalog_name
         course.pop("soc_title", None)
         parsed_units = parse_soc_units((meta or {}).get("units"))
         if parsed_units is not None:
@@ -112,7 +132,7 @@ def adopt_soc_title(course: dict, meta: dict | None) -> dict:
         course["soc_title"] = soc_title
     changed = course.get("course_name") != soc_title
     course["course_name"] = soc_title
-    return {"changed": changed, "reused": reused}
+    return {"changed": changed, "reused": reused, "replaced": catalog_name}
 
 
 def resolve_catalog_soc_offerings(
@@ -219,6 +239,7 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         wrapper = data
 
     by_code, meta_by_code = offerings_from_soc(soc)
+    soc_semesters = set(soc.get("semesters") or {})
     updated = 0
     added = 0
     titles_changed = 0
@@ -234,12 +255,18 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         if title["changed"]:
             titles_changed += 1
         if title["reused"]:
-            reused.append(f"{code}: {course.get('previous_course_name')} -> {course.get('course_name')}")
+            reused.append(f"{code}: {title['replaced']} -> {course.get('course_name')}")
         before = (course.get("offerings"), course.get("offered_qatar"), course.get("offered_pitts"))
         reconcile_course(course, offs, meta)
         if course.get("soc_ingested"):
-            # Rows the SOC created follow the SOC; catalog rows keep their history.
-            course["offered"] = offered_semesters(offs)
+            # Rows the SOC created follow the SOC for every semester soc.json
+            # holds (cancelled-only semesters drop out, and a row missing from
+            # soc.json ends up with none of them). Semesters soc.json does not
+            # hold are kept. Catalog rows keep their history.
+            kept = [s for s in course.get("offered") or [] if s not in soc_semesters]
+            course["offered"] = sorted(
+                set(offered_semesters(offs)) | set(kept), key=_semester_sort_key
+            )
         if before != (course.get("offerings"), course.get("offered_qatar"), course.get("offered_pitts")):
             updated += 1
 
