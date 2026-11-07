@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, g, jsonify, request
 
+from .cmu import normalize_cmu_email
 from .db import db
 from .models import SchedulePlan, SchedulePlanItem, SchedulePlanShareToken, User
 from .permissions import require_login
@@ -116,7 +117,10 @@ def list_plans():
 def share_plan_by_email():
     """Copy a schedule snapshot to another CountsFor user's library."""
     data = request.get_json(silent=True) or {}
-    recipient_email = (data.get("recipient_email") or "").strip().lower()
+    raw_recipient = (data.get("recipient_email") or "").strip().lower()
+    # Accounts are stored as name@andrew.cmu.edu, so map the cmu.edu and
+    # qatar.cmu.edu aliases to it before the lookup.
+    recipient_email = normalize_cmu_email(raw_recipient) or raw_recipient
     name = (data.get("name") or "").strip() or "Shared schedule"
     items = _normalize_items(data.get("items"))
 

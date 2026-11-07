@@ -105,7 +105,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
                           +-------------------------------------------+
                           |  Browser                                  |
                           |                                           |
-   index.html (landing) --+-> js/utils.js + js/landing.js             |
+   index.html (landing) --+-> js/utils.js, js/api.js, js/landing.js   |
         |  sign in / register / forgot / reset / guest                |
         v                                                             |
    app.html (main app) ---+-> js/utils.js -> js/data.js ->            |
@@ -158,7 +158,7 @@ There are two different "base URLs" in `js/api.js`. Do not confuse them.
 
 `fetchAllCourses()` loads only the bundled `data/courses.json`. There is no remote fallback: if the file cannot be loaded or has no courses, it throws and `App.loadData()` shows "Failed to load data".
 
-`getBackendUrl()` resolution order (same logic is duplicated inside `js/landing.js`):
+`getBackendUrl()` resolution order (in `js/api.js`, used by both pages):
 
 1. `localStorage['cf_backend_override']` if set (manual escape hatch).
 2. `window.CF_BACKEND_URL` if set before `api.js` loads.
@@ -193,7 +193,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 
 | Path | Tracked in git? | What it is | Status |
 |---|---|---|---|
-| `index.html` | yes | Landing page: sign in, create account, forgot and reset password, "Continue as guest". Loads `js/utils.js` and `js/landing.js` only. | Live |
+| `index.html` | yes | Landing page: sign in, create account, forgot and reset password, "Continue as guest". Loads `js/utils.js`, `js/api.js` and `js/landing.js`. | Live |
 | `app.html` | yes | Main app shell. Loads `utils.js`, `data.js`, `profile.js`, `api.js`, `app.js` in that order. Holds the `cf-build` cache tag, backend URL meta and Google client ID meta. | Live |
 | `reset.html` | yes | Redirect stub to `index.html` keeping the query string (old reset links). | Keep |
 | `landing/index.html` | yes | Redirect stub to `../index.html`. | Keep (old links) |
@@ -205,7 +205,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `assets/img/` | yes | Scotty and CMU artwork used by the landing and navbar, plus the two favicons (`scotty-portrait.png` for the landing, `scotty-standing.png` for the app). | Live |
 | `backend/` | yes | Flask API. See [section 9](#9-backend-walkthrough). | Live |
 | `data/` | yes | Catalog JSON files and the scrape pipeline scripts. See [section 14](#14-data-pipeline-soc-scrape). | Live |
-| `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `app.html`. Run by the scrape workflow. | Live |
+| `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `app.html`, and every `?v=` tag in `index.html`. Run by the scrape workflow. | Live |
 | `scripts/run-data-tests.js` | yes | Node runner for `tests/data.test.js`. | Live |
 | `tests/` | yes | Browser test page (`tests/test.html`) and JS unit tests. | Live |
 | `.github/workflows/` | yes | `scrape.yml`, `pages.yml`, `keepalive.yml`. | Live |
@@ -236,7 +236,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `bootstrap_db.py` | `python -m backend.bootstrap_db`: create tables, run migrations, verify required tables. Render pre-deploy command. |
 | `permissions.py` | `require_login`, `require_role_group`, `require_role`, `current_user`, user loading from cookie or bearer token. |
 | `tokens.py` | Bearer token sign and verify. |
-| `cmu.py` | `normalize_cmu_email()` (accepts `andrew.cmu.edu`, `cmu.edu`, `qatar.cmu.edu`, always returns `@andrew.cmu.edu`), seed file helpers. |
+| `cmu.py` | The one backend CMU email check: `normalize_cmu_email()` (accepts `andrew.cmu.edu`, `cmu.edu`, `qatar.cmu.edu`, always returns `@andrew.cmu.edu`, rejects an empty local part, whitespace or a second `@`; same rules as `normalizeCmuEmail()` in `js/utils.js`) and `email_in_domain()` (the `ALLOWED_EMAIL_DOMAIN` check). Also seed file helpers. Used by `auth.py`, `directory.py`, `directory_routes.py` and `plans.py`. |
 | `auth.py` | Register, login, forgot and reset password, set password, Google sign-in, legacy email sign-in, logout, `GET/PATCH /api/me`, role and profile validation. |
 | `directory.py` | Directory lookup logic (DB first, then JSON seed). |
 | `directory_routes.py` | `/api/directory/...` routes. |
@@ -529,7 +529,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 `app.html` loads, in order: `js/utils.js`, `js/data.js`, `js/profile.js`, `js/api.js`, `js/app.js`. There are no modules; every top-level `function` and `const` is a global. Later files depend on earlier ones. `tests/test.html` loads `utils.js`, `data.js`, `profile.js` in the same order.
 
-`index.html` loads only `js/utils.js` and `js/landing.js`. `landing.js` is wrapped in an IIFE and carries its own copies of the backend URL logic, token storage and fetch wrapper (it does not load `api.js`).
+`index.html` loads `js/utils.js`, `js/api.js` and `js/landing.js`, in that order. `landing.js` is wrapped in an IIFE and uses the globals from the other two: the backend URL, token storage, `apiFetch` and the auth calls from `api.js`; `esc`, `showToast` and the CMU email check from `utils.js`. Both pages therefore share one copy of each.
 
 **Console tip:** `App` is declared with `const`, so it is not a property of `window`. In the browser console use `App` directly or check `typeof App`. `window.App` is `undefined`.
 
@@ -537,11 +537,11 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 | Function | Purpose |
 |---|---|
-| `normalizeCmuEmail(raw)` | Same rules as the backend: CMU domains only, always returns `@andrew.cmu.edu`. |
+| `normalizeCmuEmail(raw)`, `isCmuEmail(raw)` | The one frontend CMU email check, same rules as `backend/cmu.py`: CMU domains only, always returns `@andrew.cmu.edu` (or null). Tested in `tests/data.test.js` with the same cases as `backend/tests/test_cmu.py`. |
 | `debounce(fn, ms)` | Debounce helper. |
 | `esc(s)` | HTML escape. **Use it for every value interpolated into HTML.** |
 | `loadStore(key, def)`, `saveStore(key, val)` | JSON localStorage helpers that never throw. |
-| `showToast(msg)` | Bottom toast for 2.2 seconds. |
+| `showToast(msg, ms = 2200)` | Bottom toast (`#toast.toast`, `role="status"`). Used by both pages; `css/styles.css` and `css/landing.css` each style `.toast`. The landing page passes 4500 ms. |
 | `formatPrereq(text)` | Returns null for empty or "None" prerequisites. |
 | `downloadExcelSheet(filename, sheetName, headers, rows, metaRows)` | Despite the name, writes a UTF-8 CSV (with BOM). |
 | `slugifyFilename(text)` | Safe file names for exports. |
@@ -587,8 +587,8 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | Group | Functions | Endpoint |
 |---|---|---|
 | Course data | `fetchAllCourses()`, `fetchMinorCourses()` | static files (see 3.3) |
-| Backend URL and token | `getBackendUrl()`, `isBackendConfigured()`, `getAuthToken()`, `saveAuthToken()`, `clearAuthToken()`, `getGoogleClientId()` | none |
-| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword` (these five are currently unused: only `landing.js` signs in, with its own copies), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
+| Backend URL and token | `getBackendUrl()`, `isBackendConfigured()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
+| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword` (these six are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
 | Admin console | `apiAdminOverview`, `apiAdminInsights(semester)`, `apiAdminActivity(query)` | `/api/admin/*` |
 | Course edits | `apiGetCourseOverrides` (10 s timeout), `apiAddCourse`, `apiEditCourse`, `apiArchiveCourse`, `apiRestoreCourse`, `apiRevertCourse` | `/api/courses/overrides` |
@@ -598,11 +598,11 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | Search analytics | `apiRecordCourseSearch`, `apiGetPopularCourses` (8 s timeout) | `/api/search-analytics` |
 | Plans | `apiGetPlans`, `apiSharePlan`, `apiCreatePlanShareLink`, `apiAcceptPlanShare` | `/api/plans` |
 
-`js/landing.js` has its own private versions: `apiGetMe`, `apiLogin`, `apiRegister`, `apiForgotPassword`, `apiResetPassword`, `apiGoogle`, `apiSetPassword`.
+Token storage: `saveAuthToken(token, true)` puts the token in localStorage ("Keep me signed in"), `saveAuthToken(token, false)` keeps it in sessionStorage only, and `saveAuthToken(token)` (what `apiFetch` does with a refreshed token) writes to whichever bucket already holds one, so a remembered session is never downgraded. `getAuthToken()` reads localStorage first, then sessionStorage; `clearAuthToken()` clears both.
 
-### 8.6 `js/landing.js` (about 1,125 lines)
+### 8.6 `js/landing.js` (about 955 lines)
 
-One IIFE. Main parts: backend URL and token helpers (top, lines 1 to 155), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `enterGuestMode()`, `init()`. Note: the header comment says "no browser storage", which is no longer true.
+One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "accounts unavailable" banner as soon as the server answers), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `enterGuestMode()`, `init()`.
 
 `js/app.js` has no sign-in screens of its own (the old in-app copy was removed in November 2026). It redirects to `index.html` whenever a sign-in is needed.
 
@@ -654,7 +654,7 @@ Every browser storage key (found by searching `localStorage`, `sessionStorage`, 
 
 | Key | Storage | Written by | Meaning |
 |---|---|---|---|
-| `cf_auth_token` | session (default) or local ("Keep me signed in") | `api.js`, `landing.js` | Bearer token |
+| `cf_auth_token` | session (default) or local ("Keep me signed in") | `api.js` (`saveAuthToken`, called by `landing.js` at sign-in) | Bearer token |
 | `cf_backend_override` | local | you, by hand | Backend URL override |
 | `cf_guest` | session | `landing.js` | Guest mode on |
 | `cf_pending_share_plan` | session | `landing.js`, `app.js` | Plan share token waiting for sign-in |
@@ -739,7 +739,7 @@ Student-only CRUD on the caller's own saved courses with notes. `GET /api/wishli
 ### 9.8 Plans (`backend/plans.py`)
 
 - `GET /api/plans`: plans stored for the caller (shared copies).
-- `POST /api/plans/share`: copy a plan snapshot into another existing user's account (`"From <name>: <plan>"`).
+- `POST /api/plans/share`: copy a plan snapshot into another existing user's account (`"From <name>: <plan>"`). The recipient email goes through `normalize_cmu_email()`, so `name@cmu.edu` and `name@qatar.cmu.edu` find the `name@andrew.cmu.edu` account.
 - `POST /api/plans/share-link`: returns a raw token; the token's hash is stored with the plan snapshot. Valid 30 days, 20 uses.
 - `POST /api/plans/accept-share`: import a shared snapshot into the caller's account.
 
@@ -1074,7 +1074,7 @@ Supabase Postgres was once considered instead of Render Postgres. The code suppo
 
 1. All backend tests pass except the known failures (section 16).
 2. If you added a column: migration step in `migrate.py` (section 11.2).
-3. Bump `?v=` tags in `app.html` (and `index.html` if you changed landing files): `python scripts/bump_cf_build.py my-feature-2026-11-03` then check the diff.
+3. Bump `?v=` tags in `app.html` and `index.html`: `python scripts/bump_cf_build.py my-feature-2026-11-03` then check the diff.
 4. Merge to `main` on origin. Pages deploys automatically; Render deploys the backend.
 5. Check `https://countsfor-summer-26.onrender.com/health` (table count should be 12 after the admin page), then the site in a private window.
 
@@ -1366,11 +1366,10 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 ### 21.3 Code hygiene
 
 - The no-dash rule (section 18) was fully applied to user-facing text on November 3, 2026. Check new strings before committing: `grep -n "[—–]" js/*.js *.html` should only find code comments.
-- `js/landing.js` keeps private copies of the auth calls in `js/api.js` (`apiLogin`, `apiRegister`, `apiForgotPassword`, `apiResetPassword`, `apiGetMe`); the `api.js` sign-in versions are currently unused.
+- Done in November 2026: `js/landing.js` no longer keeps its own copies of the backend URL, token storage, fetch wrapper, auth calls, `esc`, `showToast` or the CMU email check. It loads `js/api.js` and `js/utils.js` like the app. The frontend has one CMU email check (`normalizeCmuEmail` in `js/utils.js`) and the backend has one (`backend/cmu.py`).
 - Dead code: unused `users.reset_token_hash` and `reset_token_expires` columns (kept on purpose: dropping them is a schema change). The rest of the dead code found in the November 2026 audit was removed: the old in-app sign-in screens and their CSS, unused `App` methods, `isStudentRole`, `ROLE_GROUPS`, `FACULTY_GROUPS`, `getOnboardingUiGroup`, `apiUpdateDirectoryEntry`, `apiGetMyFlags`, the `API_BASE` and `GITHUB_RAW` course data fallbacks, `role_group_for`, `_can_manage_users`, `_ensure_staff_directory_table`, the `StaffDirectoryEntry` alias, the legacy `/api/directory/staff` routes, and about 170 CSS classes that nothing rendered.
 - `data_all_courses.json`: nothing in the app reads it, but `data/reconcile_offerings.py`, `data/apply_mapping_overlays.py`, a data test and `scrape.yml` still write or check it. Remove those references together, and sync the partner fork, if you want it gone.
 - `backend/schema.sql` covers 7 of 14 tables.
-- `index.html` `?v=` tags are not bumped by `bump_cf_build.py`.
 - In-memory `_cache` in `api.js` and the 24 MB catalog download make first load slow (UX review items 4 to 12).
 - `cf_flags` local queue has no cap.
 

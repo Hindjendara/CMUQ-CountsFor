@@ -17,7 +17,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from .activity import mark_signed_in, record_visit
-from .cmu import normalize_cmu_email
+from .cmu import email_in_domain, normalize_cmu_email
 from .directory import resolve_directory_entry
 from .db import db
 from .email_util import send_password_reset_email
@@ -250,10 +250,7 @@ def _auth_payload(user: User) -> dict:
 
 
 def _email_allowed(email: str) -> bool:
-    allowed_domain = (current_app.config.get("ALLOWED_EMAIL_DOMAIN") or "").lower()
-    if allowed_domain:
-        return email.endswith("@" + allowed_domain)
-    return True
+    return email_in_domain(email, current_app.config.get("ALLOWED_EMAIL_DOMAIN"))
 
 
 def _upsert_user_from_login(

@@ -48,8 +48,9 @@ async function fetchAllCourses() {
 // CountsFor Backend client — auth, flags, wishlist
 // ============================================================
 // The Python backend lives in /backend (routes are listed in README.md,
-// section 10). Dev: http://localhost:5050 ; production: the Render URL. Override at runtime by setting window.CF_BACKEND_URL before
-// app.js loads.
+// section 10). Dev: http://localhost:5050 ; production: the Render URL.
+// Override at runtime by setting window.CF_BACKEND_URL before this file loads.
+// Loaded by both index.html (landing.js) and app.html (app.js).
 
 // Backend URL resolution, in priority order:
 //   1. localStorage 'cf_backend_override' — manual escape hatch for odd setups
@@ -103,16 +104,29 @@ function getAuthToken() {
   } catch { return ''; }
 }
 
-// Writes to whichever bucket already holds a token, so refreshed tokens do not
-// silently downgrade a remembered session to a tab-only one.
-function saveAuthToken(token) {
+// `persist` is passed only at sign-in time, from the landing page's "Keep me
+// signed in" checkbox: true moves the token to localStorage, false keeps it in
+// sessionStorage only. Every other call (apiFetch storing a refreshed token)
+// passes nothing and writes to whichever bucket already holds a token, so a
+// refresh never downgrades a remembered session to a tab-only one.
+function saveAuthToken(token, persist) {
   if (!token) return;
-  try {
-    if (localStorage.getItem(CF_AUTH_TOKEN_KEY)) {
+  if (persist === true) {
+    try {
       localStorage.setItem(CF_AUTH_TOKEN_KEY, token);
+      sessionStorage.removeItem(CF_AUTH_TOKEN_KEY);
       return;
-    }
-  } catch {}
+    } catch { /* storage blocked: fall through to sessionStorage */ }
+  } else if (persist === false) {
+    try { localStorage.removeItem(CF_AUTH_TOKEN_KEY); } catch {}
+  } else {
+    try {
+      if (localStorage.getItem(CF_AUTH_TOKEN_KEY)) {
+        localStorage.setItem(CF_AUTH_TOKEN_KEY, token);
+        return;
+      }
+    } catch {}
+  }
   try { sessionStorage.setItem(CF_AUTH_TOKEN_KEY, token); } catch {}
 }
 
@@ -131,7 +145,7 @@ function getGoogleClientId() {
   const meta = typeof document !== 'undefined'
     ? document.querySelector('meta[name="cf-google-client-id"]')
     : null;
-  return (meta && meta.getAttribute('content')) || '';
+  return ((meta && meta.getAttribute('content')) || '').trim();
 }
 
 // Generic fetch wrapper:
@@ -200,6 +214,9 @@ async function apiForgotPassword(email) {
 }
 async function apiResetPassword(body) {
   return apiFetch('/api/auth/reset-password', { method: 'POST', body });
+}
+async function apiSetPassword(password) {
+  return apiFetch('/api/auth/set-password', { method: 'POST', body: { password } });
 }
 async function apiLogout()  {
   const r = await apiFetch('/api/auth/logout', { method: 'POST' });

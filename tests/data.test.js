@@ -417,3 +417,22 @@ test('layoutPlanDayBlocks: non-overlapping blocks use full width', () => {
   assertEqual(laid[0].totalCols, 1);
   assertEqual(laid[1].totalCols, 1);
 });
+
+// ── normalizeCmuEmail (js/utils.js) ──────────────────────
+// Same cases as backend/tests/test_cmu.py: the two checks must agree.
+
+test('normalizeCmuEmail: maps CMU aliases to the Andrew address', () => {
+  assertEqual(normalizeCmuEmail('alice@andrew.cmu.edu'), 'alice@andrew.cmu.edu');
+  assertEqual(normalizeCmuEmail('  Alice@Andrew.CMU.edu  '), 'alice@andrew.cmu.edu');
+  assertEqual(normalizeCmuEmail('alice@cmu.edu'), 'alice@andrew.cmu.edu');
+  assertEqual(normalizeCmuEmail('alice@qatar.cmu.edu'), 'alice@andrew.cmu.edu');
+});
+
+test('normalizeCmuEmail: rejects non CMU and malformed addresses', () => {
+  for (const raw of ['alice@gmail.com', 'alice@notcmu.edu', 'alice', '', null, undefined,
+                     '@andrew.cmu.edu', 'al ice@andrew.cmu.edu', 'a@b@andrew.cmu.edu']) {
+    assertEqual(normalizeCmuEmail(raw), null, 'input: ' + JSON.stringify(raw));
+    assertFalse(isCmuEmail(raw), 'isCmuEmail input: ' + JSON.stringify(raw));
+  }
+  assertTrue(isCmuEmail('alice@cmu.edu'));
+});
