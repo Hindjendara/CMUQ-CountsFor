@@ -1430,8 +1430,7 @@ const App = {
             const reqs = c.requirements[majorCode] || [];
             for (const req of reqs) {
               if (req.requirement && req.requirement.toLowerCase().includes(q)) {
-                const parts = req.requirement.split('---');
-                matchHint = '<span class="typeahead-hint">' + majorCode + ': ' + esc(parts[parts.length - 1]) + '</span>';
+                matchHint = '<span class="typeahead-hint">' + majorCode + ': ' + esc(requirementLeafLabel(req.requirement)) + '</span>';
                 break;
               }
             }
@@ -1566,6 +1565,8 @@ const App = {
               path,
               parts,
               leaf: parts[parts.length - 1],
+              // What people see; leaf stays the raw segment for matching.
+              label: requirementLeafLabel(path),
               count: 0
             });
           }
@@ -1642,12 +1643,13 @@ const App = {
 
     const idx = App._buildCategoryIndex();
     let catResults = idx.filter(entry => {
-      if (entry.leaf.toLowerCase().includes(q)) return true;
+      if (entry.leaf.toLowerCase().includes(q) || entry.label.toLowerCase().includes(q)) return true;
       return entry.parts.some(p => p.toLowerCase().includes(q));
     });
+    const leafHit = e => (e.leaf.toLowerCase().includes(q) || e.label.toLowerCase().includes(q)) ? 0 : 1;
     catResults.sort((a, b) => {
-      const aLeaf = a.leaf.toLowerCase().includes(q) ? 0 : 1;
-      const bLeaf = b.leaf.toLowerCase().includes(q) ? 0 : 1;
+      const aLeaf = leafHit(a);
+      const bLeaf = leafHit(b);
       if (aLeaf !== bLeaf) return aLeaf - bLeaf;
       return b.count - a.count;
     });
@@ -1681,7 +1683,7 @@ const App = {
           const uidx = flat.findIndex(f => f.kind === 'category' && f.idx === i);
           return '<div class="typeahead-item" data-unified-idx="' + uidx + '" onclick="App.selectUnifiedResult(' + uidx + ')">' +
             '<span class="typeahead-cat-major typeahead-cat-major-' + r.major.toLowerCase() + '">' + r.major + '</span>' +
-            '<span class="typeahead-name"><strong>' + esc(r.leaf) + '</strong></span>' +
+            '<span class="typeahead-name"><strong>' + esc(r.label) + '</strong></span>' +
             '<span class="typeahead-units">' + r.count + ' ' + (r.count === 1 ? 'course' : 'courses') + '</span>' +
           '</div>';
         }).join('');
@@ -1730,7 +1732,7 @@ const App = {
       this.selectCategoryResult(item.idx);
       const input = document.getElementById('homeSearch');
       const cat = this._categoryResults[item.idx];
-      if (input && cat) input.value = cat.leaf;
+      if (input && cat) input.value = cat.label;
     }
   },
 
@@ -2021,7 +2023,7 @@ const App = {
       seen.add(key);
       if (e.parts.length >= 4) out.push(e);
     }
-    out.sort((a, b) => a.leaf.localeCompare(b.leaf));
+    out.sort((a, b) => a.label.localeCompare(b.label));
     return out;
   },
 
@@ -2068,7 +2070,7 @@ const App = {
     const bandHtml = gened.length ? `
       <nav class="home-gened-band" aria-label="GenEd categories">
         ${gened.slice(0, 12).map(g =>
-          `<button type="button" class="home-qs-chip" onclick="App.enterExplorer('IS', '${esc(g.path).replace(/'/g, "\\'")}')">${esc(g.leaf)}</button>`
+          `<button type="button" class="home-qs-chip" onclick="App.enterExplorer('IS', '${esc(g.path).replace(/'/g, "\\'")}')">${esc(g.label)}</button>`
         ).join('')}
       </nav>` : '';
 
@@ -2351,7 +2353,7 @@ const App = {
     const campusBadge = group.campus ? `<span class="cc-campus-pill">${esc(group.campus)}</span>` : '';
     const dm = mod ? `<span class="cc-dm-pill ${dmCls(mod)}">${esc(mod).toUpperCase()}</span>` : '';
     const meetingsHtml = (group.meetings || []).map(m => {
-      const time = offeringDaysTimes(m);
+      const time = formatDaysTimesForDisplay(offeringDaysTimes(m));
       return `<span class="cc-sched-meeting">${esc(time)}</span>`;
     }).join('');
     let planBtn = '';
@@ -3608,7 +3610,7 @@ const App = {
         <div class="plan-list-rows">
           ${groups.map(group => {
             const c = lookupCourse(this.courseIndex, group.course_code);
-            const times = group.meetings.map(m => m.days_times || 'TBA').join(' · ');
+            const times = group.meetings.map(m => formatDaysTimesForDisplay(m.days_times)).join(' · ');
             const groupConflict = group.meetings.some(m => conflicts.has(m.id));
             return `
               <div class="plan-list-row ${groupConflict ? 'is-conflict' : ''}">
@@ -4361,8 +4363,15 @@ const App = {
     return !!(e && !c._added && (Object.keys(e.fields || {}).length || e.requirements));
   },
 
+  // Raw segments joined with ›. Used for datalist values, which
+  // _reqPathFromInput turns back into the stored path, so no LABEL_OVERRIDES.
   _courseReqLabel(path) {
     return String(path || '').split('---').join(' › ');
+  },
+
+  // Display only: the same path with LABEL_OVERRIDES applied to each segment.
+  _courseReqDisplayLabel(path) {
+    return String(path || '').split('---').map(p => LABEL_OVERRIDES[p] || p).join(' › ');
   },
 
   _courseMatches(c, q) {
@@ -4598,7 +4607,7 @@ const App = {
       const chips = list.map((r, i) => `
         <li class="adm-req">
           <span class="adm-req-tag ${r.type ? 'is-gened' : ''}">${r.type ? 'Gen Ed' : 'Core'}</span>
-          <span class="adm-req-path">${esc(this._courseReqLabel(r.requirement))}</span>
+          <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}</span>
           <button type="button" class="adm-req-x" onclick="App._removeCourseReq('${prog}', ${i})" aria-label="Remove this requirement">×</button>
         </li>`).join('');
       return `

@@ -206,7 +206,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `backend/` | yes | Flask API. See [section 9](#9-backend-walkthrough). | Live |
 | `data/` | yes | Catalog JSON files and the scrape pipeline scripts. See [section 14](#14-data-pipeline-soc-scrape). | Live |
 | `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `app.html`, and every `?v=` tag in `index.html`. Run by the scrape workflow. | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `tests/profile.test.js` and `tests/data.test.js`, with an in-memory `localStorage`. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `tests/profile.test.js` and `tests/data.test.js`, with an in-memory `localStorage`, plus the Node-only `tests/dash-guard.test.js`. | Live |
 | `tests/` | yes | Browser test page (`tests/test.html`) and JS unit tests. | Live |
 | `.github/workflows/` | yes | `scrape.yml`, `pages.yml`, `keepalive.yml`. | Live |
 | `render.yaml` | yes | Render Blueprint for the backend and database. | Live |
@@ -550,7 +550,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 |---|---|---|
 | 6 to 25 | `MAJOR_META`, `MAJOR_ORDER`, `MAJOR_BRAND` | Majors, their labels, degree names and colors. `MAJOR_ORDER = ['CS','IS','BA','BS']` controls which programs get trees and columns. |
 | 28 to 45 | `ACCENT_RULES`, `pickAccentColor()` | Accent color by requirement label. |
-| 48 to 108 | `LABEL_OVERRIDES` | Prettier display names for raw requirement segments. |
+| 48 to 110 | `LABEL_OVERRIDES` | Prettier display names for raw requirement segments. Data labels with a spaced hyphen (for example "Independent Study - Special Permission Required") get their display text here; the stored path never changes. Show a segment with `requirementLeafLabel()` or `formatRequirementPath()`, never raw. |
 | 110 to 220 | `FULFILLMENT_RULES`, `setRule()` | Hand-annotated rule chips ("pick 1", "take all", "at least N units") per major and requirement. |
 | 220 to 235 | `courseOfferedInQatar()`, `isCourseHidden()` | A row is hidden everywhere (tree, search, typeahead, home lists, also counts for, double counters) when it has `superseded_by`, or `qatar_only` without a running Qatar offering. |
 | 237 to 346 | `buildRequirementTree()`, `normalizeTree()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; split into degree and GenEd sections. |
@@ -562,7 +562,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | 577 to 625 | `predictOffering()`, `sortSemesters()` | Rule-based "likely offered next term" hint (no ML). |
 | 628 to 646 | `DEPT_NAMES`, `getDeptName()` | Department number to name. |
 | 650 to 784 | `SEMESTER_OPTIONS`, `MODALITY_OPTIONS`, `availableSemesterOptions()`, `semesterLabel()`, `getCourseOfferings()`, `filterOfferings()`, `courseHasMatchingOffering()` | Semester, campus and modality filters over SOC offerings. |
-| 787 to 1004 | `PLAN_DAY_COLUMNS`, `parseDaysTimes()`, `planOfferingKey()`, `groupOfferingsBySection()`, `findPlanConflicts()`, `layoutPlanDayBlocks()` and friends | Schedule planner math: parsing times, conflicts, calendar layout (7:00 to 22:00). |
+| 787 to 1020 | `PLAN_DAY_COLUMNS`, `parseDaysTimes()`, `formatDaysTimesForDisplay()`, `planOfferingKey()`, `groupOfferingsBySection()`, `findPlanConflicts()`, `layoutPlanDayBlocks()` and friends | Schedule planner math: parsing times, conflicts, calendar layout (7:00 to 22:00). Stored `days_times` keep the SOC form `MW 03:30PM-04:50PM` (plan keys and `parseDaysTimes` read it); `formatDaysTimesForDisplay()` shows it as `MW 3:30 PM to 4:50 PM` on course cards and the plan list, and returns any other string unchanged. |
 | 1007 to end | `courseCountsForMinor()`, `annotateDoubleCounters()`, `annotateMultiProgram()` | Profile-aware flags on courses: `_doubleCounter` (counts for major and minor) and `_programCount`. |
 
 ### 8.4 `js/profile.js` (about 325 lines): roles and programs
@@ -1114,7 +1114,8 @@ python -m pytest backend/tests -q
 # Data pipeline
 python -m pytest data/tests -q
 
-# Frontend (Node, runs tests/profile.test.js and tests/data.test.js like tests/test.html)
+# Frontend (Node, runs tests/profile.test.js and tests/data.test.js like tests/test.html,
+# then the Node-only tests/dash-guard.test.js)
 node scripts/run-data-tests.js
 
 # Frontend in the browser (runs tests/profile.test.js and tests/data.test.js)
@@ -1153,6 +1154,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/test_admin.py` and `test_course_overrides.py` cover the admin page.
 - `data/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list and `scripts/bump_cf_build.py`.
 - `tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
+- `tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also as `&mdash;`, `&ndash;` or `—`) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason: today only the four `LABEL_OVERRIDES` keys that must match requirement paths in the data.
 - `Testing/` (capital T) is not a test suite; it is the SOC mock server.
 
 There is no CI that runs the backend tests. Only the scrape workflow runs the two SOC parser test files.
@@ -1198,7 +1200,7 @@ From `git log`: one-line, imperative, sentence case, ending with a period, descr
 
 ## 18. Project rules and conventions
 
-1. **No em dashes or en dashes in any user-facing text.** This covers UI strings, toasts, titles, `title=` and `aria-label` attributes, placeholder options, and API `message` strings. Use a colon, comma or period instead. Use "to" for ranges ("9:00 AM to 10:20 AM"). Middle dots (·) are fine. Known violations still in the code are listed in 21.3.
+1. **No em dashes or en dashes in any user-facing text.** This covers UI strings, toasts, titles, `title=` and `aria-label` attributes, placeholder options, and API `message` strings. Use a colon, comma or period instead. Use "to" for ranges ("9:00 AM to 10:20 AM"). Middle dots (·) are fine. Hyphens inside words and codes stay (sign-in, CMU-Q, Non-Technical, 15-213). Course titles and descriptions from the Schedule of Classes are shown exactly as the SOC has them. `node scripts/run-data-tests.js` fails if a dash appears (16.3).
 2. **Empty values:** show "None" or "Not listed", never a dash.
 3. **Zero dependencies, no build step for the frontend.** No npm packages, no bundler, no framework, no TypeScript. Anything you add must work by opening the file in a browser.
 4. **Roles are enforced on the backend.** Every route that changes or reveals protected data needs `@require_role_group(...)` or `@require_role(...)`. Hiding a button is never enough.
@@ -1387,7 +1389,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 
 ### 21.3 Code hygiene
 
-- The no-dash rule (section 18) was fully applied to user-facing text on November 3, 2026. Check new strings before committing: `grep -n "[—–]" js/*.js *.html` should only find code comments.
+- The no-dash rule (section 18) was applied to user-facing text on November 3, 2026, and on November 8, 2026 to text that comes from data: requirement labels shown in the typeahead, category search, home chips and the admin course editor now go through `LABEL_OVERRIDES`, and meeting times show "to" instead of a hyphen. `tests/dash-guard.test.js` now checks this on every run. Meeting strings that are not in the `DAYS hh:mmAM-hh:mmPM` form, including scraper junk such as "Pittsburgh, Pennsylvania" (21.2 item 6), are still shown as stored.
 - Done in November 2026: `js/landing.js` no longer keeps its own copies of the backend URL, token storage, fetch wrapper, auth calls, `esc`, `showToast` or the CMU email check. It loads `js/api.js` and `js/utils.js` like the app. The frontend has one CMU email check (`normalizeCmuEmail` in `js/utils.js`) and the backend has one (`backend/cmu.py`).
 - Dead code: unused `users.reset_token_hash` and `reset_token_expires` columns (kept on purpose: dropping them is a schema change). The rest of the dead code found in the November 2026 audit was removed: the old in-app sign-in screens and their CSS, unused `App` methods, `isStudentRole`, `ROLE_GROUPS`, `FACULTY_GROUPS`, `getOnboardingUiGroup`, `apiUpdateDirectoryEntry`, `apiGetMyFlags`, the `API_BASE` and `GITHUB_RAW` course data fallbacks, `role_group_for`, `_can_manage_users`, `_ensure_staff_directory_table`, the `StaffDirectoryEntry` alias, the legacy `/api/directory/staff` routes, and about 170 CSS classes that nothing rendered.
 - Also removed in November 2026: `data_all_courses.json` (a 24 MB copy of `data/courses.json` that nothing read; the pipeline now writes only `data/courses.json`), the empty `data/requirements_ai.json` and `data/requirements_gs.json` placeholders, the stale `backend/schema.sql`, `data/scripts/inspect_mappings.py`, and the inline cached-CSS `<style>` block in `app.html` (its rules already live in `css/styles.css`). The partner fork may still carry `data_all_courses.json`.

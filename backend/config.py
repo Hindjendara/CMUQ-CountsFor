@@ -75,7 +75,7 @@ def _resolve_database_url() -> str:
     if on_render:
         raise RuntimeError(
             "DATABASE_URL is not set on Render. Link the web service to "
-            "CountsFor_Summer_2026 — refusing SQLite fallback."
+            "CountsFor_Summer_2026: refusing the SQLite fallback."
         )
     if is_production:
         raise RuntimeError(

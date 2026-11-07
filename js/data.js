@@ -91,7 +91,6 @@ const LABEL_OVERRIDES = {
   'Perspectives on Justice and Injustice': 'Justice & Injustice',
   'Intercultural and Global Inquiry': 'Intercultural & Global Inquiry',
   'Management Game/ Consulting Project': 'Management Game / Consulting',
-  'Concentration - select 1 concentration from the list below': 'Concentrations',
   'Global Economics & Business': 'Global Economics & Business',
   'Business Analytics & Technologies': 'Business Analytics & Tech',
   'Operations Management': 'Operations Management',
@@ -104,6 +103,8 @@ const LABEL_OVERRIDES = {
   'Global, Cultural, and Diverse Perspectives': 'Global & Cultural Perspectives',
   'Informational Literacy': 'Informational Literacy',
   'Scientific Reasoning': 'Scientific Reasoning',
+  // 70-509 BA leaf from the mapping data; the stored path keeps its text.
+  'Independent Study - Special Permission Required': 'Independent Study (Special Permission Required)',
 };
 
 // ── Fulfillment rules (manually annotated from audit specs) ──
@@ -914,6 +915,22 @@ function parseDaysTimes(raw) {
     };
   }
   return { parseable: false, days: [], startMin: null, endMin: null, raw: text };
+}
+
+/**
+ * Display text for a stored meeting string: "MW 03:30PM-04:50PM" becomes
+ * "MW 3:30 PM to 4:50 PM". Only for showing to people; the stored days_times
+ * keeps its hyphen because parseDaysTimes and planOfferingKey (saved plan
+ * keys) read it. Anything that is not "DAYS hh:mmAM-hh:mmPM" comes back as is.
+ */
+function formatDaysTimesForDisplay(raw) {
+  const text = String(raw == null ? '' : raw).trim();
+  if (!text) return 'TBA';
+  const m = text.match(/^(?:([A-Za-z]+)\s+)?(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return text;
+  const start = formatPlanMinutes(parseTimeToMinutes(m[2], m[3], m[4]));
+  const end = formatPlanMinutes(parseTimeToMinutes(m[5], m[6], m[7]));
+  return `${m[1] ? m[1] + ' ' : ''}${start} to ${end}`;
 }
 
 function planOfferingKey(courseCode, offering) {

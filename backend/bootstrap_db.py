@@ -34,7 +34,7 @@ def verify_bootstrap(app) -> None:
                 )
                 raise SystemExit(1)
             print(
-                "WARNING: local SQLite bootstrap — tables created for dev only. "
+                "WARNING: local SQLite bootstrap. Tables created for dev only. "
                 "To bootstrap Render Postgres, set DATABASE_URL in backend/.env "
                 "(External URL from CountsFor_Summer_2026) and re-run.",
                 file=sys.stderr,
@@ -47,7 +47,7 @@ def verify_bootstrap(app) -> None:
         missing = REQUIRED_TABLES - present
         if missing:
             print(
-                f"FATAL: bootstrap verification failed — missing tables: {sorted(missing)}",
+                f"FATAL: bootstrap verification failed. Missing tables: {sorted(missing)}",
                 file=sys.stderr,
             )
             raise SystemExit(1)
@@ -70,11 +70,11 @@ def main() -> None:
         if uri.startswith("postgresql"):
             print("Database bootstrap OK")
         else:
-            print("Database bootstrap OK (local SQLite - not production Postgres)")
+            print("Database bootstrap OK (local SQLite, not production Postgres)")
     except SystemExit as exc:
         if exc.code and recovery_deploy_enabled():
             print(
-                "WARNING: bootstrap failed but ALLOW_BOOTSTRAP_SKIP=1 — deploy continues. "
+                "WARNING: bootstrap failed but ALLOW_BOOTSTRAP_SKIP=1, so the deploy continues. "
                 "Upgrade Postgres to Starter, remove ALLOW_BOOTSTRAP_SKIP, redeploy.",
                 file=sys.stderr,
             )

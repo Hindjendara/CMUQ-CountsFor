@@ -23,7 +23,7 @@ async function _get(url) {
     if (Date.now() - c.ts < CACHE_TTL) return c.data;
   }
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   const data = await res.json();
   _cache.set(url, { data, ts: Date.now() });
   return data;

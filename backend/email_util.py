@@ -104,5 +104,5 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
         return True
     if _send_via_smtp(to_email, subject, text_body, html_body):
         return True
-    log.warning("No email provider configured — password reset email not sent to %s", to_email)
+    log.warning("No email provider configured: password reset email not sent to %s", to_email)
     return False

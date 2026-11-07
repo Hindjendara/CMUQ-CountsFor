@@ -38,6 +38,13 @@ for (const file of TEST_FILES) {
   load(file);
   byFile.push({ file, tests: __tests.slice(start) });
 }
+// Node-only suites (they read source files with fs), loaded with require().
+const NODE_TEST_FILES = ['tests/dash-guard.test.js'];
+for (const file of NODE_TEST_FILES) {
+  const start = __tests.length;
+  require(path.join(ROOT, file));
+  byFile.push({ file, tests: __tests.slice(start) });
+}
 
 let pass = 0;
 let fail = 0;

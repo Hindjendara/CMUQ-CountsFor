@@ -227,6 +227,22 @@ test('requirementLeafLabel: strips GenEd path to leaf', () => {
   );
 });
 
+test('requirementLeafLabel: labels with a spaced hyphen get a display override', () => {
+  const ba = 'BS in Business Administration---Concentration - select 1 concentration from the list below'
+    + '---Entrepreneurship---Entrepreneurship Concentration---Two Area Electives'
+    + '---Independent Study - Special Permission Required';
+  assertEqual(requirementLeafLabel(ba), 'Independent Study (Special Permission Required)');
+  assertEqual(
+    formatRequirementPath(ba),
+    'BA Degree Requirements > Concentrations > Entrepreneurship > Entrepreneurship Concentration'
+      + ' > Two Area Electives > Independent Study (Special Permission Required)'
+  );
+  assertEqual(
+    requirementLeafLabel('EY2022 Qatar Business Administration - University Core Requirements'),
+    'University Core'
+  );
+});
+
 test('availableSemesterOptions: includes summer when catalog has M26 offerings', () => {
   const courses = [{
     course_code: '15-122',
@@ -340,6 +356,32 @@ test('parseDaysTimes: TBA and days-only strings are not timed', () => {
   const daysOnly = parseDaysTimes('MWF');
   assertEqual(daysOnly.parseable, false);
   assertEqual(daysOnly.days.join(''), 'MWF');
+});
+
+test('formatDaysTimesForDisplay: shows a time range with "to", not a hyphen', () => {
+  assertEqual(formatDaysTimesForDisplay('MW 03:30PM-04:50PM'), 'MW 3:30 PM to 4:50 PM');
+  assertEqual(formatDaysTimesForDisplay('UTR 08:30AM-09:45AM'), 'UTR 8:30 AM to 9:45 AM');
+  assertEqual(formatDaysTimesForDisplay('F 12:00PM-12:50PM'), 'F 12:00 PM to 12:50 PM');
+  assertEqual(formatDaysTimesForDisplay('S 10:30AM-03:30PM'), 'S 10:30 AM to 3:30 PM');
+  assertEqual(formatDaysTimesForDisplay('TBA 09:00AM-10:20AM'), 'TBA 9:00 AM to 10:20 AM');
+  assertEqual(formatDaysTimesForDisplay('09:00AM - 10:20AM'), '9:00 AM to 10:20 AM');
+});
+
+test('formatDaysTimesForDisplay: TBA, empty and unparsed strings pass through', () => {
+  assertEqual(formatDaysTimesForDisplay('TBA'), 'TBA');
+  assertEqual(formatDaysTimesForDisplay(''), 'TBA');
+  assertEqual(formatDaysTimesForDisplay(null), 'TBA');
+  assertEqual(formatDaysTimesForDisplay('MWF'), 'MWF');
+  assertEqual(formatDaysTimesForDisplay('Pittsburgh, Pennsylvania'), 'Pittsburgh, Pennsylvania');
+});
+
+test('formatDaysTimesForDisplay: stored days_times and plan keys keep the hyphen format', () => {
+  const offering = { semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'MW 03:30PM-04:50PM' };
+  formatDaysTimesForDisplay(offering.days_times);
+  assertEqual(offering.days_times, 'MW 03:30PM-04:50PM');
+  assertEqual(planOfferingKey('15-213', offering), '15-213::F26::W::Qatar::MW 03:30PM-04:50PM');
+  assertEqual(parseDaysTimes(offering.days_times).parseable, true);
+  assertEqual(offeringDaysTimes({ days: 'TR', begin_time: '10:00AM', end_time: '11:20AM' }), 'TR 10:00AM-11:20AM');
 });
 
 test('planEntriesOverlap: detects same-day time overlap in one semester', () => {
