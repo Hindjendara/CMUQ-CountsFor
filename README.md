@@ -972,6 +972,8 @@ git commit -am "Sync SOC data from the hind fork"
 
 ### 14.3 Run the scraper manually
 
+Read 21.2 item 7 first: as of November 8, 2026 the scraper keeps only the first section of each course, so its output must not replace `data/soc.json` until that is fixed. Reconcile, overlays and validate can still be run on the existing `soc.json`.
+
 ```bash
 source .venv/bin/activate
 pip install pytest
@@ -1380,7 +1382,8 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 3. Render service naming and ownership are unclear (15.2). Confirm in the dashboard; remove the stray `countsfor-backend` service and `countsfor-db` database if they still exist.
 4. 6 backend tests and 1 JS test fail (16.2). No CI runs the backend tests.
 5. Email reset provider status in production unknown.
-6. `data/soc.json` was written by the old scraper, which read every row as 10 cells. Until the next scrape: titles of cancelled sections end in "This Section Cancelled", cancelled sections have no `cancelled` flag and still count as offerings, subtitles are joined into titles as "Title : subtitle", and in M26 about 300 courses sit inside other courses' `sections` (the Session column shifted the cells). M25 is no longer on the SOC form, so a new scrape cannot repair it; it needs a one time cleanup. `soc_parse.clean_soc_title()` can clean the stored titles.
+6. `data/soc.json` was written by the old scraper, which read every row as 10 cells. Titles of cancelled sections end in "This Section Cancelled", cancelled sections have no `cancelled` flag and still count as offerings, subtitles are joined into titles as "Title : subtitle", and in M26 about 300 courses sit inside other courses' `sections` (the Session column shifted the cells). Reconcile cleans the titles with `soc_parse.clean_soc_title()`, so `courses.json` names are clean, except 85-372 and 85-822, whose only SOC title is "tba This Section Cancelled" (the old catalog name is kept). M25 is no longer on the SOC form, so a new scrape cannot repair it: its 90 courses hold 827 sections, most of them other courses read with shifted cells. Reconcile does not ignore them; they become 827 M25 offerings on those 90 rows (units such as "summer two" are ignored because they are not numbers). It needs a one time cleanup.
+7. Do not run `scrape_soc.py` until its row parsing is fixed. The SOC result pages open a `<tr>` only on the first row of each course; the other section rows of that course end with `</tr>` but have no opening tag. `parse_courses` only reads complete `<tr>...</tr>` pairs, so it keeps only the first section of each course. A live scrape on November 8, 2026 kept 3,252 of the 7,584 sections in S27 (all five semesters on the form lost about 57%), and some Qatar courses lost their Qatar campus. That scrape was not adopted: on November 8, 2026 `courses.json` was regenerated (reconcile, overlays, validate) from the existing `soc.json`, which was left unchanged.
 
 ### 21.3 Code hygiene
 
