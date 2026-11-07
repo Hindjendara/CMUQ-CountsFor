@@ -1,0 +1,97 @@
+{
+  "minor": {
+    "name": "Minor in Tech Entrepreneurship",
+    "program": "Qatar Information Systems",
+    "university": "Carnegie Mellon University",
+    "version": "EY2023 Minor in Tech Entrepreneurship",
+    "entry_year": "2023 and later",
+    "last_published": "September 7, 2025",
+    "published_by": "Jarrin Nevel",
+    "visibility": "PUBLIC",
+    "applies_to": "28 students"
+  },
+  "program_requirements": {
+    "mode_average_units": 9,
+    "double_counting_rules": {
+      "max_courses_double_count": 2,
+      "description": "Up to 2 courses may double count with other programs unless specified otherwise",
+      "unlimited_double_count_within": [
+        "Pre-requisite Requirements"
+      ]
+    },
+    "requirements": {
+      "prerequisites": {
+        "mode_average_units": 10,
+        "requirement": "Fulfill any of the following",
+        "options": [
+          {
+            "course_code": "15-110",
+            "course_title": "Principles of Computing",
+            "minimum_grade": "B",
+            "units": 10
+          },
+          {
+            "course_code": "15-112",
+            "course_title": "Fundamentals of Programming and Computer Science",
+            "minimum_grade": "D",
+            "units": 12
+          }
+        ]
+      },
+      "fundamentals_of_entrepreneurship": {
+        "requirement": "Take at least 1 course",
+        "min_units": 9,
+        "mode_average_units": 9,
+        "course_options": [
+          "15-390",
+          "70-409",
+          "70-415"
+        ]
+      },
+      "digital_design_and_technology": {
+        "requirement": "Take at least 2 courses",
+        "min_units": 18,
+        "mode_average_units": 9,
+        "course_options": [
+          "10-315",
+          "11-411",
+          "11-485",
+          "15-182",
+          "15-281",
+          "15-282",
+          "15-316",
+          "15-330",
+          "15-348",
+          "15-415",
+          "15-440",
+          "15-441",
+          "15-488",
+          "16-311",
+          "17-313"
+        ]
+      },
+      "organizational_intelligence": {
+        "requirement": "Take at least 2 courses",
+        "min_units": 18,
+        "mode_average_units": 9,
+        "course_options": [
+          "67-318",
+          "67-382",
+          "70-122",
+          "70-311",
+          "70-318",
+          "70-387",
+          "70-395",
+          "70-416",
+          "70-440",
+          "70-443"
+        ]
+      },
+      "capstone_project": {
+        "requirement": "Take exactly 1 course",
+        "mode_average_units": 9,
+        "course_required": "67-474"
+      }
+    }
+  }
+}

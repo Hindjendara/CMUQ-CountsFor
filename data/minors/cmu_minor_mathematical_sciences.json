@@ -1,0 +1,91 @@
+{
+  "minor": {
+    "name": "Minor in Mathematical Sciences",
+    "department": "Mathematical Sciences",
+    "college": "Mellon College of Science",
+    "university": "Carnegie Mellon University",
+    "version": "EY2019 Doha - Minor in Mathematics",
+    "entry_year": "2019 and later",
+    "campus": "Doha"
+  },
+  "program_requirements": {
+    "total_min_units": 56,
+    "mode_average_units": 12,
+    "requirement": "Fulfill all of the following requirements",
+    "double_counting_rules": {
+      "general": "Courses may double count without any limit with other programs unless specified otherwise",
+      "electives_double_count": 0,
+      "note": "Courses that count towards Electives: 0 (no double counting allowed for electives)"
+    },
+    "requirements": {
+      "description": "Fulfill all of the following requirements",
+      "mode_average_units": 12,
+      "internal_double_counting": "Courses may double count without any limit with other requirements unless specified otherwise",
+      "categories": {
+        "concepts_of_mathematics": {
+          "requirement": "Fulfill any of the following requirements",
+          "mode_average_units": 12,
+          "options": [
+            {
+              "code": "21-127",
+              "title": "Concepts of Mathematics"
+            },
+            {
+              "code": "21-128",
+              "title": "Mathematical Concepts and Proofs"
+            }
+          ]
+        },
+        "discrete_mathematics": {
+          "requirement": "Fulfill any of the following requirements",
+          "mode_average_units": 12,
+          "options": [
+            {
+              "code": "21-228",
+              "title": "Discrete Mathematics"
+            },
+            {
+              "code": "15-251",
+              "title": "Great Ideas in Theoretical Computer Science"
+            }
+          ]
+        },
+        "matrices": {
+          "requirement": "Fulfill any of the following requirements",
+          "mode_average_units": 11,
+          "options": [
+            {
+              "code": "21-241",
+              "title": "Matrices and Linear Transformations"
+            },
+            {
+              "code": "21-242",
+              "title": "Matrix Theory"
+            },
+            {
+              "code": "21-355",
+              "title": "Principles of Real Analysis I"
+            }
+          ]
+        },
+        "electives": {
+          "requirement": "Take at least 2 courses",
+          "min_units": 18,
+          "mode_average_units": 12,
+          "course_range": {
+            "start": "21-300",
+            "end": "21-999"
+          },
+          "excluded_courses": [
+            "21-355"
+          ],
+          "description": "Any 2 courses from 21-300 to 21-999 range except 21-355"
+        }
+      }
+    },
+    "pathways": {
+      "available": false,
+      "note": "No Pathways Available"
+    }
+  }
+}

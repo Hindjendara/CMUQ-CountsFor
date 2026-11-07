@@ -1,0 +1,112 @@
+{
+  "minor": {
+    "name": "Minor in Biological Sciences",
+    "program": "Qatar Biological Sciences",
+    "university": "Carnegie Mellon University",
+    "version": "EY2024 Doha Minor in Biological Sciences",
+    "entry_year": "2024 and later",
+    "campus": "Doha",
+    "Description": "Provides students with foundational education in the biological sciences. A minimum of six biological sciences courses (and two chemistry prerequisites) must be completed to fulfill the minor. Total units required for the minor: 73. :contentReference[oaicite:0]{index=0}",
+    "Notes": "At least two chemistry prerequisites must be completed before enrolling in any biological sciences minor course. Biological sciences offerings include courses in biochemistry, cell biology, genetics, microbiology, physiology, and related areas."
+  },
+  "program_requirements": {
+    "total_min_units": 73,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "requirements": {
+      "prerequisites": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "courses": [
+          {
+            "code": "09-105",
+            "title": "Introduction to Modern Chemistry I"
+          },
+          {
+            "code": "09-217",
+            "title": "Organic Chemistry I"
+          }
+        ]
+      },
+      "required_courses": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "categories": {
+          "modern_biology": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 10,
+            "options": [
+              {
+                "code": "03-121",
+                "title": "Modern Biology"
+              },
+              {
+                "code": "03-151",
+                "title": "Honors Modern Biology"
+              }
+            ]
+          },
+          "genetics": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "03-220",
+                "title": "Genetics"
+              },
+              {
+                "code": "03-221",
+                "title": "Genomes, Evolution, and Disease: Introduction to Quantitative Genetic Analysis"
+              }
+            ]
+          },
+          "biochemistry_i": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "03-231",
+                "title": "Honors Biochemistry"
+              },
+              {
+                "code": "03-232",
+                "title": "Biochemistry I"
+              }
+            ]
+          },
+          "cell_biology": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "03-240",
+                "title": "Cell Biology"
+              },
+              {
+                "code": "03-320",
+                "title": "Cell Biology"
+              }
+            ]
+          },
+          "general_biology_elective": {
+            "requirement": "Take at least 9 units from subject code 03",
+            "min_units": 9,
+            "mode_average_units": 9,
+            "subject_code": "03"
+          },
+          "advanced_biology_elective": {
+            "requirement": "Take at least 1 course that matches the following",
+            "min_units": 9,
+            "mode_average_units": 9,
+            "course_pattern": "03-3XX",
+            "description": "Any 300-level biology course"
+          }
+        }
+      }
+    },
+    "pathways": {
+      "available": false,
+      "note": "No Pathways Available"
+    }
+  }
+}

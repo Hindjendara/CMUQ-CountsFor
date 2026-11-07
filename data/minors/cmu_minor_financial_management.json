@@ -1,0 +1,110 @@
+{
+  "minor": {
+    "name": "Minor in Financial Management",
+    "department": "Business Administration",
+    "school": "David A. Tepper School of Business",
+    "university": "Carnegie Mellon University",
+    "version": "Tepper - Minor in Financial Management - EY2023+",
+    "entry_year": "2020 and later",
+    "campus": "Pittsburgh",
+    "last_published": "January 17, 2025",
+    "published_by": "Tara Trapani",
+    "visibility": "PUBLIC",
+    "applies_to": "40 students",
+    "manually_applied_to": "4 students"
+  },
+  "program_requirements": {
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "transfer_restrictions": "At most 1 course with transfer grades",
+    "double_counting_rules": {
+      "general": "Up to 1 course may double count with other programs unless specified otherwise",
+      "unlimited_double_count_with_programs": [
+        "DC General Education Requirements (2004)",
+        "EY2018 Pittsburgh - DC General Education Requirements",
+        "EY2019 Pittsburgh - DC General Education Requirements",
+        "EY2018 Art - University Academic Courses",
+        "EY2012 Music - General Studies Courses",
+        "EY2020 Pittsburgh - DC General Education Requirements",
+        "Tepper - University Core Requirements - EY2020+",
+        "EY2020 SCS - General Education",
+        "Dietrich College - General Education - EY2021-2023",
+        "Mellon College of Science - General Education - EY2021+",
+        "EY2021 SCS - General Education",
+        "EY2018 BHA - General Education Requirements",
+        "EY2019 BHA - General Education Requirements",
+        "EY2020 BSA - General Education Requirements",
+        "EY2020 BCA - General Education Requirements",
+        "EY2020 BHA - General Education Requirements",
+        "EY2022 SCS - General Education",
+        "Carnegie Institute of Technology - General Education - EY2021+",
+        "EY2023 SCS - General Education",
+        "EY2021 BCA - General Education Requirements",
+        "EY2021 BHA - General Education Requirements",
+        "EY2021 BSA - General Education Requirements",
+        "EY2022 BCA - General Education Requirements",
+        "EY2022 BSA - General Education Requirements",
+        "EY2023 BHA - General Education Requirements",
+        "Dietrich College - General Education - EY2024+"
+      ]
+    },
+    "requirements": {
+      "required_courses": {
+        "requirement": "Required courses",
+        "courses": [
+          {
+            "code": "70-391",
+            "title": "Finance"
+          },
+          {
+            "code": "70-493",
+            "title": "Valuation and Financial Modeling"
+          }
+        ]
+      },
+      "statistics": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "options": [
+          {
+            "code": "70-207",
+            "title": "Probability and Statistics for Business Applications"
+          },
+          {
+            "code": "36-200",
+            "title": "Reasoning with Data"
+          },
+          {
+            "code": "36-225",
+            "title": "Introduction to Probability Theory"
+          },
+          {
+            "code": "36-235",
+            "title": "Probability and Statistical Inference I"
+          },
+          {
+            "code": "36-217",
+            "title": "Probability Theory and Random Processes"
+          },
+          {
+            "code": "36-218",
+            "title": "Probability Theory for Computer Scientists"
+          }
+        ]
+      },
+      "finance_electives": {
+        "requirement": "Take at least 3 courses",
+        "mode_average_units": 9,
+        "course_options": [
+          "21-270",
+          "70-398",
+          "70-428",
+          "70-492",
+          "70-495",
+          "73-103",
+          "73-337"
+        ]
+      }
+    }
+  }
+}

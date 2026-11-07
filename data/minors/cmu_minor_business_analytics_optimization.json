@@ -1,0 +1,220 @@
+{
+  "minor": {
+    "name": "Minor in Business Analytics and Optimization",
+    "department": "Business Administration",
+    "school": "David A. Tepper School of Business",
+    "university": "Carnegie Mellon University",
+    "version": "Tepper - Minor In Business Analytics and Optimization - EY2020+",
+    "entry_year": "2017 and later",
+    "campus": "Pittsburgh",
+    "last_published": "October 31, 2024",
+    "published_by": "Tara Trapani",
+    "visibility": "PUBLIC",
+    "applies_to": "68 students"
+  },
+  "program_requirements": {
+    "total_min_units": 54,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "transfer_restrictions": "At most 1 course with transfer grades",
+    "double_counting_rules": {
+      "general": "Up to 1 course may double count with other programs unless specified otherwise",
+      "unlimited_double_count": [
+        "Required Prerequisite Course"
+      ],
+      "unlimited_double_count_with_programs": [
+        "DC General Education Requirements (2004)",
+        "EY2018 Pittsburgh - DC General Education Requirements",
+        "EY2019 Pittsburgh - DC General Education Requirements",
+        "EY2018 Art - University Academic Courses",
+        "EY2012 Music - General Studies Courses",
+        "EY2020 Pittsburgh - DC General Education Requirements",
+        "Tepper - University Core Requirements - EY2020+",
+        "EY2020 SCS - General Education",
+        "Dietrich College - General Education - EY2021-2023",
+        "Mellon College of Science - General Education - EY2021+",
+        "EY2021 SCS - General Education",
+        "EY2018 BHA - General Education Requirements",
+        "EY2019 BHA - General Education Requirements",
+        "EY2020 BSA - General Education Requirements",
+        "EY2020 BCA - General Education Requirements",
+        "EY2020 BHA - General Education Requirements",
+        "EY2022 SCS - General Education",
+        "Carnegie Institute of Technology - General Education - EY2021+",
+        "EY2023 SCS - General Education",
+        "EY2021 BCA - General Education Requirements",
+        "EY2021 BHA - General Education Requirements",
+        "EY2021 BSA - General Education Requirements",
+        "EY2022 BCA - General Education Requirements",
+        "EY2022 BHA - General Education Requirements",
+        "EY2022 BSA - General Education Requirements",
+        "EY2023 BHA - General Education Requirements",
+        "Dietrich College - General Education - EY2024+"
+      ]
+    },
+    "requirements": {
+      "required_prerequisite_course": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "options": [
+          {
+            "code": "21-256",
+            "title": "Multivariate Analysis"
+          },
+          {
+            "code": "21-259",
+            "title": "Calculus in Three Dimensions"
+          },
+          {
+            "code": "21-254",
+            "title": "Linear Algebra and Vector Calculus for Engineers"
+          }
+        ]
+      },
+      "modeling_uncertainty": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "options": [
+          {
+            "code": "70-207",
+            "title": "Probability and Statistics for Business Applications"
+          },
+          {
+            "code": "36-207",
+            "title": "Probability and Statistics for Business Applications"
+          },
+          {
+            "code": "36-200",
+            "title": "Reasoning with Data"
+          },
+          {
+            "code": "36-220",
+            "title": "Engineering Statistics and Quality Control"
+          },
+          {
+            "code": "36-225",
+            "title": "Introduction to Probability Theory"
+          }
+        ]
+      },
+      "business_analytics_and_optimization_core": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "categories": {
+          "business_analytics": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "70-467",
+                "title": "Machine Learning for Business Analytics"
+              },
+              {
+                "code": "70-374",
+                "title": "Data Mining & Business Analytics"
+              },
+              {
+                "code": "15-388",
+                "title": "Practical Data Science"
+              }
+            ]
+          },
+          "optimization": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "70-257",
+                "title": "Optimization for Business"
+              },
+              {
+                "code": "21-292",
+                "title": "Operations Research I"
+              },
+              {
+                "code": "21-257",
+                "title": "Models and Methods for Optimization"
+              },
+              {
+                "code": "70-469",
+                "title": "End to End Business Analytics"
+              }
+            ]
+          }
+        }
+      },
+      "business_foundations_elective": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "options": [
+          {
+            "code": "70-122",
+            "title": "Introduction to Accounting"
+          },
+          {
+            "code": "70-311",
+            "title": "Organizational Behavior"
+          },
+          {
+            "code": "70-371",
+            "title": "Operations Management"
+          },
+          {
+            "code": "70-381",
+            "title": "Marketing I"
+          },
+          {
+            "code": "70-391",
+            "title": "Finance"
+          },
+          {
+            "code": "73-102",
+            "title": "Principles of Microeconomics"
+          },
+          {
+            "code": "73-104",
+            "title": "Principles of Microeconomics Accelerated"
+          }
+        ]
+      },
+      "technical_elective": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "options": [
+          {
+            "code": "70-208",
+            "title": "Regression Analysis"
+          },
+          {
+            "code": "70-374",
+            "title": "Data Mining & Business Analytics"
+          },
+          {
+            "code": "70-455",
+            "title": "Data Management Fundamentals"
+          },
+          {
+            "code": "70-460",
+            "title": "Mathematical Models for Consulting"
+          },
+          {
+            "code": "70-462",
+            "title": "Uncertainty and Risk Modeling"
+          },
+          {
+            "code": "70-467",
+            "title": "Machine Learning for Business Analytics"
+          },
+          {
+            "code": "73-374",
+            "title": "Econometrics II"
+          },
+          {
+            "code": "15-388",
+            "title": "Practical Data Science"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "minor": {
+    "name": "Minor in Neuroscience",
+    "program": "Qatar Biological Sciences",
+    "university": "Carnegie Mellon University",
+    "version": "EY2022+ Doha Minor in Neuroscience",
+    "entry_year": "2022 and later",
+    "campus": "Doha"
+  },
+  "program_requirements": {
+    "total_min_units": 63,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "double_counting_rules": {
+      "max_courses_double_count": 2,
+      "description": "Up to 2 courses may double count with other programs unless specified otherwise"
+    },
+    "requirements": {
+      "required_courses": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "categories": {
+          "modern_biology": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 10,
+            "options": [
+              {
+                "code": "03-121",
+                "title": "Modern Biology"
+              },
+              {
+                "code": "03-151",
+                "title": "Honors Modern Biology"
+              }
+            ]
+          },
+          "neuroscience_core": {
+            "requirement": "Required courses",
+            "courses": [
+              {
+                "code": "03-362",
+                "title": "Cellular Neuroscience"
+              },
+              {
+                "code": "03-363",
+                "title": "Systems Neuroscience"
+              }
+            ]
+          },
+          "fobb_or_molecules_to_mind": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "03-161",
+                "title": "Molecules to Mind"
+              },
+              {
+                "code": "85-170",
+                "title": "Foundations of Brain and Behavior"
+              },
+              {
+                "code": "85-219",
+                "title": "Foundations of Brain and Behavior"
+              }
+            ]
+          }
+        }
+      },
+      "neurobiology_elective_requirement": {
+        "requirement": "Fulfill any of the following requirements",
+        "min_units": 27,
+        "mode_average_units": 9,
+        "description": "Take at least 27 units total from the following courses",
+        "course_options": [
+          {
+            "code": "03-133",
+            "title": "Neurobiology of Disease"
+          },
+          {
+            "code": "03-351",
+            "title": "Computation and Biology Integrated Research Lab"
+          },
+          {
+            "code": "03-360",
+            "title": "Genomics and Epigenetics of the Brain"
+          },
+          {
+            "code": "02-319",
+            "title": "Genomics and Epigenetics of the Brain"
+          },
+          {
+            "code": "03-365",
+            "title": "Neural Correlates of Learning and Memory"
+          },
+          {
+            "code": "03-366",
+            "title": "Neuropharmacology: Drugs, Brain and Behavior"
+          },
+          {
+            "code": "85-104",
+            "title": "Psychopathology"
+          },
+          {
+            "code": "85-110",
+            "title": "Cognitive Psychology"
+          },
+          {
+            "code": "85-130",
+            "title": "Developmental Psychology"
+          },
+          {
+            "code": "85-190",
+            "title": "Psychopathology"
+          },
+          {
+            "code": "85-211",
+            "title": "Cognitive Psychology"
+          },
+          {
+            "code": "85-213",
+            "title": "Human Information Processing and Artificial Intelligence"
+          },
+          {
+            "code": "85-221",
+            "title": "Principles of Child Development"
+          },
+          {
+            "code": "85-310",
+            "title": "Research Methods in Cognitive Psychology"
+          },
+          {
+            "code": "85-370",
+            "title": "Cognitive Neuropsychology Research Methods"
+          },
+          {
+            "code": "85-406",
+            "title": "Autism: Psychological and Neuroscience Perspectives"
+          },
+          {
+            "code": "85-414",
+            "title": "Cognition in the Age of AI"
+          },
+          {
+            "code": "85-413",
+            "title": "Perception"
+          },
+          {
+            "code": "85-420",
+            "title": "Biologically Intelligent Exploration"
+          },
+          {
+            "code": "85-435",
+            "title": "Biologically Intelligent Exploration"
+          },
+          {
+            "code": "85-472",
+            "title": "Cognitive Neuropsychology"
+          }
+        ]
+      }
+    },
+    "pathways": {
+      "available": false,
+      "note": "No Pathways Available"
+    }
+  }
+}

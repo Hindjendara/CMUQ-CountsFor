@@ -1,0 +1,66 @@
+{
+  "minor": {
+    "name": "Minor in History",
+    "department": "History",
+    "college": "Dietrich College of H&SS",
+    "university": "Carnegie Mellon University",
+    "version": "EY2023 Minor in History",
+    "entry_year": "2023 and later"
+  },
+  "program_requirements": {
+    "total_min_units": 63,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "double_counting_rules": {
+      "default": "Courses may not double count with other programs unless specified otherwise",
+      "unlimited_double_count": [
+        "Required Course"
+      ],
+      "limited_double_count": {
+        "max_courses": 2,
+        "applies_to": [
+          "History Electives"
+        ]
+      }
+    },
+    "requirements": {
+      "required_course": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "courses": [
+          {
+            "code": "79-104",
+            "title": "Global Histories"
+          }
+        ]
+      },
+      "history_electives": {
+        "requirement": "Take any 6 courses",
+        "min_units": 54,
+        "mode_average_units": 9,
+        "course_range": {
+          "start": "79-100",
+          "end": "79-999"
+        },
+        "additional_courses_allowed": [
+          "82-233",
+          "82-247",
+          "82-273",
+          "82-286",
+          "82-413",
+          "QG-447",
+          "QN-242",
+          "QT-235",
+          "QV-112",
+          "QV-115",
+          "QV-116"
+        ],
+        "description": "Any 6 courses from 79-100 to 79-999 range, plus the additional specified courses from other departments"
+      }
+    },
+    "pathways": {
+      "available": false,
+      "note": "No Pathways Available"
+    }
+  }
+}

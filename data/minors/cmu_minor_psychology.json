@@ -1,0 +1,151 @@
+{
+  "minor": {
+    "name": "Minor in Psychology",
+    "department": "Psychology",
+    "college": "Dietrich College of H&SS",
+    "university": "Carnegie Mellon University",
+    "version": "EY23-25 Doha Minor Psychology",
+    "entry_year": "2023 - 2023",
+    "campus": "Doha",
+    "last_published": "September 3, 2025",
+    "published_by": "Jarrin Nevel",
+    "visibility": "PUBLIC",
+    "applies_to": "8 students"
+  },
+  "program_requirements": {
+    "total_min_units": 72,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "double_counting_rules": {
+      "general": "Courses may double count without any limit with other programs unless specified otherwise"
+    },
+    "requirements": {
+      "survey_courses": {
+        "requirement": "Take at least 2 courses",
+        "mode_average_units": 9,
+        "course_options": {
+          "fall_2025_and_later": [
+            "85-110",
+            "85-130",
+            "85-150",
+            "85-170",
+            "85-190",
+            "85-251"
+          ],
+          "summer_2025_and_earlier": {
+            "courses": [
+              "85-104",
+              "85-211",
+              "85-219",
+              "85-221",
+              "85-241",
+              "85-251"
+            ],
+            "note": "Hidden from the student unless taken"
+          }
+        }
+      },
+      "statistics_requirements": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "categories": {
+          "introductory_statistics": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "36-200",
+                "title": "Reasoning with Data"
+              },
+              {
+                "code": "36-201",
+                "title": "Statistical Reasoning and Practice"
+              },
+              {
+                "code": "36-207",
+                "title": "Probability and Statistics for Business Applications"
+              },
+              {
+                "code": "36-225",
+                "title": "Introduction to Probability Theory"
+              },
+              {
+                "code": "70-207",
+                "title": "Probability and Statistics for Business Applications"
+              },
+              {
+                "code": "36-247",
+                "title": "Statistics for Lab Sciences"
+              }
+            ]
+          },
+          "behavioral_statistics": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "70-208",
+                "title": "Regression Analysis"
+              },
+              {
+                "code": "36-309",
+                "title": "Experimental Design for Behavioral & Social Sciences"
+              },
+              {
+                "code": "85-309",
+                "title": "Statistical Concepts and Methods for Behavioral and Social Science"
+              },
+              {
+                "code": "36-202",
+                "title": "Methods for Statistics & Data Science"
+              }
+            ]
+          }
+        }
+      },
+      "introduction_to_research_methods": {
+        "requirement": "Take at least 1 course",
+        "min_units": 9,
+        "mode_average_units": 9,
+        "course_options": [
+          {
+            "code": "85-300",
+            "title": "Introduction to Research Methods"
+          },
+          {
+            "code": "85-310",
+            "title": "Research Methods in Cognitive Psychology"
+          }
+        ]
+      },
+      "advanced_courses": {
+        "requirement": "Take at least 2 courses",
+        "mode_average_units": 9,
+        "course_range": {
+          "start": "85-350",
+          "end": "85-499"
+        },
+        "excluded_courses": [
+          "85-480",
+          "85-482",
+          "85-484",
+          "85-505",
+          "85-506",
+          "85-507",
+          "85-508",
+          "85-509",
+          "85-510"
+        ]
+      },
+      "psychology_elective_course": {
+        "requirement": "Take at least 9 units",
+        "min_units": 9,
+        "mode_average_units": 9,
+        "subject_code": "85",
+        "restrictions": {
+          "ap_grade": "Courses with AP grade may not count"
+        }
+      }
+    }
+  }
+}

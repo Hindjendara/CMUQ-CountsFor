@@ -1,0 +1,91 @@
+{
+  "minor": {
+    "name": "Minor in Computational Biology",
+    "program": "Qatar Computer Science",
+    "university": "Carnegie Mellon University",
+    "version": "EY2024 Doha Minor in Computational Biology",
+    "entry_year": "2024 and later",
+    "campus": "Doha"
+  },
+  "program_requirements": {
+    "total_min_units": 54,
+    "mode_average_units": 12,
+    "requirement": "Fulfill all of the following requirements",
+    "requirements": {
+      "prerequisites": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 10,
+        "double_counting_rules": "Double counting allowed within the following subrequirements unless specified otherwise",
+        "categories": {
+          "modern_biology": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 10,
+            "options": [
+              {
+                "code": "03-121",
+                "title": "Modern Biology"
+              },
+              {
+                "code": "03-151",
+                "title": "Honors Modern Biology"
+              }
+            ]
+          },
+          "computing": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 10,
+            "options": [
+              {
+                "code": "15-110",
+                "title": "Principles of Computing"
+              },
+              {
+                "code": "15-112",
+                "title": "Fundamentals of Programming and Computer Science"
+              }
+            ]
+          }
+        }
+      },
+      "core_courses": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 12,
+        "double_counting_rules": "Double counting allowed up to 2 courses within the following subrequirements unless specified otherwise",
+        "categories": {
+          "introduction_to_computational_biology": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 12,
+            "courses": [
+              {
+                "code": "02-250",
+                "title": "Introduction to Computational Biology"
+              }
+            ]
+          },
+          "computational_biology_lab": {
+            "requirement": "Take at least 1 course",
+            "mode_average_units": 9,
+            "course_options": [
+              "02-261",
+              "02-262",
+              "03-343"
+            ]
+          },
+          "computational_biology_electives": {
+            "requirement": "Take any 3 courses",
+            "mode_average_units": 12,
+            "course_range": {
+              "start": "02-300",
+              "end": "02-999"
+            },
+            "description": "Any 3 courses with codes between 02-300 to 02-999"
+          }
+        }
+      }
+    },
+    "pathways": {
+      "available": false,
+      "note": "No Pathways Available"
+    }
+  }
+}

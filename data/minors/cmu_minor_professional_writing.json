@@ -1,0 +1,99 @@
+{
+  "minor": {
+    "name": "Minor in Professional Writing",
+    "department": "English",
+    "college": "Dietrich College of H&SS",
+    "university": "Carnegie Mellon University",
+    "version": "EY2024 Doha Minor in Professional Writing",
+    "entry_year": "2024 and later",
+    "campus": "Doha"
+  },
+  "program_requirements": {
+    "total_min_units": 54,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "double_counting_rules": {
+      "max_courses_double_count": 1,
+      "description": "Up to 1 course may double count with other programs unless specified otherwise",
+      "cannot_double_count_with_programs": [
+        "Additional Major in Creative Writing",
+        "Minor in Creative Writing",
+        "BA in Creative Writing",
+        "Minor in Technical Writing",
+        "Additional Major in Technical Writing",
+        "BA in Film and Visual Media",
+        "Additional Major in Film and Visual Media",
+        "Additional Major in Literature and Culture",
+        "BA in Literature and Culture",
+        "Minor in Literature and Culture",
+        "BS in Technical Writing"
+      ]
+    },
+    "requirements": {
+      "writing_for_professions_or_intro": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "description": "Writing for the Professions OR Introduction to Professional and Technical Writing",
+        "options": [
+          {
+            "code": "76-270",
+            "title": "Writing for the Professions"
+          },
+          {
+            "code": "76-271",
+            "title": "Introduction to Professional and Technical Writing"
+          }
+        ]
+      },
+      "two_200_or_300_level_core_writing_courses": {
+        "requirement": "Take at least 1 course and at least 18 units total",
+        "mode_average_units": 9,
+        "min_units": 18,
+        "required_courses": [
+          "76-373",
+          "76-389",
+          "76-390"
+        ],
+        "max_units_from_creative_writing": {
+          "limit": 9,
+          "courses": [
+            "76-260",
+            "76-261",
+            "76-262",
+            "76-265",
+            "76-269"
+          ],
+          "description": "Take at most 9 units from these creative writing courses"
+        }
+      },
+      "two_300_or_400_level_writing_courses": {
+        "requirement": "Take at least 2 courses",
+        "min_units": 18,
+        "course_range": {
+          "start": "76-300",
+          "end": "76-499"
+        },
+        "description": "Any 2 courses from 76-3XX to 76-499"
+      },
+      "200_level_or_above_english_elective": {
+        "requirement": "Take at least 1 course",
+        "min_units": 9,
+        "mode_average_units": 9,
+        "course_range": {
+          "start": "76-200",
+          "end": "76-499"
+        },
+        "description": "Any 1 course from 76-200 to 76-499"
+      }
+    },
+    "pathways": {
+      "available": true,
+      "pathway_info": {
+        "name": "Minor in Professional Writing",
+        "created_by": "Laura Donaldson",
+        "terms": 6,
+        "choices": 6
+      }
+    }
+  }
+}

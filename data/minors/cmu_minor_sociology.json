@@ -1,0 +1,295 @@
+{
+  "minor": {
+    "name": "Minor in Sociology",
+    "department": "Dietrich College Interdisciplinary",
+    "college": "Dietrich College of H&SS",
+    "university": "Carnegie Mellon University",
+    "version": "EY2023 Pittsburgh - Minor in Sociology",
+    "entry_year": "2023 and later",
+    "campus": "Pittsburgh"
+  },
+  "program_requirements": {
+    "total_min_units": 54,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "double_counting_rules": {
+      "general": "Up to 2 courses may double count with other programs unless specified otherwise",
+      "unlimited_double_count_with_programs": [
+        "Tepper - University Core Requirements - EY2020+",
+        "Dietrich College - General Education - EY2021-2023",
+        "Mellon College of Science - General Education - EY2021+",
+        "EY2021 SCS - General Education"
+      ],
+      "restrictions": "with no restrictions"
+    },
+    "requirements": {
+      "core_courses": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "courses": [
+          {
+            "code": "70-311",
+            "title": "Organizational Behavior"
+          }
+        ]
+      },
+      "methodology": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "options": [
+          {
+            "code": "36-202",
+            "title": "Methods for Statistics & Data Science"
+          },
+          {
+            "code": "70-208",
+            "title": "Regression Analysis"
+          },
+          {
+            "code": "85-340",
+            "title": "Research Methods in Social Psychology"
+          },
+          {
+            "code": "88-251",
+            "title": "Empirical Research Methods"
+          },
+          {
+            "code": "88-252",
+            "title": "Causal Inference: from Data to Decisions"
+          }
+        ]
+      },
+      "sociology_minor_electives": {
+        "requirement": "Take at least 4 courses in total from the subrequirements",
+        "mode_average_units": 9,
+        "note": "Other pre-approved courses may also count",
+        "categories": {
+          "sociology_of_gender_family_and_culture": {
+            "requirement": "Take at least 1 course",
+            "mode_average_units": 9,
+            "course_options": [
+              {
+                "code": "70-342",
+                "title": "Managing Across Cultures"
+              },
+              {
+                "code": "70-385",
+                "title": "Consumer Behavior"
+              },
+              {
+                "code": "76-241",
+                "title": "Introduction to Gender Studies"
+              },
+              {
+                "code": "79-244",
+                "title": "Women in American History"
+              },
+              {
+                "code": "79-261",
+                "title": "The Last Emperors: Chinese History and Society, 1600-1900"
+              },
+              {
+                "code": "79-292",
+                "title": "China and the West"
+              },
+              {
+                "code": "79-308",
+                "title": "Crime and Justice in American Film"
+              },
+              {
+                "code": "79-320",
+                "title": "Women, Politics, and Protest"
+              },
+              {
+                "code": "79-323",
+                "title": "Making Modern Cities"
+              },
+              {
+                "code": "79-331",
+                "title": "Body Politics: Women and Health in America"
+              },
+              {
+                "code": "79-343",
+                "title": "Education, Democracy, and Civil Rights"
+              },
+              {
+                "code": "79-377",
+                "title": "Food, Culture, and Power: A History of Eating"
+              },
+              {
+                "code": "80-224",
+                "title": "Race, Gender and Science"
+              },
+              {
+                "code": "80-245",
+                "title": "Medical Ethics"
+              },
+              {
+                "code": "80-246",
+                "title": "Moral Psychology"
+              },
+              {
+                "code": "80-256",
+                "title": "Modern Moral Philosophy"
+              },
+              {
+                "code": "80-305",
+                "title": "Game Theory"
+              },
+              {
+                "code": "80-335",
+                "title": "Social and Political Philosophy"
+              },
+              {
+                "code": "80-348",
+                "title": "Health, Human Rights, and International Development"
+              },
+              {
+                "code": "84-369",
+                "title": "Decision Science for International Relations"
+              },
+              {
+                "code": "85-241",
+                "title": "Social Psychology"
+              },
+              {
+                "code": "85-350",
+                "title": "Psychology of Prejudice"
+              },
+              {
+                "code": "85-352",
+                "title": "Evolutionary Psychology"
+              },
+              {
+                "code": "85-358",
+                "title": "Pro-Social Behavior"
+              },
+              {
+                "code": "85-377",
+                "title": "Attitudes and Persuasion"
+              },
+              {
+                "code": "85-442",
+                "title": "Health Psychology"
+              },
+              {
+                "code": "85-446",
+                "title": "Psychology of Gender"
+              },
+              {
+                "code": "88-230",
+                "title": "Human Intelligence and Human Stupidity"
+              },
+              {
+                "code": "88-231",
+                "title": "Thinking in Person vs. Thinking Online"
+              },
+              {
+                "code": "88-285",
+                "title": "Deconstructing and Dismantling Discrimination"
+              },
+              {
+                "code": "88-290",
+                "title": "Confessions, Lies, and Gossip"
+              }
+            ]
+          },
+          "sociology_of_work_organizations_and_technology": {
+            "requirement": "Take at least 1 course",
+            "mode_average_units": 9,
+            "course_options": [
+              {
+                "code": "70-332",
+                "title": "Business, Society and Ethics"
+              },
+              {
+                "code": "73-348",
+                "title": "Behavioral Economics"
+              },
+              {
+                "code": "79-234",
+                "title": "Technology and Society"
+              },
+              {
+                "code": "79-275",
+                "title": "Introduction to Global Studies"
+              },
+              {
+                "code": "79-342",
+                "title": "Age of Crusading, 1000-1800"
+              },
+              {
+                "code": "80-341",
+                "title": "Computers, Society and Ethics"
+              },
+              {
+                "code": "88-234",
+                "title": "Negotiation: International Focus"
+              },
+              {
+                "code": "88-235",
+                "title": "Negotiation: Strategies and Behavioral Insights"
+              },
+              {
+                "code": "88-237",
+                "title": "The Happy Cyborg"
+              },
+              {
+                "code": "88-255",
+                "title": "Strategic Decision Making"
+              },
+              {
+                "code": "88-261",
+                "title": "Health Policy and Decision Making"
+              },
+              {
+                "code": "88-262",
+                "title": "Rationality and Irrationality in Medicine"
+              },
+              {
+                "code": "88-275",
+                "title": "Bubbles: Data Science for Human Minds"
+              },
+              {
+                "code": "88-312",
+                "title": "Decision Models and Games"
+              },
+              {
+                "code": "88-341",
+                "title": "Team Dynamics and Leadership"
+              },
+              {
+                "code": "88-344",
+                "title": "Systems Analysis: Environmental Policy"
+              },
+              {
+                "code": "88-365",
+                "title": "Behavioral Economics and Public Policy"
+              },
+              {
+                "code": "88-366",
+                "title": "Behavioral Economics of Poverty and Development"
+              },
+              {
+                "code": "88-367",
+                "title": "Designing Economics Experiments in the Wild"
+              },
+              {
+                "code": "88-451",
+                "title": "Policy Analysis Senior Project"
+              },
+              {
+                "code": "88-452",
+                "title": "Policy Analysis Senior Project"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "pathways": {
+      "available": false,
+      "note": "No Pathways Available"
+    }
+  }
+}

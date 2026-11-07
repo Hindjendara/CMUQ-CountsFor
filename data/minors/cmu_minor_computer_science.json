@@ -1,0 +1,164 @@
+{
+  "minor": {
+    "name": "Minor in Computer Science",
+    "program": "Qatar Computer Science",
+    "university": "Carnegie Mellon University",
+    "version": "EY2017 Doha Minor in Computer Science",
+    "entry_year": "2017 and later",
+    "campus": "Doha",
+    "last_published": "July 16, 2024",
+    "published_by": "Giselle Reis",
+    "visibility": "PUBLIC",
+    "applies_to": "19 students",
+    "Description": "Provides non-CS majors with foundational knowledge in computer science. Students must satisfy prerequisite coursework before enrolling in the core minor courses. After completing prerequisites, students complete three core CS courses and at least three additional SCS courses to fulfill the minor.",
+    "Notes": "Prerequisite courses (15-112 and 21-127) do not count toward the minor’s unit total. Pre-requisites and two other courses used for the minor may double-count toward another major or minor (general education courses do not count)."
+  },
+  "program_requirements": {
+    "mode_average_units": 12,
+    "double_counting_rules": {
+      "default": "Courses may not double count with other programs unless specified otherwise",
+      "unlimited_double_count": [
+        "Prerequisites"
+      ],
+      "limited_double_count": {
+        "max_courses": 2,
+        "applies_to": [
+          "Computer Science Core",
+          "CS Elective",
+          "CS/SCS Elective"
+        ]
+      }
+    },
+    "requirements": {
+      "prerequisites": {
+        "requirement": "Fulfill all of the following",
+        "mode_average_units": 12,
+        "courses": [
+          {
+            "code": "15-112",
+            "title": "Fundamentals of Programming and Computer Science"
+          },
+          {
+            "code": "21-127",
+            "title": "Concepts of Mathematics"
+          }
+        ]
+      },
+      "computer_science_core": {
+        "requirement": "Fulfill all of the following",
+        "mode_average_units": 12,
+        "required_courses": [
+          {
+            "code": "15-122",
+            "title": "Principles of Imperative Computation"
+          },
+          {
+            "code": "15-150",
+            "title": "Principles of Functional Programming"
+          },
+          {
+            "code": "15-210",
+            "title": "Parallel and Sequential Data Structures and Algorithms"
+          }
+        ],
+        "additional_requirement": {
+          "name": "15-213 or 15-251",
+          "requirement": "Fulfill any of the following",
+          "mode_average_units": 12,
+          "note": "Other pre-approved courses may also count",
+          "double_count_restriction": "Courses may not double count with other requirements unless specified otherwise",
+          "options": [
+            {
+              "code": "15-213",
+              "title": "Introduction to Computer Systems"
+            },
+            {
+              "code": "18-213",
+              "title": "Introduction to Computer Systems"
+            },
+            {
+              "code": "15-251",
+              "title": "Great Ideas in Theoretical Computer Science"
+            }
+          ]
+        }
+      },
+      "cs_elective": {
+        "requirement": "Take at least 1 course from subject code 15",
+        "mode_average_units": 12,
+        "min_units_per_course": 9,
+        "subject_code": "15",
+        "excluded_courses": [
+          "15-351"
+        ],
+        "excluded_ranges": [
+          {
+            "start": "15-001",
+            "end": "15-199"
+          }
+        ]
+      },
+      "cs_scs_elective": {
+        "requirement": "Take at least 1 course",
+        "mode_average_units": 12,
+        "min_units_per_course": 9,
+        "subject_codes": [
+          "15",
+          "16",
+          "02",
+          "11",
+          "05",
+          "10",
+          "17"
+        ],
+        "excluded_courses": [
+          "02-223",
+          "05-200",
+          "05-341",
+          "05-436",
+          "05-674",
+          "08-200",
+          "08-532",
+          "08-533",
+          "15-351",
+          "16-200",
+          "16-223",
+          "16-397",
+          "17-200",
+          "17-333",
+          "17-562"
+        ],
+        "excluded_ranges": [
+          {
+            "start": "02-001",
+            "end": "02-199"
+          },
+          {
+            "start": "05-001",
+            "end": "05-199"
+          },
+          {
+            "start": "10-001",
+            "end": "10-199"
+          },
+          {
+            "start": "11-001",
+            "end": "11-199"
+          },
+          {
+            "start": "15-001",
+            "end": "15-199"
+          },
+          {
+            "start": "16-001",
+            "end": "16-199"
+          },
+          {
+            "start": "17-001",
+            "end": "17-199"
+          }
+        ]
+      }
+    }
+  }
+}

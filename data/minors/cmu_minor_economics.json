@@ -1,0 +1,262 @@
+{
+  "minor": {
+    "name": "Minor in Economics",
+    "department": "Business Administration",
+    "school": "David A. Tepper School of Business",
+    "university": "Carnegie Mellon University",
+    "version": "Qatar - Minor in Economics - EY2020+",
+    "entry_year": "2020 and later",
+    "campus": "Qatar",
+    "Description": "Provides non‐economics majors with foundational training in economic theory and quantitative analysis through 9-unit economics courses.",
+    "Notes": "Courses used to fulfill the minor cannot double-count with any other major or minor. Students who have taken coursework in intermediate-level regression analysis and data visualization may petition to substitute 73-274 Econometrics I or 73-423 Forecasting for Economics and Business for 73-265 Economics and Data Science. Students are eligible to apply for a minor upon completion of two required courses for the minor wherein they earn a 2.0 QPA or higher in said coursework. While there are no double counting restrictions between the minor and the student's home college general education requirements, 73-265 Economics and Data Science and the 3 economics electives must be unique for the minor and cannot double count with any other major or minor."
+  },
+  "program_requirements": {
+    "total_min_units": 54,
+    "mode_average_units": 9,
+    "requirement": "Fulfill all of the following requirements",
+    "double_counting_rules": {
+      "general": {
+        "default": "Courses may not double count with other programs unless specified otherwise",
+        "unlimited_double_count_within": [
+          "Economic Theory Requirements",
+          "Mathematics Requirements",
+          "Quantitative Analysis Requirements"
+        ],
+        "no_double_count": [
+          "Advanced Economics Elective",
+          "Economics and Data Science"
+        ]
+      },
+      "with_bs_business_administration": {
+        "default": "Courses may not double count with other programs unless specified otherwise",
+        "unlimited_double_count_within": [
+          "Advanced Economics Elective",
+          "Economic Theory Requirements",
+          "Mathematics Requirements",
+          "Quantitative Analysis Requirements"
+        ],
+        "no_double_count": [
+          "Economics and Data Science"
+        ]
+      },
+      "unlimited_double_count_with_general_education_programs": [
+        "CIT General Education Requirements (2012)",
+        "DC General Education Requirements (2004)",
+        "MCS General Education Requirements (2008)",
+        "MCS General Education Requirements (2010)",
+        "MCS General Education Requirements (2001)",
+        "SCS General Education Requirements (2017)",
+        "EY2017 Pittsburgh- CIT General Education Requirements",
+        "MCS General Education Requirement - BSC (2015)",
+        "MCS General Education Requirement - CMY (2015)",
+        "MCS General Education Requirement - MSC (2015)",
+        "Tepper - Liberal Arts & Sciences Breadth Requirements - EY2017 - 2020",
+        "EY2018 Pittsburgh - CIT General Education Requirements",
+        "EY2018 Pittsburgh - DC General Education Requirements",
+        "EY2001 Pittsburgh - CIT General Education Requirements",
+        "EY2019 Pittsburgh - DC General Education Requirements",
+        "EY2018 Art - University Academic Courses",
+        "EY2012 Music - General Studies Courses",
+        "EY2018 - SCS General Education Requirements (CS)",
+        "EY2019 - SCS General Education Requirements (CS)",
+        "EY2019 - SCS General Education Requirements (AI)",
+        "EY2020 Pittsburgh - DC General Education Requirements",
+        "Tepper - University Core Requirements - EY2020+",
+        "EY2020 SCS - General Education",
+        "Dietrich College - General Education - EY2021-2023",
+        "MCS General Education Requirement - CMY (2020)",
+        "MCS General Education Requirement - BSC (2020)",
+        "Mellon College of Science - General Education - EY2021+",
+        "EY2021 SCS - General Education",
+        "EY2018 BCA - General Education Requirements",
+        "EY2018 BHA - General Education Requirements",
+        "EY2018 BSA - General Education Requirements"
+      ]
+    },
+    "requirements": {
+      "mathematics_requirements": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 10,
+        "categories": {
+          "differential_integral_calculus": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 10,
+            "options": [
+              {
+                "code": "21-120",
+                "title": "Differential and Integral Calculus"
+              },
+              {
+                "code": "21-112",
+                "title": "Integral Calculus"
+              },
+              {
+                "code": "21-121",
+                "title": "21-121"
+              }
+            ]
+          },
+          "multivariate_analysis": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "21-256",
+                "title": "Multivariate Analysis"
+              },
+              {
+                "code": "21-259",
+                "title": "Calculus in Three Dimensions"
+              },
+              {
+                "code": "21-268",
+                "title": "Multidimensional Calculus"
+              },
+              {
+                "code": "21-269",
+                "title": "Vector Analysis"
+              }
+            ]
+          }
+        }
+      },
+      "economic_theory_requirements": {
+        "requirement": "Fulfill all of the following requirements",
+        "mode_average_units": 9,
+        "categories": {
+          "principles_of_microeconomics": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "73-102",
+                "title": "Principles of Microeconomics"
+              },
+              {
+                "code": "73-104",
+                "title": "Principles of Microeconomics Accelerated"
+              },
+              {
+                "code": "73-100",
+                "title": "Principles of Economics"
+              },
+              {
+                "code": "73-103",
+                "title": "Principles of Macroeconomics"
+              }
+            ]
+          },
+          "economics_theory": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "73-160",
+                "title": "Foundations of Microeconomics: Applications and Theory"
+              },
+              {
+                "code": "73-230",
+                "title": "Intermediate Microeconomics"
+              },
+              {
+                "code": "73-240",
+                "title": "Intermediate Macroeconomics"
+              }
+            ]
+          }
+        }
+      },
+      "quantitative_analysis_requirements": {
+        "requirement": "Fulfill any of the following requirements",
+        "mode_average_units": 9,
+        "categories": {
+          "quantitative_prereq": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "options": [
+              {
+                "code": "36-200",
+                "title": "Reasoning with Data"
+              },
+              {
+                "code": "36-207",
+                "title": "Probability and Statistics for Business Applications"
+              },
+              {
+                "code": "36-217",
+                "title": "Probability Theory and Random Processes"
+              },
+              {
+                "code": "36-218",
+                "title": "Probability Theory for Computer Scientists"
+              },
+              {
+                "code": "36-219",
+                "title": "Probability Theory and Random Processes"
+              },
+              {
+                "code": "36-220",
+                "title": "Engineering Statistics and Quality Control"
+              },
+              {
+                "code": "36-225",
+                "title": "Introduction to Probability Theory"
+              },
+              {
+                "code": "36-235",
+                "title": "Probability and Statistical Inference I"
+              },
+              {
+                "code": "70-207",
+                "title": "Probability and Statistics for Business Applications"
+              },
+              {
+                "code": "21-325",
+                "title": "Probability"
+              },
+              {
+                "code": "15-259",
+                "title": "Probability and Computing"
+              },
+              {
+                "code": "36-247",
+                "title": "Statistics for Lab Sciences"
+              }
+            ]
+          },
+          "economics_and_data_science": {
+            "requirement": "Fulfill any of the following requirements",
+            "mode_average_units": 9,
+            "double_count_restriction": "Courses may not double count with other requirements unless specified otherwise",
+            "courses": [
+              {
+                "code": "73-265",
+                "title": "Economics and Data Science"
+              }
+            ]
+          }
+        }
+      },
+      "advanced_economics_elective": {
+        "requirement": "Take at least 3 courses",
+        "mode_average_units": 9,
+        "course_range": {
+          "start": "73-300",
+          "end": "73-999"
+        },
+        "excluded_courses": [
+          "73-300",
+          "73-360",
+          "73-407",
+          "73-450",
+          "73-497"
+        ],
+        "description": "Any 3 courses from 73-300 to 73-999 range except the excluded courses"
+      }
+    },
+    "pathways": {
+      "available": false,
+      "note": "No Pathways Available"
+    }
+  }
+}
