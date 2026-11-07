@@ -4606,6 +4606,10 @@ const App = {
       ? `<span class="adm-field-was">Schedule of Classes says: ${esc(fmt ? fmt(cat[field]) : (cat[field] === '' || cat[field] == null ? '(blank)' : String(cat[field])))}</span>` : '';
     const known = this._knownReqPaths || (this._knownReqPaths = knownRequirementPaths(this.courses || []));
     const edit = course && course._edit;
+    // A retired number is hidden from students; its current row is what they see.
+    const retired = !adding && !st.archived && course && course.superseded_by
+      ? normalizeCourseCode(course.superseded_by) : '';
+    const locked = st.archived || !!retired;
 
     const reqSections = MAJOR_ORDER.map(prog => {
       const list = d.requirements[prog] || [];
@@ -4635,6 +4639,9 @@ const App = {
     const actions = adding
       ? `<button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" id="ce-save" onclick="App._saveCourse()">Add course</button>
          <button type="button" class="adm-btn" onclick="App._closeCourseEditor()">Cancel</button>`
+      : retired
+        ? `<button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" onclick="App._openCourseEditor('${esc(retired)}', false)">Edit ${esc(retired)}</button>
+           <button type="button" class="adm-btn" onclick="App._closeCourseEditor()">Back</button>`
       : st.archived
         ? `<button type="button" class="adm-btn adm-btn-resolve" onclick="App._restoreCourse()">Restore course</button>
            <button type="button" class="adm-btn" onclick="App._closeCourseEditor()">Back</button>`
@@ -4650,10 +4657,11 @@ const App = {
         <div class="adm-editor-head">
           <div class="adm-title">${adding ? 'Add a course' : esc(d.course_code) + ' ' + esc(d.course_name)}</div>
           ${st.archived ? '<p class="adm-card-text">This course is archived, so students do not see it. Restore it to edit it again.</p>' : ''}
+          ${retired ? `<p class="adm-card-text">This number was replaced by ${esc(retired)}. Students only see ${esc(retired)}, so edit that course instead.</p>` : ''}
           ${edit && edit.updated_at ? `<p class="adm-cell-sub">Last edited ${esc(this._admWhen(edit.updated_at))}${edit.updated_by_email ? ' by ' + esc(edit.updated_by_email) : ''}</p>` : ''}
           ${!adding && course && !course._added && !this._courseIsEdited(course) ? '<p class="adm-cell-sub">Showing the Schedule of Classes version. Nothing has been changed yet.</p>' : ''}
         </div>
-        <fieldset class="adm-fieldset" ${st.archived ? 'disabled' : ''}>
+        <fieldset class="adm-fieldset" ${locked ? 'disabled' : ''}>
           <div class="adm-form-grid">
             <label class="adm-field">Course number<input class="adm-search" id="ce-code" value="${esc(d.course_code)}" placeholder="15-122" inputmode="numeric" />${was('course_code')}</label>
             <label class="adm-field adm-field-wide">Course name<input class="adm-search" id="ce-name" value="${esc(d.course_name)}" placeholder="Principles of Imperative Computation" />${was('course_name')}</label>
@@ -4779,9 +4787,22 @@ const App = {
       return;
     }
     const course = adding ? null : this._findCourseByKey(st.key, false);
-    const clash = lookupCourse(this.courseIndex, code) || (this._archivedCourses || []).find(c => c.course_code === code);
-    if (clash && clash !== course) {
+    if (course && course.superseded_by) {
+      this._courseFormNotice(`This number was replaced by ${course.superseded_by}. Edit that course instead.`);
+      return;
+    }
+    // Exact codes: the course index also maps retired numbers to their
+    // current row, which would make a retired row clash with itself.
+    const clash = [...(this.courses || []), ...(this._archivedCourses || [])]
+      .find(c => c !== course && c.course_code === code);
+    if (clash) {
       this._courseFormNotice(`${code} is already in the catalog. Edit that course instead.`, 'ce-code');
+      return;
+    }
+    const renamedFrom = (this.courses || []).find(c => Array.isArray(c.previous_codes)
+      && c.previous_codes.some(p => normalizeCourseCode(p) === code));
+    if (renamedFrom && (!course || course.course_code !== code)) {
+      this._courseFormNotice(`${code} is an old number of ${renamedFrom.course_code}. Use a different number.`, 'ce-code');
       return;
     }
     const offered = this._parseOffered(d.offered);
@@ -4865,7 +4886,7 @@ const App = {
   async _archiveCourse() {
     const st = this._courseAdmin;
     const course = this._findCourseByKey(st.key, false);
-    if (!course) return;
+    if (!course || course.superseded_by) return;
     if (!confirm(`Archive ${course.course_code} ${course.course_name}? Students will stop seeing it. Nothing is deleted, and you can restore it from the Archived list.`)) return;
     const r = await apiArchiveCourse(st.key);
     if (!r.ok) {

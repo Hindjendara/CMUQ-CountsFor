@@ -106,7 +106,7 @@ function loadApp() {
   App.profile = { role: 'student', primary: 'CS', secondary: null, scope: null };
   App.renderShell();
   shellRenders = 0;
-  return { App, document, shellRenders: () => shellRenders };
+  return { App, document, ctx, shellRenders: () => shellRenders };
 }
 
 function leftBodyHtml(document) {
@@ -175,3 +175,78 @@ test('app views: guest view switch with a course open shows home in both directi
   assertEqual(App.profile.role, 'student');
   assertEqual(leftBodyHtml(document), HOME_MARKER, 'faculty to student');
 });
+
+// Admin course editor and renumbered courses. 85-211 is retired (superseded_by
+// 85-110) and stays in the catalog, hidden from students.
+function loadCourseAdmin() {
+  const env = loadApp();
+  const { App, document, ctx } = env;
+  const reqs = () => ({ CS: [], IS: [], BA: [], BS: [] });
+  App.courses = [
+    { course_code: '85-211', course_name: 'Cognitive Psychology', superseded_by: '85-110', requirements: reqs(), offered: [] },
+    { course_code: '85-110', course_name: 'Cognitive Psychology', previous_codes: ['85-211'], requirements: reqs(), offered: ['F26'] },
+    { course_code: '15-112', course_name: 'Fundamentals of Programming', requirements: reqs(), offered: ['F26'] },
+  ];
+  App.courseIndex = vm.runInContext('buildCourseIndex', ctx)(App.courses);
+  App._archivedCourses = [];
+  const content = document.createElement('div');
+  content.scrollIntoView = () => {};
+  document.live.set('admContent', content);
+  App._syncCourseDraft = () => {};
+  App._collectPendingCourseReqs = () => {};
+  App._setCourseSaving = () => {};
+  const notices = [];
+  App._courseFormNotice = (msg) => { if (msg) notices.push(msg); };
+  const calls = [];
+  ctx.apiEditCourse = (key, body) => { calls.push({ key, body }); return new Promise(() => {}); };
+  ctx.apiArchiveCourse = (key) => { calls.push({ archive: key }); return new Promise(() => {}); };
+  ctx.confirm = () => true;
+  return { ...env, notices, calls };
+}
+
+test('course editor: a retired row is read only and points to its current code', () => {
+  const { App, document } = loadCourseAdmin();
+  App._openCourseEditor('85-211', false);
+  const html = document.getElementById('admContent').innerHTML;
+  assertTrue(html.includes('replaced by 85-110'), 'explains the replacement');
+  assertTrue(html.includes("App._openCourseEditor('85-110', false)"), 'links to the current course');
+  assertFalse(html.includes('App._archiveCourse()'), 'no Archive button');
+  assertFalse(html.includes('App._saveCourse()'), 'no Save button');
+  assertTrue(/<fieldset class="adm-fieldset" disabled>/.test(html), 'fields are disabled');
+});
+
+test('course editor: save and archive do nothing on a retired row', () => {
+  const { App, notices, calls } = loadCourseAdmin();
+  App._openCourseEditor('85-211', false);
+  App._courseAdmin.draft.course_name = 'Edited';
+  App._saveCourse();
+  App._archiveCourse();
+  assertEqual(calls, []);
+  assertTrue(notices.some(n => n.includes('replaced by 85-110')), notices.join(' | '));
+});
+
+test('course editor: the current row saves under its own code', () => {
+  const { App, notices, calls } = loadCourseAdmin();
+  App._openCourseEditor('85-110', false);
+  App._courseAdmin.draft.course_name = 'Cognitive Psychology (edited)';
+  App._saveCourse();
+  assertEqual(notices, []);
+  assertEqual(calls.length, 1);
+  assertEqual(calls[0].key, '85-110');
+});
+
+test('course editor: renumbering onto a retired or previous code is a clash', () => {
+  const { App, notices, calls } = loadCourseAdmin();
+  App._openCourseEditor('85-110', false);
+  App._courseAdmin.draft.course_code = '85-211';
+  App._saveCourse();
+  assertTrue(notices.some(n => n.includes('85-211 is already in the catalog')), notices.join(' | '));
+
+  App.courses = App.courses.filter(c => c.course_code !== '85-211');
+  App._openCourseEditor('15-112', false);
+  App._courseAdmin.draft.course_code = '85-211';
+  App._saveCourse();
+  assertTrue(notices.some(n => n.includes('85-211 is an old number of 85-110')), notices.join(' | '));
+  assertEqual(calls, []);
+});
+

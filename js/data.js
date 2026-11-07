@@ -377,11 +377,10 @@ function applyCourseOverrides(courses, overrides) {
   // Copy before editing: fetchAllCourses caches the parsed catalog, and a later
   // reload must start from the scraped values, not from edited objects.
   courses = courses.slice();
+  // Exact codes only, no renumbering aliases: an override keyed by a retired
+  // number edits or archives that retired row (which is never deleted, so an
+  // is_new override on it finds it and adds nothing), never its current row.
   const index = new Map(courses.map((c, i) => [normalizeCourseCode(c.course_code), i]));
-  // A retired number resolves to its current row (see buildCourseIndex), so an
-  // override keyed by the old code edits the current course, and an is_new
-  // override on it cannot bring the retired row back.
-  for (const [oldCode, i] of renumberedAliases(courses)) index.set(oldCode, i);
   const byCode = {
     get(key) {
       const i = index.get(key);

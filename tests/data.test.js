@@ -549,21 +549,44 @@ test('buildCourseIndex: a code held by a live row is never aliased', () => {
   assertEqual(lookupCourse(index, '85-102').course_code, '85-102');
 });
 
-test('applyCourseOverrides: an override on an old code edits the current row', () => {
+test('applyCourseOverrides: an override on an old code edits only the retired row', () => {
   const overrides = [{ course_code: '85-211', fields: { course_name: 'Cognitive Psychology (edited)' } }];
   const { courses } = applyCourseOverrides(renumberedCatalog(), overrides);
   const byCode = Object.fromEntries(courses.map(c => [c.course_code, c]));
-  assertEqual(byCode['85-110'].course_name, 'Cognitive Psychology (edited)');
-  assertEqual(byCode['85-211'].course_name, 'Cognitive Psychology');
+  assertEqual(byCode['85-211'].course_name, 'Cognitive Psychology (edited)');
+  assertEqual(byCode['85-110'].course_name, 'Cognitive Psychology');
+  assertEqual(byCode['85-110']._edit, undefined, 'the current row has no edit');
 });
 
-test('applyCourseOverrides: an is_new override on an old code adds no row', () => {
-  const overrides = [{ course_code: '85-211', is_new: true, fields: { units: 9 } }];
+test('applyCourseOverrides: archiving an old code never archives the current row', () => {
+  const { courses, archived } = applyCourseOverrides(renumberedCatalog(), [{ course_code: '85-211', archived: true }]);
+  assertEqual(archived.map(c => c.course_code), ['85-211']);
+  assertTrue(!!courses.find(c => c.course_code === '85-110'), 'the current row stays');
+});
+
+test('applyCourseOverrides: overrides on an old code and its current row stay separate', () => {
+  const overrides = [
+    { course_code: '85-110', fields: { units: 12 } },
+    { course_code: '85-211', fields: { course_name: 'Old edit' } },
+  ];
+  const { courses } = applyCourseOverrides(renumberedCatalog(), overrides);
+  const current = courses.find(c => c.course_code === '85-110');
+  assertEqual(current._edit.course_code, '85-110');
+  assertEqual(current.units, 12);
+  assertEqual(current.course_name, 'Cognitive Psychology');
+});
+
+test('applyCourseOverrides: an is_new override on an old code adds no row and renames nothing', () => {
+  // The backend stores fields.course_code on every is_new row.
+  const overrides = [{ course_code: '85-211', is_new: true, fields: { course_code: '85-211', course_name: 'Added', units: 9 } }];
   const { courses } = applyCourseOverrides(renumberedCatalog(), overrides);
   assertEqual(courses.length, 3);
   assertEqual(courses.filter(c => c.course_code === '85-211').length, 1);
   assertTrue(!!courses.find(c => c.course_code === '85-211').superseded_by, 'retired row stays superseded');
-  assertEqual(courses.find(c => c.course_code === '85-110').units, 9);
+  const current = courses.find(c => c.course_code === '85-110');
+  assertTrue(!!current, 'the current row keeps its code');
+  assertEqual(current.course_name, 'Cognitive Psychology');
+  assertEqual(current.units, undefined);
 });
 
 test('getAlsoCountsFor and annotateDoubleCounters skip hidden rows', () => {
