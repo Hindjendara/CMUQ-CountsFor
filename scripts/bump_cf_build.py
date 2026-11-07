@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 APP_HTML = ROOT / "app.html"
 INDEX_HTML = ROOT / "index.html"
 _V_RE = re.compile(r"\?v=[^\"']+")
+_META_RE = re.compile(r'(<meta name="cf-build" content=")[^"]+(")')
 
 
 # Read and write without newline translation so the files keep their line endings.
@@ -26,25 +27,30 @@ def _write(path: Path, text: str) -> None:
     path.write_bytes(text.encode("utf-8"))
 
 
-def bump(build_id: str | None = None) -> str:
+def bump(
+    build_id: str | None = None,
+    app_html: Path = APP_HTML,
+    index_html: Path = INDEX_HTML,
+) -> str:
     build = build_id or f"soc-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-    text = _read(APP_HTML)
-    text, n_meta = re.subn(
-        r'(<meta name="cf-build" content=")[^"]+(")',
-        rf"{build}",
+    text = _read(app_html)
+    # A function replacement keeps the build id literal (no backreference or
+    # escape parsing, so ids that start with a digit or contain backslashes are safe).
+    text, n_meta = _META_RE.subn(
+        lambda m: f"{m.group(1)}{build}{m.group(2)}",
         text,
         count=1,
     )
-    text, n_v = _V_RE.subn(f"?v={build}", text)
+    text, n_v = _V_RE.subn(lambda _m: f"?v={build}", text)
     if n_meta != 1:
         raise SystemExit(f"Expected one cf-build meta tag, updated {n_meta}")
     if n_v < 1:
         raise SystemExit("No ?v= cache-bust query strings found in app.html")
-    _write(APP_HTML, text)
+    _write(app_html, text)
 
-    if INDEX_HTML.is_file():
-        index_text = _read(INDEX_HTML)
-        _write(INDEX_HTML, _V_RE.sub(f"?v={build}", index_text))
+    if index_html.is_file():
+        index_text = _read(index_html)
+        _write(index_html, _V_RE.sub(lambda _m: f"?v={build}", index_text))
     return build
 
 
