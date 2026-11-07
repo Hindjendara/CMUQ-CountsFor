@@ -9,7 +9,8 @@ courses that appear at multiple campuses. Each section is tagged with its
 campus; each course's `campus` field lists every campus it runs at.
 
 Columns are mapped from each results table's header, because summer pages
-add a "Session" column after the title.
+add a "Session" column after the title. Rows are split on </tr>, because
+real pages give only the first row of each course an opening <tr>.
 
 Continuation rows: SOC often lists extra meeting times on rows with a blank
 section cell (same section, different days/times). parse_courses() inherits
@@ -138,7 +139,10 @@ _HEADER_TEXT_FIELDS = {
 }
 
 _TABLE_RE = re.compile(r'<table\b[^>]*>(.*?)</table>', re.DOTALL | re.IGNORECASE)
-_ROW_RE = re.compile(r'<tr\b[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
+# Real SOC pages open only the first row of each course with <tr>; the
+# section and continuation rows after it have only a closing </tr>. Rows are
+# therefore split on </tr> instead of being matched as <tr>...</tr> pairs.
+_ROW_END_RE = re.compile(r'</tr\s*>', re.IGNORECASE)
 _TH_RE = re.compile(r'<th\b([^>]*)>(.*?)</th>', re.DOTALL | re.IGNORECASE)
 _TD_RE = re.compile(r'<td\b[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
 _CANCELLED_DIV_RE = re.compile(
@@ -205,7 +209,7 @@ def _parse_table(table_html, dept_code, dept_name, courses):
     current_course = None
     last_section = None
     last_section_row = None
-    for row_html in _ROW_RE.findall(table_html):
+    for row_html in _ROW_END_RE.split(table_html):
         tds = _TD_RE.findall(row_html)
         if not tds:
             continue  # header row

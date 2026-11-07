@@ -1,12 +1,14 @@
 """Unit tests for SOC scrape thresholds and HTML parsing.
 
 The soc_psy_*.html fixtures are real SOC result pages for Psychology saved on
-November 7, 2026 (F26 and S27 trimmed to a few rows):
-  F26 PIT: fall layout, cancelled 85-103
+November 7, 2026, kept untrimmed. On real pages only the first row of each
+course opens with <tr>; later section rows end with </tr> but have no <tr>.
+  F26 PIT: fall layout, cancelled 85-103, 85-100 with 12 sections
   S27 PIT: "<br />: subtitle" on 85-310 and 85-716, cancelled 85-270 and 85-473
   S26 DOH: Qatar sections
   M26 PIT: summer layout with the extra "Session" column
 """
+import re
 import sys
 from pathlib import Path
 
@@ -37,8 +39,9 @@ def _parse_fixture(name):
     return {c["course_number"]: c for c in parse_courses(_fixture(name), "PSY", "Psychology")}
 
 
-def _row(*values):
-    return "<tr>" + "".join(f"<td>{v}</td>" for v in values) + "</tr>"
+def _row(*values, open_tr=True):
+    """One table row. Real SOC continuation rows have no opening <tr>."""
+    return ("<tr>" if open_tr else "") + "".join(f"<td>{v}</td>" for v in values) + "</tr>"
 
 
 def _table(*rows):
@@ -107,13 +110,53 @@ def test_summer_session_column_does_not_shift_cells():
 
 def test_fall_page_columns_and_no_session_field():
     courses = _parse_fixture("soc_psy_F26_PIT.html")
-    assert len(courses) == 7
+    assert len(courses) == 52
     intro = courses["85100"]
     assert intro["title"] == "Introduction to Psychology"
     assert intro["units"] == "9"
     assert intro["sections"][0]["section"] == "Lec 1"
     assert "session" not in intro["sections"][0]
     assert courses["85030"]["sections"][0]["days"] == "TBA"
+
+
+def _data_row_count(html):
+    """Rows that end with </tr>, minus the header row."""
+    return len(re.findall(r"</tr\s*>", html, re.IGNORECASE)) - 1
+
+
+def test_every_data_row_becomes_a_section_on_real_pages():
+    """Rows without an opening <tr> (all but each course's first) are kept."""
+    for name in ("soc_psy_F26_PIT.html", "soc_psy_S27_PIT.html",
+                 "soc_psy_S26_DOH.html", "soc_psy_M26_PIT.html"):
+        html = _fixture(name)
+        courses = parse_courses(html, "PSY", "Psychology")
+        assert sum(len(c["sections"]) for c in courses) == _data_row_count(html), name
+    assert len(re.findall(r"<tr\b", _fixture("soc_psy_F26_PIT.html"))) < _data_row_count(
+        _fixture("soc_psy_F26_PIT.html"))
+
+
+def test_multi_section_course_keeps_rows_without_opening_tr():
+    intro = _parse_fixture("soc_psy_F26_PIT.html")["85100"]
+    assert [s["section"] for s in intro["sections"]] == [
+        "Lec 1", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]
+    assert (intro["sections"][1]["days"], intro["sections"][1]["begin_time"]) == ("W", "10:00AM")
+    s27 = _parse_fixture("soc_psy_S27_PIT.html")["85100"]
+    assert (s27["sections"][1]["section"], s27["sections"][1]["days"],
+            s27["sections"][1]["begin_time"]) == ("A", "W", "06:00PM")
+
+
+def test_synthetic_rows_without_opening_tr():
+    html = _table(
+        _row("85100", "Introduction to Psychology", "9", "Lec 1", "", "TR", "02:00PM", "02:50PM", "Pittsburgh, Pennsylvania", "In-person only"),
+        _row("", "", "", "A", "", "W", "10:00AM", "10:50AM", "Pittsburgh, Pennsylvania", "In-person only", open_tr=False),
+        _row("", "", "", "", "", "F", "10:00AM", "10:50AM", "", "", open_tr=False),
+        _row("85102", "Introduction to Psychology", "9", "A", "", "MW", "09:00AM", "09:50AM", "Pittsburgh, Pennsylvania", "In-person only"),
+    )
+    courses = parse_courses(html, "PSY", "Psychology")
+    assert [c["course_number"] for c in courses] == ["85100", "85102"]
+    assert [(s["section"], s["days"]) for s in courses[0]["sections"]] == [
+        ("Lec 1", "TR"), ("A", "W"), ("A", "F")]
+    assert courses[0]["sections"][2]["location"] == "Pittsburgh, Pennsylvania"
 
 
 def test_qatar_page_parses_doha_sections():
