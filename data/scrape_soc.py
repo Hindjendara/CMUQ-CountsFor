@@ -94,16 +94,60 @@ LOCATIONS_TO_SCRAPE = SOC_LOCATION_CODES
 
 # ---------- HTTP helpers ----------
 
+_META_CHARSET_RE = re.compile(rb'<meta\s[^>]*charset\s*=\s*["\']?([A-Za-z0-9_.:-]+)', re.IGNORECASE)
+# Browsers read a page labelled ISO-8859-1 (or ASCII) as windows-1252.
+_LATIN1_LABELS = {'iso-8859-1', 'iso8859-1', 'latin-1', 'latin1', 'l1',
+                  'us-ascii', 'ascii', 'windows-1252', 'cp1252'}
+
+
+def decode_body(raw, header_charset=None):
+    """Decode an HTTP body with the charset the server declares.
+
+    The SOC serves "text/html;charset=ISO-8859-1" (and the same meta tag), so
+    the e-acute in "L'etoile" arrives as the single byte 0xE9. Decoding that
+    as UTF-8 turned every accented letter into U+FFFD. Order: the HTTP header
+    charset, then <meta charset>, then UTF-8 if the bytes are valid UTF-8,
+    else windows-1252.
+    """
+    charset = (header_charset or '').strip().strip('"\'').lower()
+    if not charset:
+        m = _META_CHARSET_RE.search(raw[:4096])
+        if m:
+            charset = m.group(1).decode('ascii', 'ignore').lower()
+    if not charset:
+        try:
+            return raw.decode('utf-8')
+        except UnicodeDecodeError:
+            charset = 'windows-1252'
+    if charset in _LATIN1_LABELS:
+        try:
+            return raw.decode('cp1252')
+        except UnicodeDecodeError:
+            # 0x81, 0x8D, 0x8F, 0x90, 0x9D are unassigned in cp1252.
+            return raw.decode('latin-1')
+    try:
+        return raw.decode(charset)
+    except LookupError:
+        return raw.decode('utf-8', errors='replace')
+    except UnicodeDecodeError:
+        return raw.decode(charset, errors='replace')
+
+
+def _read(req):
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return decode_body(resp.read(), resp.headers.get_content_charset())
+
+
 def fetch_get(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (countsfor-bot)'})
-    return urllib.request.urlopen(req, timeout=60).read().decode('utf-8', errors='replace')
+    return _read(req)
 
 
 def fetch_post(params):
     data = urllib.parse.urlencode(params).encode()
     req = urllib.request.Request(SEARCH, data=data,
                                  headers={'User-Agent': 'Mozilla/5.0 (countsfor-bot)'})
-    return urllib.request.urlopen(req, timeout=60).read().decode('utf-8', errors='replace')
+    return _read(req)
 
 
 # ---------- Parsing ----------
@@ -403,7 +447,7 @@ def scrape_semester(semester_code, dept_list, min_courses=None):
 def load_existing():
     if os.path.exists(OUTPUT_PATH):
         try:
-            with open(OUTPUT_PATH) as f:
+            with open(OUTPUT_PATH, encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             pass
@@ -475,7 +519,7 @@ def main():
     }
 
     os.makedirs(os.path.dirname(OUTPUT_PATH) or ".", exist_ok=True)
-    with open(OUTPUT_PATH, 'w') as f:
+    with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
         json.dump(existing, f, indent=2)
 
     size_mb = os.path.getsize(OUTPUT_PATH) / (1024 * 1024)

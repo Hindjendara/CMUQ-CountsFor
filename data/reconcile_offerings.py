@@ -11,17 +11,19 @@ sys.path.insert(0, str(ROOT / "data"))
 
 from json_io import load_json, save_json  # noqa: E402
 from soc_parse import (  # noqa: E402
-    active_sections,
     apply_campus_fix,
     build_offering,
     clean_soc_title,
     code_to_course_number,
     course_number_to_code,
     is_cancelled_section,
+    is_malformed_course,
     is_placeholder_title,
+    malformed_counts,
     normalize_course_code,
     parse_soc_units,
     titles_match,
+    usable_sections,
 )
 
 SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
@@ -52,6 +54,10 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
     for sem_code in sorted(semesters.keys(), key=_semester_sort_key, reverse=True):
         sem_data = semesters[sem_code]
         for course in sem_data.get("courses") or []:
+            if is_malformed_course(course):
+                # Shifted summer row from the old fixed-column parser: kept in
+                # soc.json, ignored here (see soc_parse.is_malformed_course).
+                continue
             num = course.get("course_number") or ""
             code = course_number_to_code(num)
             title = course.get("title") or ""
@@ -75,8 +81,9 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
             if prev["department"] is None and dept:
                 prev["department"] = dept
             # Cancelled sections are not offerings: they must not set campus
-            # flags or the `offered` list of a new stub course.
-            for section in active_sections(course.get("sections")):
+            # flags or the `offered` list of a new stub course. Malformed
+            # sections (section cell not a section id) are skipped too.
+            for section in usable_sections(course):
                 off = build_offering(
                     semester_code=sem_code,
                     section=section,
@@ -89,6 +96,25 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
         if meta_by_code[code]["title"] is None:
             meta_by_code[code]["title"] = title
     return by_code, meta_by_code
+
+
+def soc_presence(soc: dict) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """(present, ignored_only): course_code -> semester codes.
+
+    present: semesters where soc.json lists the course in a usable form
+    (cancelled-only included). ignored_only: semesters where it appears only
+    as malformed rows, which the pipeline ignores.
+    """
+    present: dict[str, set[str]] = {}
+    seen: dict[str, set[str]] = {}
+    for sem_code, sem_data in (soc.get("semesters") or {}).items():
+        for course in sem_data.get("courses") or []:
+            code = course_number_to_code(course.get("course_number") or "")
+            seen.setdefault(code, set()).add(sem_code)
+            if not is_malformed_course(course):
+                present.setdefault(code, set()).add(sem_code)
+    ignored_only = {code: sems - present.get(code, set()) for code, sems in seen.items()}
+    return present, {code: sems for code, sems in ignored_only.items() if sems}
 
 
 def campus_flags_from_offerings(offerings: list[dict]) -> tuple[bool, bool]:
@@ -240,6 +266,7 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
 
     by_code, meta_by_code = offerings_from_soc(soc)
     soc_semesters = set(soc.get("semesters") or {})
+    present, ignored_only = soc_presence(soc)
     updated = 0
     added = 0
     titles_changed = 0
@@ -258,12 +285,16 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
             reused.append(f"{code}: {title['replaced']} -> {course.get('course_name')}")
         before = (course.get("offerings"), course.get("offered_qatar"), course.get("offered_pitts"))
         reconcile_course(course, offs, meta)
-        if course.get("soc_ingested"):
+        if course.get("soc_ingested") and code in present:
             # Rows the SOC created follow the SOC for every semester soc.json
-            # holds (cancelled-only semesters drop out, and a row missing from
-            # soc.json ends up with none of them). Semesters soc.json does not
-            # hold are kept. Catalog rows keep their history.
-            kept = [s for s in course.get("offered") or [] if s not in soc_semesters]
+            # holds (cancelled-only semesters drop out). Semesters soc.json
+            # does not hold, and semesters where the row appears only as
+            # ignored malformed data, are kept. A row soc.json no longer lists
+            # at all keeps its `offered` unchanged (rows are never emptied).
+            # Catalog rows keep their history.
+            skip = ignored_only.get(code, set())
+            kept = [s for s in course.get("offered") or []
+                    if s not in soc_semesters or s in skip]
             course["offered"] = sorted(
                 set(offered_semesters(offs)) | set(kept), key=_semester_sort_key
             )
@@ -280,7 +311,9 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         added += 1
 
     save_json(courses_path, wrapper if wrapper is not None else courses)
+    ignored = {sem: n for sem, n in malformed_counts(soc).items() if n["courses"] or n["sections"]}
     return {
+        "malformed_ignored": ignored,
         "courses_updated": updated,
         "courses_added": added,
         "offerings_courses": len(by_code),
@@ -299,7 +332,10 @@ def main():
 
     stats = reconcile_file(COURSES_PATH, SOC_PATH)
     reused = stats.pop("reused_numbers")
+    ignored = stats.pop("malformed_ignored")
     print(f"Reconciled {COURSES_PATH}: {stats}")
+    for sem, n in sorted(ignored.items()):
+        print(f"IGNORED malformed SOC data in {sem}: {n['courses']} course(s), {n['sections']} section(s)")
     if reused:
         # Mappings are kept; someone should check whether they still apply.
         print(f"REVIEW: {len(reused)} course number(s) whose SOC title no longer matches the catalog name:")

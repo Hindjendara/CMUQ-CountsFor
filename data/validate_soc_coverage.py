@@ -20,8 +20,10 @@ from soc_parse import (  # noqa: E402
     clean_soc_title,
     course_number_to_code,
     is_cancelled_course,
+    is_malformed_course,
     normalize_course_code,
     normalize_title,
+    usable_sections,
 )
 
 SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
@@ -35,15 +37,20 @@ def soc_course_codes(soc: dict) -> dict[str, set[str]]:
     """Return {semester_code: set(course_code)} from scraped SOC data.
 
     Courses whose sections are all cancelled are left out: reconcile does not
-    add a catalog row for a course that has no running section.
+    add a catalog row for a course that has no running section. Malformed
+    courses and courses whose sections are all malformed are left out for the
+    same reason (see soc_parse.usable_sections).
     """
     by_sem: dict[str, set[str]] = {}
     for sem_code, sem_data in (soc.get("semesters") or {}).items():
         codes = set()
         for course in sem_data.get("courses") or []:
             num = course.get("course_number") or ""
-            if num and not is_cancelled_course(course):
-                codes.add(course_number_to_code(num))
+            if not num or is_cancelled_course(course) or is_malformed_course(course):
+                continue
+            if course.get("sections") and not usable_sections(course):
+                continue
+            codes.add(course_number_to_code(num))
         by_sem[sem_code] = codes
     return by_sem
 

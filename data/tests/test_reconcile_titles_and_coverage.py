@@ -178,7 +178,7 @@ def test_soc_ingested_offered_keeps_semesters_outside_soc_json(tmp_path):
     gone = catalog_row("62-318", "Gone", offered=["F26"], soc_ingested=True)
     _, rows, _ = run_reconcile(tmp_path, soc, [stub, gone])
     assert rows["85-110"]["offered"] == ["S24", "S26", "F26"]
-    assert rows["62-318"]["offered"] == [], "F26 is in soc.json and the row is not"
+    assert rows["62-318"]["offered"] == ["F26"], "a row soc.json no longer lists keeps its history"
 
 
 def test_new_stub_uses_cleaned_title(tmp_path):

@@ -185,6 +185,76 @@ def is_cancelled_course(course: dict) -> bool:
     return bool(sections) and not active_sections(sections)
 
 
+# Malformed rows. Before tables were read by header, summer pages (which add
+# a "Session" column after the title) were parsed as 10 fixed cells, so every
+# field after the title moved one column: units held the session ("summer",
+# "qatar summer", "summer one"), section held the units, location held a time.
+# soc.json still carries that data for semesters no longer on the SOC form
+# (M25). It is kept in soc.json but ignored: no offerings, campus flags, titles
+# or catalog rows come from it.
+#
+# Real units: "9", "1.5", "VAR", "3-12", "0,36-48", "1.0 - 12.0", "9-48 4".
+_UNITS_RE = re.compile(
+    r"^(?:var|\d+(?:\.\d+)?(?:\s*[-,]\s*\d+(?:\.\d+)?)*(?:\s+\d+(?:\.\d+)?)?)$",
+    re.IGNORECASE,
+)
+# Real section ids: "1", "A", "W2", "AA", "Lec 14".
+_SECTION_ID_RE = re.compile(r"^(?:Lec \d{1,3}|[A-Z0-9]{1,3})$")
+
+
+def is_valid_units(units) -> bool:
+    """True for a SOC units cell: a number, a range or list of numbers, or VAR."""
+    return bool(_UNITS_RE.match(str(units if units is not None else "").strip()))
+
+
+def is_section_id(value) -> bool:
+    """True for a SOC section id ("A", "1", "W2", "Lec 3"); "TBA" is not one."""
+    s = str(value if value is not None else "").strip()
+    return s.upper() != "TBA" and bool(_SECTION_ID_RE.match(s))
+
+
+def is_malformed_course(course: dict | None) -> bool:
+    """True when a SOC course's units cell is not units (a shifted summer row)."""
+    return not is_valid_units((course or {}).get("units"))
+
+
+def is_malformed_section(section: dict | None) -> bool:
+    """True when a SOC section's section cell is not a section id."""
+    return not is_section_id((section or {}).get("section"))
+
+
+def usable_sections(course: dict | None) -> list[dict]:
+    """Running, well-formed sections of a SOC course.
+
+    Empty for a malformed course; otherwise cancelled and malformed sections
+    are left out.
+    """
+    if is_malformed_course(course):
+        return []
+    return [s for s in active_sections((course or {}).get("sections"))
+            if not is_malformed_section(s)]
+
+
+def malformed_counts(soc: dict) -> dict[str, dict[str, int]]:
+    """{semester: {"courses": n, "sections": m}} that the pipeline ignores.
+
+    "courses" counts malformed courses; "sections" counts every section of a
+    malformed course plus malformed sections of well-formed courses.
+    """
+    out: dict[str, dict[str, int]] = {}
+    for sem_code, sem_data in (soc.get("semesters") or {}).items():
+        courses = sections = 0
+        for course in sem_data.get("courses") or []:
+            secs = course.get("sections") or []
+            if is_malformed_course(course):
+                courses += 1
+                sections += len(secs)
+            else:
+                sections += sum(1 for s in secs if is_malformed_section(s))
+        out[sem_code] = {"courses": courses, "sections": sections}
+    return out
+
+
 _CANCELLED_SUFFIX_RE = re.compile(r"\s*This Section Cancelled\s*$", re.IGNORECASE)
 _TRAILING_TBA_RE = re.compile(r"\s*:\s*TBA\s*$", re.IGNORECASE)
 

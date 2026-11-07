@@ -15,7 +15,13 @@ from pathlib import Path
 DATA = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(DATA))
 
-from scrape_soc import attach_offerings, parse_courses, parse_title_cell, scrape_threshold  # noqa: E402
+from scrape_soc import (  # noqa: E402
+    attach_offerings,
+    decode_body,
+    parse_courses,
+    parse_title_cell,
+    scrape_threshold,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
@@ -257,3 +263,35 @@ def test_attach_offerings_drops_campus_with_only_cancelled_sections():
     assert course["campus"] == ["Pittsburgh"]
     assert [o["section"] for o in course["offerings"]] == ["A"]
     assert "cancelled" not in course
+
+
+# The SOC serves "text/html;charset=ISO-8859-1" with a matching meta tag. This
+# row is copied byte for byte (whitespace trimmed) from the S26 Drama page:
+# the e in "L'etoile" is the single latin-1 byte 0xE9.
+_LATIN1_PAGE = (
+    b'<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">'
+    b'</head><body>' + HEADER.encode("ascii") +
+    b"<tr><td><a href=\"\">54439</a></td>"
+    b"<td>Production Prep: L'\xe9toile <br />: Directing</td>"
+    b"<td>VAR</td><td>A </td><td></td><td>MTWRF</td><td>05:00PM</td><td>10:30PM</td>"
+    b"<td>Pittsburgh, Pennsylvania</td><td>In-person only</td></tr>"
+    b"</tbody></table></body></html>"
+)
+
+
+def test_latin1_page_decodes_accented_titles():
+    for header_charset in ("ISO-8859-1", None):  # HTTP header, or only the meta tag
+        html = decode_body(_LATIN1_PAGE, header_charset)
+        assert "�" not in html
+        (course,) = parse_courses(html, "DRA", "Drama")
+        assert course["title"] == "Production Prep: L'étoile"
+        assert course["sections"][0]["section_title"] == "Directing"
+    # The old decode (UTF-8 with errors="replace") lost the letter.
+    assert "L'�toile" in _LATIN1_PAGE.decode("utf-8", errors="replace")
+
+
+def test_decode_body_without_charset_prefers_utf8():
+    assert decode_body("Pokémon".encode("utf-8")) == "Pokémon"
+    assert decode_body(b"Pok\xe9mon") == "Pokémon"  # not UTF-8: windows-1252
+    assert decode_body(b"Bj\xf6rk", "iso-8859-1") == "Björk"
+    assert decode_body("Björk".encode("utf-8"), "utf-8") == "Björk"

@@ -1,0 +1,266 @@
+{
+ "_note": "Real rows copied from data/soc.json (commit 15452ac): M25 79234 and M26 85150 as stored by the old fixed-column summer parser.",
+ "semesters": {
+  "M25": {
+   "courses": [
+    {
+     "course_number": "79234",
+     "title": "Technology and Society",
+     "units": "qatar summer",
+     "department_code": "HIS",
+     "department": "History",
+     "sections": [
+      {
+       "section": "9",
+       "mini": "W",
+       "days": "",
+       "begin_time": "UMTWR",
+       "end_time": "11:00AM",
+       "location": "12:30PM",
+       "delivery_mode": "Doha, Qatar",
+       "campus": "Qatar"
+      },
+      {
+       "section": "qatar summer",
+       "mini": "9",
+       "days": "W",
+       "begin_time": "",
+       "end_time": "UMTWR",
+       "location": "01:00PM",
+       "delivery_mode": "02:30PM",
+       "campus": "Qatar"
+      }
+     ],
+     "campus": [
+      "Qatar"
+     ],
+     "offerings": [
+      {
+       "semester": "Summer 2025",
+       "semester_code": "M25",
+       "campus": "Qatar",
+       "section": "9",
+       "modality": "In Person",
+       "units": "qatar summer",
+       "days_times": "TBA UMTWR-11:00AM",
+       "instructor": "",
+       "location": "12:30PM",
+       "delivery_mode_raw": "Doha, Qatar"
+      },
+      {
+       "semester": "Summer 2025",
+       "semester_code": "M25",
+       "campus": "Qatar",
+       "section": "qatar summer",
+       "modality": "In Person",
+       "units": "qatar summer",
+       "days_times": "W",
+       "instructor": "",
+       "location": "01:00PM",
+       "delivery_mode_raw": "02:30PM"
+      }
+     ],
+     "semester": "Summer 2025",
+     "semester_code": "M25"
+    }
+   ]
+  },
+  "M26": {
+   "courses": [
+    {
+     "course_number": "85150",
+     "title": "Social Psychology",
+     "units": "summer",
+     "department_code": "PSY",
+     "department": "Psychology",
+     "sections": [
+      {
+       "section": "9",
+       "mini": "A6",
+       "days": "Y",
+       "begin_time": "MTWRF",
+       "end_time": "12:30PM",
+       "location": "01:50PM",
+       "delivery_mode": "Pittsburgh, Pennsylvania",
+       "campus": "Pittsburgh"
+      },
+      {
+       "section": "summer",
+       "mini": "9",
+       "days": "A6",
+       "begin_time": "Y",
+       "end_time": "MTWRF",
+       "location": "09:30AM",
+       "delivery_mode": "10:50AM",
+       "campus": "Pittsburgh"
+      },
+      {
+       "section": "Psychology of Prejudice",
+       "mini": "summer",
+       "days": "9",
+       "begin_time": "A6",
+       "end_time": "Y",
+       "location": "MTWRF",
+       "delivery_mode": "11:00AM",
+       "campus": "Pittsburgh"
+      },
+      {
+       "section": "85482",
+       "mini": "Internship in Psychology",
+       "days": "summer",
+       "begin_time": "3-12",
+       "end_time": "I",
+       "location": "MTWRF",
+       "delivery_mode": "TBA",
+       "campus": "Pittsburgh"
+      },
+      {
+       "section": "In-person Expectation",
+       "mini": "85506",
+       "days": "Readings in Psychology",
+       "begin_time": "summer",
+       "end_time": "1-18",
+       "location": "A",
+       "delivery_mode": "TBA",
+       "campus": "Pittsburgh"
+      },
+      {
+       "section": "Pittsburgh, Pennsylvania",
+       "mini": "In-person Expectation",
+       "days": "85781",
+       "begin_time": "Graduate Reading and Research",
+       "end_time": "summer",
+       "location": "0-99",
+       "delivery_mode": "R",
+       "campus": "Pittsburgh"
+      },
+      {
+       "section": "TBA",
+       "mini": "Pittsburgh, Pennsylvania",
+       "days": "In-person + remote",
+       "begin_time": "85798",
+       "end_time": "Graduate Internship",
+       "location": "summer",
+       "delivery_mode": "3",
+       "campus": "Pittsburgh"
+      },
+      {
+       "section": "9",
+       "mini": "W5",
+       "days": "Y",
+       "begin_time": "UMTWR",
+       "end_time": "11:00AM",
+       "location": "12:30PM",
+       "delivery_mode": "Doha, Qatar",
+       "campus": "Qatar"
+      }
+     ],
+     "campus": [
+      "Pittsburgh",
+      "Qatar"
+     ],
+     "offerings": [
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Pittsburgh",
+       "section": "9",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "Y MTWRF-12:30PM",
+       "instructor": "",
+       "location": "01:50PM",
+       "delivery_mode_raw": "Pittsburgh, Pennsylvania"
+      },
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Pittsburgh",
+       "section": "summer",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "A6 Y-MTWRF",
+       "instructor": "",
+       "location": "09:30AM",
+       "delivery_mode_raw": "10:50AM"
+      },
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Pittsburgh",
+       "section": "Psychology of Prejudice",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "9 A6-Y",
+       "instructor": "",
+       "location": "MTWRF",
+       "delivery_mode_raw": "11:00AM"
+      },
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Pittsburgh",
+       "section": "85482",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "summer 3-12-I",
+       "instructor": "",
+       "location": "MTWRF",
+       "delivery_mode_raw": "TBA"
+      },
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Pittsburgh",
+       "section": "In-person Expectation",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "Readings in Psychology summer-1-18",
+       "instructor": "",
+       "location": "A",
+       "delivery_mode_raw": "TBA"
+      },
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Pittsburgh",
+       "section": "Pittsburgh, Pennsylvania",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "85781 Graduate Reading and Research-summer",
+       "instructor": "",
+       "location": "0-99",
+       "delivery_mode_raw": "R"
+      },
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Pittsburgh",
+       "section": "TBA",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "In-person + remote 85798-Graduate Internship",
+       "instructor": "",
+       "location": "summer",
+       "delivery_mode_raw": "3"
+      },
+      {
+       "semester": "Summer 2026",
+       "semester_code": "M26",
+       "campus": "Qatar",
+       "section": "9",
+       "modality": "In Person",
+       "units": "summer",
+       "days_times": "Y UMTWR-11:00AM",
+       "instructor": "",
+       "location": "12:30PM",
+       "delivery_mode_raw": "Doha, Qatar"
+      }
+     ],
+     "semester": "Summer 2026",
+     "semester_code": "M26"
+    }
+   ]
+  }
+ }
+}
