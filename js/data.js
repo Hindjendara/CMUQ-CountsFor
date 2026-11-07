@@ -218,11 +218,27 @@ setRule('BS', 'Physics II', { type: 'pick', n: 1, label: 'pick 1' });
 setRule('BS', 'Non-Technical Breadth Electives', { type: 'min_units', units: 63, label: '≥63 units' });
 setRule('BS', 'STEM Course', { type: 'pick', n: 1, label: 'elective' });
 
+// ── Rows the app keeps but never lists ───────────────────────
+// Set by data/apply_mapping_overlays.py from data/mapping_overlays.json:
+// - superseded_by: a retired number ("renumbered"); the current row carries
+//   its mappings and lists it in previous_codes.
+// - qatar_only: shown only while its SOC offerings include the Qatar campus.
+function courseOfferedInQatar(course) {
+  return getCourseOfferings(course).some(o => o && o.campus === 'Qatar' && !o.cancelled);
+}
+
+function isCourseHidden(course) {
+  if (!course) return true;
+  if (course.superseded_by) return true;
+  return !!course.qatar_only && !courseOfferedInQatar(course);
+}
+
 // ── Build requirement tree from courses ──────────────────────
 function buildRequirementTree(courses, majorCode) {
   const root = { label: MAJOR_META[majorCode].degree, children: {}, courses: [], path: '' };
-  
+
   for (const course of courses) {
+    if (isCourseHidden(course)) continue;
     const majorReqs = (course.requirements && course.requirements[majorCode]) || [];
     for (const req of majorReqs) {
       const parts = req.requirement.split('---');
@@ -361,6 +377,10 @@ function applyCourseOverrides(courses, overrides) {
   // reload must start from the scraped values, not from edited objects.
   courses = courses.slice();
   const index = new Map(courses.map((c, i) => [normalizeCourseCode(c.course_code), i]));
+  // A retired number resolves to its current row (see buildCourseIndex), so an
+  // override keyed by the old code edits the current course, and an is_new
+  // override on it cannot bring the retired row back.
+  for (const [oldCode, i] of renumberedAliases(courses)) index.set(oldCode, i);
   const byCode = {
     get(key) {
       const i = index.get(key);
@@ -439,7 +459,39 @@ function knownRequirementPaths(courses) {
   return out;
 }
 
+/**
+ * [oldCode, i] pairs: a retired number and the position of the current row
+ * that replaces it. Comes from superseded_by on the retired row and from
+ * previous_codes on the current row (a code still held by a row that is not
+ * superseded is never aliased).
+ */
+function renumberedAliases(courses) {
+  const pos = new Map();
+  courses.forEach((c, i) => {
+    const k = normalizeCourseCode(c && c.course_code);
+    if (k && !pos.has(k)) pos.set(k, i);
+  });
+  const out = [];
+  courses.forEach((c, i) => {
+    if (!c) return;
+    if (c.superseded_by) {
+      const j = pos.get(normalizeCourseCode(c.superseded_by));
+      const k = normalizeCourseCode(c.course_code);
+      if (k && j !== undefined && !courses[j].superseded_by) out.push([k, j]);
+      return;
+    }
+    for (const old of (Array.isArray(c.previous_codes) ? c.previous_codes : [])) {
+      const k = normalizeCourseCode(old);
+      const holder = pos.get(k);
+      if (k && (holder === undefined || courses[holder].superseded_by)) out.push([k, i]);
+    }
+  });
+  return out;
+}
+
 // ── Build course index ──────────────────────────────────────
+// Old numbers resolve to the current row, so wishlist items, flags, plans and
+// search counts saved under a retired code still find the course.
 function buildCourseIndex(courses) {
   const index = {};
   for (const course of courses) {
@@ -451,12 +503,28 @@ function buildCourseIndex(courses) {
     index[canonical] = course;
     index[canonical.replace(/-/g, '')] = course;
   }
+  for (const [oldCode, i] of renumberedAliases(courses)) {
+    index[oldCode] = courses[i];
+    index[oldCode.replace(/-/g, '')] = courses[i];
+  }
   return index;
 }
 
 function lookupCourse(index, code) {
   if (!code) return null;
   return index[normalizeCourseCode(code)] || index[code] || null;
+}
+
+/** The code a stored code resolves to (an old number gives the current code). */
+function resolveCourseCode(index, code) {
+  const c = lookupCourse(index, code);
+  return c ? c.course_code : normalizeCourseCode(code);
+}
+
+/** True when two stored codes name the same course (old numbers included). */
+function sameCourseCode(index, a, b) {
+  if (!a || !b) return false;
+  return resolveCourseCode(index, a) === resolveCourseCode(index, b);
 }
 
 /** Find a requirement node by its --- delimited path. */
@@ -559,6 +627,7 @@ function summarizeFlagsByStatus(items) {
 // ── Get "also counts for" tags for a course in a given major ──
 function getAlsoCountsFor(course, currentMajor) {
   const others = [];
+  if (isCourseHidden(course)) return others;
   for (const m of MAJOR_ORDER) {
     if (m === currentMajor) continue;
     const reqs = (course.requirements && course.requirements[m]) || [];
@@ -1031,6 +1100,7 @@ function annotateDoubleCounters(courses, profile, minorCourseList) {
     return;
   }
   for (const c of courses) {
+    if (isCourseHidden(c)) { c._doubleCounter = false; continue; }
     const req = c.requirements || {};
     const hasPrimary = Array.isArray(req[p]) && req[p].length > 0;
     const hasSecondary = minors.some(mc => courseCountsForMinor(c, mc, minorCourseList));

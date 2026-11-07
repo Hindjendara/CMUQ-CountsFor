@@ -1,30 +1,39 @@
 {
-  "description": "Manual requirement overlays applied after SOC reconcile. Additive only — never removes existing mappings.",
+  "description": "Manual complements applied by data/apply_mapping_overlays.py after SOC reconcile. The Schedule of Classes scrape stays the rule; this file is the one place for Qatar campus additions on top of it. Sections run in this order, and a second run changes nothing: (1) renumbered: copies the retired code's requirement rows (deduplicated by major, requirement and type) and an empty description or prerequisites onto the current code, sets previous_codes on the current row and superseded_by on the retired row, which stays in the catalog and is hidden in the app; a retired code missing from the catalog is skipped with a warning, a current code missing from the catalog fails the run. (2) overlays: additive requirement mappings only. (3) remove_mappings: removes requirement rows for the listed programs (a list of CS, IS, BA, BS or \"all\"); runs after (1) and (2) so nothing re-adds them, and (1) and (2) skip those programs. (4) qatar_visibility: rule show_only_if_offered_qatar sets qatar_only, and the app hides that course unless its SOC offerings include the Qatar campus. previous_codes, superseded_by and qatar_only are owned by this file: a row it no longer lists loses them. Only list what has been confirmed; never infer renumberings.",
+  "renumbered": [
+    {"old": "85-211", "current": "85-110", "source": "H&SS Course Offerings sheet", "note": "Cognitive Psychology, renumbered for Fall 2025."},
+    {"old": "85-219", "current": "85-170", "source": "H&SS Course Offerings sheet", "note": "Foundations of Brain and Behavior, renumbered for Fall 2025."},
+    {"old": "85-221", "current": "85-130", "source": "H&SS Course Offerings sheet", "note": "Principles of Child Development became Developmental Psychology for Fall 2025."},
+    {"old": "85-241", "current": "85-150", "source": "H&SS Course Offerings sheet", "note": "Social Psychology, renumbered for Fall 2025."},
+    {"old": "85-377", "current": "85-452", "source": "H&SS Course Offerings sheet", "note": "Attitudes and Persuasion, renumbered for Fall 2025 (85-852 is the graduate version, not linked)."},
+    {"old": "85-104", "current": "85-190", "source": "Psychology minor requirements (official)", "note": "Psychopathology. The minor lists 85-104 under Summer 2025 and earlier and 85-190 under Fall 2025 and later. 85-253 and 85-261 are not linked."}
+  ],
   "overlays": [
     {
-      "id": "is-igi-modern-languages-core",
-      "note": "IS GenEd Intercultural and Global Inquiry for elementary/intermediate modern language courses.",
+      "id": "is-igi-hss-sheet",
+      "note": "IS Intercultural and Global Inquiry: full list from the H&SS Course Offerings sheet (Qatar), confirmed 2026-11-07. The other courses the catalog maps to this category are kept until the user decides on them. Defaults apply only to the modern language codes the earlier is-igi-modern-languages-core entry covered.",
       "course_codes": [
+        "76-324", "76-357", "76-386", "79-284", "79-293", "79-391",
         "82-101", "82-102", "82-111", "82-112", "82-141", "82-142",
-        "82-241", "82-242", "82-313"
+        "82-201", "82-241", "82-242", "82-283", "82-313"
       ],
       "requirements": {
         "IS": [
-          {
-            "requirement": "GenEd---GenEd---Foundations---Intercultural and Global Inquiry",
-            "type": true,
-            "major": "IS"
-          }
+          {"requirement": "GenEd---GenEd---Foundations---Intercultural and Global Inquiry", "type": true, "major": "IS"}
         ]
       },
       "ensure_course_defaults": {
         "department": "82",
         "offered_qatar": true
-      }
+      },
+      "ensure_course_defaults_codes": [
+        "82-101", "82-102", "82-111", "82-112", "82-141", "82-142",
+        "82-241", "82-242", "82-313"
+      ]
     },
     {
       "id": "is-contextual-arab-world",
-      "note": "79-286 Movers & Shakers — IS Contextual Thinking.",
+      "note": "79-286 Movers & Shakers: IS Contextual Thinking.",
       "course_codes": ["79-286"],
       "requirements": {
         "IS": [
@@ -42,7 +51,7 @@
     },
     {
       "id": "is-contextual-qatar-history",
-      "note": "79-232 History of Qatar — IS Contextual Thinking.",
+      "note": "79-232 History of Qatar: IS Contextual Thinking.",
       "course_codes": ["79-232"],
       "requirements": {
         "IS": [
@@ -60,7 +69,7 @@
     },
     {
       "id": "ba-global-cultural-diverse",
-      "note": "BA University Core — Global, Cultural, and Diverse Perspectives.",
+      "note": "BA University Core: Global, Cultural, and Diverse Perspectives.",
       "course_codes": [
         "82-101", "82-102", "82-111", "82-112", "82-141", "82-142",
         "82-241", "82-242", "82-313", "82-314", "82-355", "82-412",
@@ -78,7 +87,7 @@
     },
     {
       "id": "bs-modern-languages-and-breadth",
-      "note": "BS GenEd — Cultural/Global Understanding (Modern Languages) plus Non-Technical Breadth Electives.",
+      "note": "BS GenEd: Cultural/Global Understanding (Modern Languages) plus Non-Technical Breadth Electives.",
       "course_codes": [
         "82-102", "82-112", "82-142", "82-241", "82-242", "82-313",
         "82-314", "82-355", "82-412", "82-414", "82-511", "82-512",
@@ -101,7 +110,7 @@
     },
     {
       "id": "bs-modern-languages-only",
-      "note": "BS GenEd — Modern Languages Course only (no breadth duplicate for 82-141 per audit).",
+      "note": "BS GenEd: Modern Languages Course only (no breadth duplicate for 82-141 per audit).",
       "course_codes": ["82-101", "82-111", "82-141"],
       "requirements": {
         "BS": [
@@ -115,7 +124,7 @@
     },
     {
       "id": "bs-non-technical-breadth-only",
-      "note": "79-286 — BS Non-Technical Breadth Electives only.",
+      "note": "79-286: BS Non-Technical Breadth Electives only.",
       "course_codes": ["79-286"],
       "requirements": {
         "BS": [
@@ -129,7 +138,7 @@
     },
     {
       "id": "cs-humanities-arts-electives",
-      "note": "CS GenEd — Humanities/Arts Electives for modern language courses.",
+      "note": "CS GenEd: Humanities/Arts Electives for modern language courses.",
       "course_codes": [
         "82-101", "82-102", "82-111", "82-112", "82-141", "82-142",
         "82-241", "82-242", "82-355", "82-412", "82-414", "82-511",
@@ -147,7 +156,7 @@
     },
     {
       "id": "cs-cultural-analysis-and-humanities",
-      "note": "CS GenEd — Category 3 Cultural Analysis plus Humanities/Arts Electives.",
+      "note": "CS GenEd: Category 3 Cultural Analysis plus Humanities/Arts Electives.",
       "course_codes": ["82-313", "82-314", "79-286"],
       "requirements": {
         "CS": [
@@ -163,6 +172,220 @@
           }
         ]
       }
+    },
+    {
+      "id": "hss-sheet-85-170",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-170"],
+      "create_missing": false,
+      "requirements": {
+        "IS": [
+          {"requirement": "GenEd---GenEd---Foundations---Scientific Inquiry", "type": true, "major": "IS"}
+        ],
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Biological Sciences Electives---Interdisciplinary Electives Group", "type": false, "major": "BS"},
+          {"requirement": "BS in Biological Sciences---Options---Neuroscience---Any ONE of the following courses", "type": false, "major": "BS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-364",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-364"],
+      "create_missing": false,
+      "requirements": {
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-413",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-413"],
+      "create_missing": false,
+      "requirements": {
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)", "type": true, "major": "CS"},
+          {"requirement": "GenEd---Category 1: Cognition---Cognitive Studies (AI)", "type": true, "major": "CS"},
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-130",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-130"],
+      "create_missing": false,
+      "requirements": {
+        "IS": [
+          {"requirement": "GenEd---GenEd---Foundations---Contextual Thinking", "type": true, "major": "IS"}
+        ],
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)", "type": true, "major": "CS"},
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-150",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-150"],
+      "create_missing": false,
+      "requirements": {
+        "IS": [
+          {"requirement": "GenEd---GenEd---Foundations---Contextual Thinking", "type": true, "major": "IS"}
+        ],
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)", "type": true, "major": "CS"},
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-310",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-310"],
+      "create_missing": false,
+      "requirements": {
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-300",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-300"],
+      "create_missing": false,
+      "requirements": {
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-452",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-452"],
+      "create_missing": false,
+      "requirements": {
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-190",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-190"],
+      "create_missing": false,
+      "requirements": {
+        "IS": [
+          {"requirement": "GenEd---GenEd---Disciplinary Perspectives---Social Sciences", "type": true, "major": "IS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-110",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-110"],
+      "create_missing": false,
+      "requirements": {
+        "IS": [
+          {"requirement": "GenEd---GenEd---Disciplinary Perspectives---Social Sciences", "type": true, "major": "IS"}
+        ],
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)", "type": true, "major": "CS"},
+          {"requirement": "GenEd---Category 1: Cognition---Cognitive Studies (AI)", "type": true, "major": "CS"},
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-251",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-251"],
+      "create_missing": false,
+      "requirements": {
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)", "type": true, "major": "CS"},
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
+    },
+    {
+      "id": "hss-sheet-85-450",
+      "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
+      "course_codes": ["85-450"],
+      "create_missing": false,
+      "requirements": {
+        "IS": [
+          {"requirement": "GenEd---GenEd---Special Seminars---Perspectives on Justice and Injustice", "type": true, "major": "IS"}
+        ],
+        "BA": [
+          {"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}
+        ],
+        "BS": [
+          {"requirement": "GenEd---Cultural/Global Understanding---Approved Coursework", "type": true, "major": "BS"},
+          {"requirement": "GenEd---Non-Technical Breadth Electives", "type": true, "major": "BS"}
+        ],
+        "CS": [
+          {"requirement": "GenEd---Humanities/Arts Electives", "type": true, "major": "CS"}
+        ]
+      }
     }
+  ],
+  "remove_mappings": [
+    {"course_code": "85-414", "programs": "all", "reason": "Number reused: the old course was Cognitive Neuropsychology; its mappings belong to the old course. The H&SS sheet lists none for 85-414."},
+    {"course_code": "85-426", "programs": "all", "reason": "Renamed to Reverse Engineering Brains and Machines; the mappings came from Learning in Humans and Machines. Left unmapped until the user confirms."}
+  ],
+  "qatar_visibility": [
+    {"course_code": "85-100", "rule": "show_only_if_offered_qatar", "note": "85-100 is not in the H&SS sheet, so it shows only if the Schedule of Classes lists it for Qatar."}
   ]
 }

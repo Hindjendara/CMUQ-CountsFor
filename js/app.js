@@ -1207,15 +1207,21 @@ const App = {
   },
 
   // Search respects semester + campus + modality (same as requirement tree).
+  // Retired numbers and Qatar-only courses not offered in Qatar never show.
   coursePassesSearchFilter(course) {
-    if (!course) return false;
+    if (!course || isCourseHidden(course)) return false;
     return courseHasMatchingOffering(course, this._filterParams());
   },
 
   /** Requirement tree respects semester + campus + modality. */
   coursePassesTreeFilter(course) {
-    if (!course) return false;
+    if (!course || isCourseHidden(course)) return false;
     return courseHasMatchingOffering(course, this._filterParams());
+  },
+
+  /** True when two stored course codes name the same course (old numbers resolve). */
+  _sameCourse(a, b) {
+    return sameCourseCode(this.courseIndex || {}, a, b);
   },
 
   _rankCourseCodeResults(results, qNorm) {
@@ -1238,8 +1244,9 @@ const App = {
   _ensureExactCourseInResults(results, query) {
     const code = normalizeCourseCode((query || '').trim());
     if (!/^\d{1,2}-\d{2,4}$/.test(code)) return results;
+    // An old number finds its current course; hidden courses stay hidden.
     const hit = lookupCourse(this.courseIndex, code);
-    if (!hit) return results;
+    if (!hit || isCourseHidden(hit)) return results;
     const rest = results.filter(c => c.course_code !== hit.course_code);
     return [hit, ...rest];
   },
@@ -1545,7 +1552,7 @@ const App = {
     if (this._categoryIndex) return this._categoryIndex;
     const seen = new Map();
     for (const c of this.courses) {
-      if (!c.requirements) continue;
+      if (!c.requirements || isCourseHidden(c)) continue;
       for (const major of MAJOR_ORDER) {
         const reqs = c.requirements[major] || [];
         for (const req of reqs) {
@@ -2021,8 +2028,8 @@ const App = {
   _popularRowsHtml(items) {
     return items.map(item => {
       const c = lookupCourse(this.courseIndex, item.course_code);
-      if (!c) return '';
-      return `<li><button type="button" class="home-qs-link" onclick="App.selectCourseFromTree('${esc(item.course_code)}')"><span class="home-qs-code">${esc(item.course_code)}</span>${esc(c.course_name)}</button></li>`;
+      if (!c || isCourseHidden(c)) return '';
+      return `<li><button type="button" class="home-qs-link" onclick="App.selectCourseFromTree('${esc(c.course_code)}')"><span class="home-qs-code">${esc(c.course_code)}</span>${esc(c.course_name)}</button></li>`;
     }).filter(Boolean);
   },
 
@@ -2201,6 +2208,8 @@ const App = {
     if (course.offered_qatar) whereParts.push('Qatar');
     if (course.offered_pitts) whereParts.push('Pittsburgh');
     const whereStr = whereParts.length ? whereParts.join(' &amp; ') : 'Not listed';
+    // Retired numbers this course replaced (data/mapping_overlays.json "renumbered").
+    const previousCodes = Array.isArray(course.previous_codes) ? course.previous_codes.filter(Boolean) : [];
 
     // Slim DC banner (spec § 4.4) — student lens only; faculty get the full
     // cross-program grid instead of a "double-counter for you" framing.
@@ -2219,6 +2228,7 @@ const App = {
       <div class="cc-kv"><span class="cc-k">Dept</span><span class="cc-v">${esc(deptName)} (${esc(course.course_code.split('-')[0])})</span></div>
       <div class="cc-kv"><span class="cc-k">Offered</span><span class="cc-v">${semesters.length ? semesters.map(s => esc(semesterLabel(s))).join(' · ') : 'Not listed'}</span></div>
       <div class="cc-kv"><span class="cc-k">Where</span><span class="cc-v">${whereStr}</span></div>
+      ${previousCodes.length ? `<div class="cc-kv"><span class="cc-k">Previously</span><span class="cc-v">${previousCodes.map(esc).join(', ')}</span></div>` : ''}
       <div class="cc-kv"><span class="cc-k">Prereq</span><span class="cc-v">${prereq ? esc(prereq) : '<em>None</em>'}</span></div>
     `;
 
@@ -2812,12 +2822,12 @@ const App = {
   },
 
   _getWishlistNote(code) {
-    const item = this._getWishlistItems().find(i => i.course_code === code);
+    const item = this._getWishlistItems().find(i => this._sameCourse(i.course_code, code));
     return item ? (item.note || '') : '';
   },
 
   _isInWishlist(code) {
-    return this._getWishlistItems().some(i => i.course_code === code);
+    return this._getWishlistItems().some(i => this._sameCourse(i.course_code, code));
   },
 
   async toggleWishlist(code) {
@@ -2827,7 +2837,7 @@ const App = {
     }
     if (!code) return;
     const list = this._getWishlistItems();
-    const idx = list.findIndex(i => i.course_code === code);
+    const idx = list.findIndex(i => this._sameCourse(i.course_code, code));
     if (idx === -1) {
       list.push({ course_code: code, note: '' });
       this._saveWishlistItems(list);
@@ -2841,10 +2851,11 @@ const App = {
       }
       showToast('Saved for later');
     } else {
-      list.splice(idx, 1);
+      // The saved entry may use an old number; remove it under that code.
+      const [removed] = list.splice(idx, 1);
       this._saveWishlistItems(list);
       if (this.authMode === 'authed') {
-        const r = await apiRemoveWishlist(code);
+        const r = await apiRemoveWishlist(removed.course_code);
         if (!r.ok && r.status !== 404) {
           try { localStorage.removeItem('cf_synced'); } catch {}
           showToast('Removed locally. Sync to server failed.');
@@ -2853,7 +2864,7 @@ const App = {
       showToast('Removed from wishlist');
     }
     // Re-render any visible surfaces that show wishlist state
-    if (this.selectedCourse && this.selectedCourse.course_code === code) {
+    if (this.selectedCourse && this._sameCourse(this.selectedCourse.course_code, code)) {
       this.renderCourseCard(this.selectedCourse);
     }
     // Quick re-render of leaf rows (affects bookmark fill state)
@@ -2939,12 +2950,12 @@ const App = {
 
   async _saveWishlistNote(code, note) {
     const items = this._getWishlistItems();
-    const idx = items.findIndex(i => i.course_code === code);
+    const idx = items.findIndex(i => this._sameCourse(i.course_code, code));
     if (idx === -1) return;
     items[idx].note = (note || '').trim();
     this._saveWishlistItems(items);
     if (this.authMode === 'authed') {
-      const r = await apiUpdateWishlistNote(code, items[idx].note);
+      const r = await apiUpdateWishlistNote(items[idx].course_code, items[idx].note);
       if (!r.ok) {
         try { localStorage.removeItem('cf_synced'); } catch {}
         showToast('Note saved on this device. Could not sync to server.');
@@ -3372,8 +3383,9 @@ const App = {
     let total = 0;
     const seen = new Set();
     for (const item of items || []) {
-      if (seen.has(item.course_code)) continue;
-      seen.add(item.course_code);
+      const key = resolveCourseCode(this.courseIndex || {}, item.course_code);
+      if (seen.has(key)) continue;
+      seen.add(key);
       const c = lookupCourse(this.courseIndex, item.course_code);
       total += Number(c && c.units) || 0;
     }
@@ -3484,7 +3496,7 @@ const App = {
     } else if (this._homeView === 'home') {
       this._refreshHomeDock();
     }
-    if (this.selectedCourse && this.selectedCourse.course_code === courseCode) {
+    if (this.selectedCourse && this._sameCourse(this.selectedCourse.course_code, courseCode)) {
       this.renderCourseCard(this.selectedCourse);
     }
   },
@@ -3827,7 +3839,7 @@ const App = {
       ? this.serverFlags
       : this._getFlags();
     return flags.some(f =>
-      f.course_code === code &&
+      this._sameCourse(f.course_code, code) &&
       (f.reason_code === 'not_offered' || f.reason_code === 'campus_wrong') &&
       f.status !== 'dismissed'
     );
@@ -3835,11 +3847,11 @@ const App = {
 
   _courseHasVisibleFlag(code) {
     const flags = this.serverFlags || [];
-    return flags.some(f => f.course_code === code && f.status !== 'dismissed');
+    return flags.some(f => this._sameCourse(f.course_code, code) && f.status !== 'dismissed');
   },
 
   _courseFlagStatus(code) {
-    const f = (this.serverFlags || []).find(x => x.course_code === code && x.status !== 'dismissed');
+    const f = (this.serverFlags || []).find(x => this._sameCourse(x.course_code, code) && x.status !== 'dismissed');
     return f ? f.status : '';
   },
 
@@ -4435,6 +4447,7 @@ const App = {
         c._added ? '<span class="adm-pill adm-pill-new">Added here</span>' : '',
         this._courseIsEdited(c) && !archivedView ? '<span class="adm-pill adm-pill-edit">Edited</span>' : '',
         archivedView ? '<span class="adm-pill">Archived</span>' : '',
+        c.superseded_by ? `<span class="adm-pill">Replaced by ${esc(c.superseded_by)}</span>` : '',
       ].join('');
       const key = esc(this._courseEditKey(c));
       return `

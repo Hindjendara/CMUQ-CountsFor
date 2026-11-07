@@ -110,3 +110,53 @@ def test_expected_mapping_table_covers_user_courses():
     assert "79-286" in EXPECTED_GENED_MAPPINGS
     assert "79-232" in EXPECTED_GENED_MAPPINGS
     assert "82-411" not in EXPECTED_GENED_MAPPINGS
+
+
+# ── is-igi-hss-sheet: the H&SS Course Offerings sheet list (2026-11-07) ──
+
+HSS_IGI_CODES = [
+    "76-324", "76-357", "76-386", "79-284", "79-293", "79-391",
+    "82-101", "82-102", "82-111", "82-112", "82-141", "82-142",
+    "82-201", "82-241", "82-242", "82-283", "82-313",
+]
+
+
+def _overlay(overlay_id):
+    doc = json.loads((ROOT / "data" / "mapping_overlays.json").read_text(encoding="utf-8"))
+    hits = [o for o in doc["overlays"] if o["id"] == overlay_id]
+    assert len(hits) == 1, overlay_id
+    return doc, hits[0]
+
+
+def test_is_igi_hss_sheet_entry_lists_the_17_courses():
+    doc, entry = _overlay("is-igi-hss-sheet")
+    assert not [o for o in doc["overlays"] if o["id"] == "is-igi-modern-languages-core"]
+    assert entry["course_codes"] == HSS_IGI_CODES
+    assert entry["requirements"] == {"IS": [{"requirement": IS_IGI_PATH, "type": True, "major": "IS"}]}
+    # Defaults (offered_qatar) only for the codes the old modern languages entry had.
+    assert sorted(entry["ensure_course_defaults_codes"]) == sorted(MODERN_LANGUAGE_CODES)
+    for code in ("76-386", "79-391", "82-201"):
+        assert code not in entry["ensure_course_defaults_codes"]
+
+
+def test_is_igi_hss_sheet_already_mapped_and_keeps_other_courses():
+    courses = _load_courses("data/courses.json")
+    before = set(query_is_igi_courses(courses))
+    assert before.issuperset(HSS_IGI_CODES), "all 17 are mapped in the catalog already"
+    copy = json.loads(json.dumps(courses))
+    _, entry = _overlay("is-igi-hss-sheet")
+    stats = apply_overlays_to_courses(copy, [entry])
+    assert stats["requirements_added"] == 0
+    assert stats["courses_created"] == 0
+    assert set(query_is_igi_courses(copy)) == before, "the other mapped courses stay"
+
+
+def test_is_igi_hss_sheet_does_not_set_offered_qatar_outside_defaults():
+    courses = [
+        {"course_code": code, "offered_qatar": False, "requirements": {"CS": [], "IS": [], "BA": [], "BS": []}}
+        for code in HSS_IGI_CODES
+    ]
+    _, entry = _overlay("is-igi-hss-sheet")
+    apply_overlays_to_courses(courses, [entry])
+    flagged = sorted(c["course_code"] for c in courses if c["offered_qatar"])
+    assert flagged == sorted(MODERN_LANGUAGE_CODES)

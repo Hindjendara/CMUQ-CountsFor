@@ -1,8 +1,27 @@
 #!/usr/bin/env python3
-"""Apply manual requirement overlays to the bundled course catalog.
+"""Apply data/mapping_overlays.json to the bundled course catalog.
 
-Mappings live in course records inside JSON catalogs — not in Postgres.
+Mappings live in course records inside JSON catalogs, not in Postgres.
 Run after reconcile_offerings.py so overlays survive daily SOC scrapes.
+
+The SOC scrape stays the rule; the overlay file is the one place for manual
+complements on top of it. One run applies its sections in this order, and
+running it again changes nothing:
+
+1. "renumbered": copy the retired code's requirement rows (and an empty
+   description or prerequisites) onto the current code, set "previous_codes"
+   on the current row and "superseded_by" on the retired row. The retired row
+   is kept, because validate_soc_coverage needs every code soc.json lists.
+   A retired code missing from the catalog is skipped with a warning; a
+   current code missing from the catalog fails the run (nothing is saved).
+2. "overlays": additive requirement mappings.
+3. "remove_mappings": drop requirement rows per program. Runs after 1 and 2
+   so nothing re-adds them; steps 1 and 2 also skip those programs.
+4. "qatar_visibility": set "qatar_only" on courses the frontend shows only
+   when their SOC offerings include the Qatar campus.
+
+"previous_codes", "superseded_by" and "qatar_only" belong to this step: a row
+not listed in the file loses them. Copied requirement rows stay.
 """
 from __future__ import annotations
 
@@ -16,7 +35,13 @@ sys.path.insert(0, str(ROOT / "data"))
 from json_io import load_json, save_json  # noqa: E402
 from soc_parse import normalize_course_code  # noqa: E402
 
-OVERLAYS_PATH = Path(__file__).resolve().parent / "mapping_overlays.json"
+OVERLAYS_PATH = Path(
+    os.environ.get("MAPPING_OVERLAYS_PATH")
+    or Path(__file__).resolve().parent / "mapping_overlays.json"
+)
+PROGRAMS = ("CS", "IS", "BA", "BS")
+# qatar_visibility rule -> course flag the frontend reads
+VISIBILITY_RULES = {"show_only_if_offered_qatar": "qatar_only"}
 DEFAULT_CATALOGS = [
     ROOT / "data" / "courses.json",
 ]
@@ -194,22 +219,49 @@ def _merge_requirements(course: dict, overlay_reqs: dict) -> int:
     return added
 
 
-def apply_overlays_to_courses(courses: list[dict], overlays: list[dict]) -> dict:
-    by_code = {c.get("course_code"): c for c in courses if c.get("course_code")}
-    stats = {"codes_normalized": 0, "courses_created": 0, "requirements_added": 0}
+class OverlayError(Exception):
+    """The overlay file is invalid or names a current course the catalog lacks."""
 
-    stats["codes_normalized"] = normalize_catalog_codes(courses)
-    by_code = {c.get("course_code"): c for c in courses if c.get("course_code")}
 
+def _by_code(courses: list[dict]) -> dict[str, dict]:
+    return {c.get("course_code"): c for c in courses if c.get("course_code")}
+
+
+def _apply_additive_overlays(
+    courses: list[dict],
+    by_code: dict[str, dict],
+    overlays: list[dict],
+    removed: dict[str, set[str]] | None = None,
+) -> dict:
+    """Section 2. An overlay may set:
+
+    - "create_missing": false to skip (with a warning) codes the catalog lacks
+      instead of creating a manual_seed row (default true);
+    - "ensure_course_defaults_codes": the only codes that get
+      "ensure_course_defaults" (and may be created). Default: every code.
+
+    Programs that remove_mappings lists for a course are skipped, so a rerun
+    does not add rows only for section 3 to drop them again.
+    """
+    removed = removed or {}
+    stats = {"courses_created": 0, "requirements_added": 0, "overlay_codes_missing": []}
     for overlay in overlays:
         overlay_reqs = overlay.get("requirements") or {}
         defaults = overlay.get("ensure_course_defaults") or {}
+        create_missing = overlay.get("create_missing", True)
+        defaults_codes = overlay.get("ensure_course_defaults_codes")
+        if defaults_codes is not None:
+            defaults_codes = {normalize_course_code(c) for c in defaults_codes}
         for code in overlay.get("course_codes") or []:
             canonical = normalize_course_code(code)
             if not canonical:
                 continue
+            gets_defaults = defaults_codes is None or canonical in defaults_codes
             course = by_code.get(canonical)
             if course is None:
+                if not (create_missing and gets_defaults):
+                    stats["overlay_codes_missing"].append(f"{overlay.get('id')}: {canonical}")
+                    continue
                 course = {
                     "course_code": canonical,
                     "course_name": canonical,
@@ -228,17 +280,196 @@ def apply_overlays_to_courses(courses: list[dict], overlays: list[dict]) -> dict
                 courses.append(course)
                 by_code[canonical] = course
                 stats["courses_created"] += 1
-            for field, value in defaults.items():
-                if field == "department" and not course.get("department"):
-                    course["department"] = str(value)
-                elif field == "offered_qatar" and value:
-                    course["offered_qatar"] = True
-            stats["requirements_added"] += _merge_requirements(course, overlay_reqs)
-
+            if gets_defaults:
+                for field, value in defaults.items():
+                    if field == "department" and not course.get("department"):
+                        course["department"] = str(value)
+                    elif field == "offered_qatar" and value:
+                        course["offered_qatar"] = True
+            blocked = removed.get(canonical, set())
+            reqs = {m: r for m, r in overlay_reqs.items() if m not in blocked}
+            stats["requirements_added"] += _merge_requirements(course, reqs)
     return stats
 
 
-def apply_file(catalog_path: Path, overlays: list[dict]) -> dict:
+def apply_overlays_to_courses(courses: list[dict], overlays: list[dict]) -> dict:
+    """Normalize codes, then apply the additive "overlays" list only."""
+    stats = {"codes_normalized": normalize_catalog_codes(courses)}
+    added = _apply_additive_overlays(courses, _by_code(courses), overlays)
+    stats["courses_created"] = added["courses_created"]
+    stats["requirements_added"] = added["requirements_added"]
+    return stats
+
+
+def _removal_programs(entry: dict) -> tuple[str, ...]:
+    programs = entry.get("programs")
+    if programs == "all":
+        return PROGRAMS
+    if not isinstance(programs, list) or not programs or any(p not in PROGRAMS for p in programs):
+        raise OverlayError(
+            f"remove_mappings {entry.get('course_code')}: programs must be \"all\" "
+            f"or a list from {', '.join(PROGRAMS)}"
+        )
+    return tuple(programs)
+
+
+def removed_programs_by_code(removals: list[dict]) -> dict[str, set[str]]:
+    """course_code -> programs whose requirement rows remove_mappings drops."""
+    out: dict[str, set[str]] = {}
+    for entry in removals:
+        code = normalize_course_code(entry.get("course_code"))
+        if not code:
+            raise OverlayError(f"remove_mappings entry without course_code: {entry}")
+        out.setdefault(code, set()).update(_removal_programs(entry))
+    return out
+
+
+def renumbered_pairs(renumbered: list[dict]) -> list[tuple[str, str]]:
+    """(old, current) pairs. Rejects missing fields, self links, conflicts and chains."""
+    pairs: list[tuple[str, str]] = []
+    olds: dict[str, str] = {}
+    for entry in renumbered:
+        old = normalize_course_code(entry.get("old"))
+        current = normalize_course_code(entry.get("current"))
+        if not old or not current:
+            raise OverlayError(f"renumbered entry needs old and current: {entry}")
+        if old == current:
+            raise OverlayError(f"renumbered {old}: old and current are the same code")
+        if olds.get(old, current) != current:
+            raise OverlayError(f"renumbered {old}: listed with two current codes ({olds[old]}, {current})")
+        olds[old] = current
+        pairs.append((old, current))
+    for old, current in pairs:
+        if current in olds:
+            raise OverlayError(
+                f"renumbered {old} -> {current}: {current} is itself renumbered to {olds[current]}; "
+                "link the old code to the final code instead"
+            )
+    return pairs
+
+
+def apply_renumbered(
+    courses: list[dict],
+    by_code: dict[str, dict],
+    renumbered: list[dict],
+    removed: dict[str, set[str]] | None = None,
+) -> dict:
+    """Section 1: link retired codes to their current code (see the module docstring)."""
+    removed = removed or {}
+    pairs = renumbered_pairs(renumbered)
+    missing_current = sorted({cur for _, cur in pairs if cur not in by_code})
+    if missing_current:
+        raise OverlayError(
+            "renumbered: current code(s) missing from the catalog: " + ", ".join(missing_current)
+        )
+
+    stats = {"renumbered_linked": 0, "renumbered_old_missing": [], "requirements_copied": 0}
+    superseded: dict[str, str] = {}
+    previous: dict[str, list[str]] = {}
+    for old, current in pairs:
+        old_row = by_code.get(old)
+        if old_row is None:
+            stats["renumbered_old_missing"].append(f"{old} -> {current}")
+            continue
+        cur_row = by_code[current]
+        blocked = removed.get(current, set())
+        copy = {
+            major: [r for r in reqs or [] if isinstance(r, dict)]
+            for major, reqs in (old_row.get("requirements") or {}).items()
+            if major not in blocked
+        }
+        stats["requirements_copied"] += _merge_requirements(cur_row, copy)
+        for field in ("description", "prerequisites"):
+            if not str(cur_row.get(field) or "").strip() and str(old_row.get(field) or "").strip():
+                cur_row[field] = old_row[field]
+        superseded[old] = current
+        previous.setdefault(current, []).append(old)
+        stats["renumbered_linked"] += 1
+
+    for course in courses:
+        code = course.get("course_code")
+        if code in superseded:
+            course["superseded_by"] = superseded[code]
+        else:
+            course.pop("superseded_by", None)
+        if code in previous:
+            course["previous_codes"] = previous[code]
+        else:
+            course.pop("previous_codes", None)
+    return stats
+
+
+def apply_remove_mappings(by_code: dict[str, dict], removed: dict[str, set[str]]) -> dict:
+    """Section 3: drop the requirement rows of the listed programs."""
+    stats = {"mappings_removed": 0, "remove_codes_missing": []}
+    for code, programs in sorted(removed.items()):
+        course = by_code.get(code)
+        if course is None:
+            stats["remove_codes_missing"].append(code)
+            continue
+        reqs = course.get("requirements")
+        if not isinstance(reqs, dict):
+            continue
+        for program in sorted(programs):
+            if reqs.get(program):
+                stats["mappings_removed"] += len(reqs[program])
+                reqs[program] = []
+    return stats
+
+
+def _visibility_flags(entries: list[dict]) -> dict[str, set[str]]:
+    wanted: dict[str, set[str]] = {}
+    for entry in entries:
+        code = normalize_course_code(entry.get("course_code"))
+        rule = entry.get("rule")
+        if not code or rule not in VISIBILITY_RULES:
+            raise OverlayError(
+                f"qatar_visibility entry needs course_code and a rule from {sorted(VISIBILITY_RULES)}: {entry}"
+            )
+        wanted.setdefault(code, set()).add(VISIBILITY_RULES[rule])
+    return wanted
+
+
+def apply_qatar_visibility(courses: list[dict], by_code: dict[str, dict], entries: list[dict]) -> dict:
+    """Section 4: set the flag each rule names; rows not listed lose it."""
+    wanted = _visibility_flags(entries)
+    stats = {
+        "visibility_flags": sum(len(f) for c, f in wanted.items() if c in by_code),
+        "visibility_codes_missing": sorted(c for c in wanted if c not in by_code),
+    }
+    for course in courses:
+        flags = wanted.get(course.get("course_code"), set())
+        for flag in VISIBILITY_RULES.values():
+            if flag in flags:
+                course[flag] = True
+            else:
+                course.pop(flag, None)
+    return stats
+
+
+def apply_overlay_document(courses: list[dict], doc: dict) -> dict:
+    """Apply every section of mapping_overlays.json in the documented order.
+
+    Raises OverlayError, before any requirement or flag changes, when the file
+    is invalid or a renumbered current code is missing from the catalog.
+    """
+    removed = removed_programs_by_code(doc.get("remove_mappings") or [])
+    renumbered_pairs(doc.get("renumbered") or [])
+    _visibility_flags(doc.get("qatar_visibility") or [])
+
+    stats: dict = {"codes_normalized": normalize_catalog_codes(courses)}
+    by_code = _by_code(courses)
+    stats.update(apply_renumbered(courses, by_code, doc.get("renumbered") or [], removed))
+    stats.update(_apply_additive_overlays(courses, by_code, doc.get("overlays") or [], removed))
+    stats.update(apply_remove_mappings(by_code, removed))
+    stats.update(apply_qatar_visibility(courses, by_code, doc.get("qatar_visibility") or []))
+    return stats
+
+
+def apply_file(catalog_path: Path, doc) -> dict:
+    """Apply the overlay document (or a bare "overlays" list) to one catalog file."""
+    if isinstance(doc, list):
+        doc = {"overlays": doc}
     data = load_json(catalog_path)
     if isinstance(data, list):
         courses = data
@@ -246,7 +477,7 @@ def apply_file(catalog_path: Path, overlays: list[dict]) -> dict:
     else:
         courses = data["courses"]
         wrapper = data
-    stats = apply_overlays_to_courses(courses, overlays)
+    stats = apply_overlay_document(courses, doc)
     save_json(catalog_path, wrapper if wrapper is not None else courses)
     stats["catalog"] = str(catalog_path)
     return stats
@@ -318,19 +549,36 @@ def verify_expected_geneds(catalog_path: Path) -> dict:
 
 def main() -> int:
     overlays_doc = load_json(OVERLAYS_PATH)
-    overlays = overlays_doc.get("overlays") or []
     catalogs = [Path(p) for p in os.environ.get("CATALOG_PATHS", "").split(";") if p.strip()]
     if not catalogs:
         catalogs = DEFAULT_CATALOGS
 
+    failed = False
     for path in catalogs:
         if not path.exists():
             print(f"skip missing catalog: {path}")
             continue
-        stats = apply_file(path, overlays)
-        print(f"{path.name}: normalized={stats['codes_normalized']} created={stats['courses_created']} reqs_added={stats['requirements_added']}")
+        try:
+            stats = apply_file(path, overlays_doc)
+        except OverlayError as exc:
+            print(f"ERROR {path.name}: {exc} (catalog not saved)")
+            failed = True
+            continue
+        print(
+            f"{path.name}: normalized={stats['codes_normalized']} "
+            f"renumbered={stats['renumbered_linked']} reqs_copied={stats['requirements_copied']} "
+            f"created={stats['courses_created']} reqs_added={stats['requirements_added']} "
+            f"mappings_removed={stats['mappings_removed']} visibility_flags={stats['visibility_flags']}"
+        )
+        for item in stats["renumbered_old_missing"]:
+            print(f"  WARNING renumbered: old code not in the catalog, skipped: {item}")
+        for item in stats["overlay_codes_missing"]:
+            print(f"  WARNING overlay: course not in the catalog, not created: {item}")
+        for code in stats["remove_codes_missing"]:
+            print(f"  WARNING remove_mappings: course not in the catalog: {code}")
+        for code in stats["visibility_codes_missing"]:
+            print(f"  WARNING qatar_visibility: course not in the catalog: {code}")
 
-    failed = False
     for path in catalogs:
         if not path.exists():
             continue

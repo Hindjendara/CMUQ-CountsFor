@@ -436,3 +436,104 @@ test('normalizeCmuEmail: rejects non CMU and malformed addresses', () => {
   }
   assertTrue(isCmuEmail('alice@cmu.edu'));
 });
+
+// ── Qatar overlay flags: superseded_by, previous_codes, qatar_only ──
+// Written by data/apply_mapping_overlays.py from data/mapping_overlays.json.
+
+function renumberedCatalog() {
+  const req = (major, path) => ({ requirement: path, type: true, major });
+  return [
+    {
+      course_code: '85-211', course_name: 'Cognitive Psychology', superseded_by: '85-110',
+      requirements: { CS: [req('CS', 'GenEd---Humanities/Arts Electives')], IS: [], BA: [], BS: [] },
+      offerings: [],
+    },
+    {
+      course_code: '85-110', course_name: 'Cognitive Psychology', previous_codes: ['85-211'],
+      requirements: { CS: [req('CS', 'GenEd---Humanities/Arts Electives')], IS: [], BA: [], BS: [] },
+      offerings: [{ semester_code: 'F26', campus: 'Qatar', modality: 'In Person' }],
+    },
+    {
+      course_code: '85-100', course_name: 'Introduction to Psychology', qatar_only: true,
+      requirements: { CS: [req('CS', 'GenEd---Humanities/Arts Electives')], IS: [], BA: [], BS: [] },
+      offerings: [{ semester_code: 'F26', campus: 'Pittsburgh', modality: 'In Person' }],
+    },
+  ];
+}
+
+test('isCourseHidden: superseded rows and qatar_only rows without a Qatar offering', () => {
+  const [old, current, intro] = renumberedCatalog();
+  assertTrue(isCourseHidden(old));
+  assertFalse(isCourseHidden(current));
+  assertTrue(isCourseHidden(intro));
+  intro.offerings.push({ semester_code: 'S27', campus: 'Qatar', modality: 'In Person' });
+  assertFalse(isCourseHidden(intro), 'a Qatar offering makes a qatar_only course visible');
+  intro.offerings[1].cancelled = true;
+  assertTrue(isCourseHidden(intro), 'a cancelled Qatar section does not count');
+  assertFalse(isCourseHidden({ course_code: '15-122', offerings: [] }));
+});
+
+test('buildRequirementTree: leaves out superseded and hidden qatar_only rows', () => {
+  const tree = buildRequirementTree(renumberedCatalog(), 'CS');
+  const leaf = tree.children.GenEd.children['Humanities/Arts Electives'];
+  assertEqual(leaf.courses.map(c => c.code), ['85-110']);
+});
+
+test('buildCourseIndex: old numbers resolve to the current row', () => {
+  const courses = renumberedCatalog();
+  const index = buildCourseIndex(courses);
+  assertEqual(lookupCourse(index, '85-211').course_code, '85-110');
+  assertEqual(lookupCourse(index, '85211').course_code, '85-110');
+  assertEqual(lookupCourse(index, '85-110').course_code, '85-110');
+  assertEqual(resolveCourseCode(index, '85-211'), '85-110');
+  assertTrue(sameCourseCode(index, '85-211', '85-110'));
+  assertTrue(sameCourseCode(index, '85110', '85-211'));
+  assertFalse(sameCourseCode(index, '85-211', '85-100'));
+  assertFalse(sameCourseCode(index, '', '85-110'));
+});
+
+test('buildCourseIndex: previous_codes alias works when the old row is gone', () => {
+  const courses = [{ course_code: '85-190', previous_codes: ['85-104'] }];
+  const index = buildCourseIndex(courses);
+  assertEqual(lookupCourse(index, '85-104').course_code, '85-190');
+});
+
+test('buildCourseIndex: a code held by a live row is never aliased', () => {
+  const courses = [
+    { course_code: '85-102', course_name: 'Introduction to Psychology' },
+    { course_code: '85-100', course_name: 'Introduction to Psychology', previous_codes: ['85-102'] },
+  ];
+  const index = buildCourseIndex(courses);
+  assertEqual(lookupCourse(index, '85-102').course_code, '85-102');
+});
+
+test('applyCourseOverrides: an override on an old code edits the current row', () => {
+  const overrides = [{ course_code: '85-211', fields: { course_name: 'Cognitive Psychology (edited)' } }];
+  const { courses } = applyCourseOverrides(renumberedCatalog(), overrides);
+  const byCode = Object.fromEntries(courses.map(c => [c.course_code, c]));
+  assertEqual(byCode['85-110'].course_name, 'Cognitive Psychology (edited)');
+  assertEqual(byCode['85-211'].course_name, 'Cognitive Psychology');
+});
+
+test('applyCourseOverrides: an is_new override on an old code adds no row', () => {
+  const overrides = [{ course_code: '85-211', is_new: true, fields: { units: 9 } }];
+  const { courses } = applyCourseOverrides(renumberedCatalog(), overrides);
+  assertEqual(courses.length, 3);
+  assertEqual(courses.filter(c => c.course_code === '85-211').length, 1);
+  assertTrue(!!courses.find(c => c.course_code === '85-211').superseded_by, 'retired row stays superseded');
+  assertEqual(courses.find(c => c.course_code === '85-110').units, 9);
+});
+
+test('getAlsoCountsFor and annotateDoubleCounters skip hidden rows', () => {
+  const [old, current] = renumberedCatalog();
+  old.requirements.BA = [{ requirement: 'BA---Core', type: false, major: 'BA' }];
+  current.requirements.BA = [{ requirement: 'BA---Core', type: false, major: 'BA' }];
+  assertEqual(getAlsoCountsFor(old, 'CS'), []);
+  assertEqual(getAlsoCountsFor(current, 'CS'), ['BA']);
+
+  const profile = { role: 'student', primary: 'CS', secondary: 'business' };
+  const minorList = { business: ['85-211', '85-110'] };
+  annotateDoubleCounters([old, current], profile, minorList);
+  assertEqual(old._doubleCounter, false);
+  assertEqual(current._doubleCounter, true);
+});

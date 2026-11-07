@@ -14,6 +14,7 @@ from soc_parse import (  # noqa: E402
     active_sections,
     apply_campus_fix,
     build_offering,
+    clean_soc_title,
     code_to_course_number,
     course_number_to_code,
     is_cancelled_section,
@@ -51,22 +52,20 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
             code = course_number_to_code(num)
             title = course.get("title") or ""
             units = course.get("units")
-            parsed_units = parse_soc_units(units)
-            prev = meta_by_code.get(code)
-            if prev is None:
-                meta_by_code[code] = {
-                    "title": title,
-                    "units": units,
-                    "department": course.get("department") or course.get("department_code"),
-                }
-            else:
-                if title:
-                    prev["title"] = title
-                if parsed_units is not None:
-                    prev["units"] = units
-                dept = course.get("department") or course.get("department_code")
-                if dept:
-                    prev["department"] = dept
+            dept = course.get("department") or course.get("department_code")
+            # Semesters are walked newest first, so the first value seen wins:
+            # an older semester only fills a field the newer ones left empty.
+            # "title" is the cleaned title (clean_soc_title), None if no
+            # semester has a usable one.
+            prev = meta_by_code.setdefault(
+                code, {"title": None, "units": None, "department": None}
+            )
+            if prev["title"] is None:
+                prev["title"] = clean_soc_title(title)
+            if prev["units"] is None and parse_soc_units(units) is not None:
+                prev["units"] = units
+            if prev["department"] is None and dept:
+                prev["department"] = dept
             # Cancelled sections are not offerings: they must not set campus
             # flags or the `offered` list of a new stub course.
             for section in active_sections(course.get("sections")):
@@ -88,34 +87,41 @@ def campus_flags_from_offerings(offerings: list[dict]) -> tuple[bool, bool]:
     return qatar, pitts
 
 
+def adopt_soc_title(course: dict, meta: dict | None) -> dict:
+    """Set course_name to the newest cleaned SOC title.
+
+    The SOC is the rule for names. When cleaning leaves nothing usable (for
+    example "tba This Section Cancelled") the catalog name is kept.
+    titles_match only detects a reused number: the old name goes into
+    previous_course_name for review. Requirement mappings are never touched.
+
+    Returns {"changed": bool, "reused": bool}.
+    """
+    soc_title = clean_soc_title((meta or {}).get("title"))
+    if not soc_title:
+        return {"changed": False, "reused": False}
+    catalog_name = (course.get("course_name") or "").strip()
+    reused = bool(catalog_name) and not titles_match(catalog_name, soc_title)
+    if reused:
+        course["previous_course_name"] = catalog_name
+        course.pop("soc_title", None)
+        parsed_units = parse_soc_units((meta or {}).get("units"))
+        if parsed_units is not None:
+            course["units"] = parsed_units
+    elif "soc_title" in course:
+        course["soc_title"] = soc_title
+    changed = course.get("course_name") != soc_title
+    course["course_name"] = soc_title
+    return {"changed": changed, "reused": reused}
+
+
 def resolve_catalog_soc_offerings(
     course: dict,
     offerings: list[dict],
     meta: dict | None,
 ) -> list[dict]:
-    """Attach SOC offerings only when titles align; handle reused course numbers."""
-    if not offerings:
-        return []
-
-    soc_title = ((meta or {}).get("title") or "").strip()
-    catalog_name = (course.get("course_name") or "").strip()
-    if not soc_title or titles_match(catalog_name, soc_title):
-        return offerings
-
-    # CMU reused this number for a different course — drop stale catalog title.
-    if catalog_name and catalog_name != soc_title:
-        course["previous_course_name"] = catalog_name
-    course["course_name"] = soc_title
-    course.pop("soc_title", None)
-    units_raw = (meta or {}).get("units")
-    parsed_units = parse_soc_units(units_raw)
-    if parsed_units is not None:
-        course["units"] = parsed_units
-    elif units_raw is not None:
-        try:
-            course["units"] = int(units_raw) if str(units_raw).isdigit() else course.get("units")
-        except (TypeError, ValueError):
-            pass
+    """Adopt the SOC title (see adopt_soc_title) and return the offerings to attach."""
+    adopt_soc_title(course, meta)
     return offerings
 
 
@@ -159,6 +165,16 @@ def reconcile_course(course: dict, offerings: list[dict], meta: dict | None = No
     ]
 
 
+def offered_semesters(offerings: list[dict]) -> list[str]:
+    """Semester codes with a running offering, oldest first."""
+    codes = {
+        o.get("semester_code")
+        for o in offerings
+        if o.get("semester_code") and not is_cancelled_section(o)
+    }
+    return sorted(codes, key=_semester_sort_key)
+
+
 def stub_course_from_soc(code: str, offerings: list[dict], meta: dict | None = None) -> dict:
     """Minimal course row for SOC-only courses not yet in the catalog."""
     prefix = code.split("-")[0]
@@ -169,8 +185,8 @@ def stub_course_from_soc(code: str, offerings: list[dict], meta: dict | None = N
             units = int(units_raw) if str(units_raw).isdigit() else 0
         except (TypeError, ValueError):
             units = 0
-    title = (meta or {}).get("title") or code
-    sem_codes = sorted({o.get("semester_code") for o in offerings if o.get("semester_code")})
+    title = clean_soc_title((meta or {}).get("title")) or code
+    sem_codes = offered_semesters(offerings)
     course = {
         "course_code": code,
         "course_name": title,
@@ -203,9 +219,10 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         wrapper = data
 
     by_code, meta_by_code = offerings_from_soc(soc)
-    existing_codes = {c.get("course_code") for c in courses}
     updated = 0
     added = 0
+    titles_changed = 0
+    reused: list[str] = []
 
     for course in courses:
         code = normalize_course_code(course.get("course_code"))
@@ -213,16 +230,21 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
             course["course_code"] = code
         offs = by_code.get(code, [])
         meta = meta_by_code.get(code)
-        resolved_offs = resolve_catalog_soc_offerings(course, offs, meta)
-        old_q, old_p = course.get("offered_qatar"), course.get("offered_pitts")
-        reconcile_course(course, resolved_offs, meta)
-        if (
-            course.get("offerings") != resolved_offs
-            or course.get("offered_qatar") != old_q
-            or course.get("offered_pitts") != old_p
-        ):
+        title = adopt_soc_title(course, meta)
+        if title["changed"]:
+            titles_changed += 1
+        if title["reused"]:
+            reused.append(f"{code}: {course.get('previous_course_name')} -> {course.get('course_name')}")
+        before = (course.get("offerings"), course.get("offered_qatar"), course.get("offered_pitts"))
+        reconcile_course(course, offs, meta)
+        if course.get("soc_ingested"):
+            # Rows the SOC created follow the SOC; catalog rows keep their history.
+            course["offered"] = offered_semesters(offs)
+        if before != (course.get("offerings"), course.get("offered_qatar"), course.get("offered_pitts")):
             updated += 1
 
+    # Built after normalizing, so a row stored as "85211" is not added again as "85-211".
+    existing_codes = {c.get("course_code") for c in courses}
     for code, offs in sorted(by_code.items()):
         if code in existing_codes:
             continue
@@ -235,6 +257,8 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         "courses_updated": updated,
         "courses_added": added,
         "offerings_courses": len(by_code),
+        "titles_changed": titles_changed,
+        "reused_numbers": reused,
     }
 
 
@@ -247,7 +271,13 @@ def main():
         sys.exit(1)
 
     stats = reconcile_file(COURSES_PATH, SOC_PATH)
+    reused = stats.pop("reused_numbers")
     print(f"Reconciled {COURSES_PATH}: {stats}")
+    if reused:
+        # Mappings are kept; someone should check whether they still apply.
+        print(f"REVIEW: {len(reused)} course number(s) whose SOC title no longer matches the catalog name:")
+        for line in reused:
+            print(f"  - {line}")
 
 
 if __name__ == "__main__":

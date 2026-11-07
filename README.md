@@ -90,7 +90,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **Wishlist / Saved** | A student's saved courses with optional notes (`wishlist_items`). The UI calls it "Saved". |
 | **Plan / schedule plan** | A weekly schedule built from course sections. Stored in browser localStorage; the server only stores shared copies. |
 | **Override** | An admin edit to the course catalog stored in the database (`course_overrides`) and applied in the browser on top of the scraped `data/courses.json`. |
-| **Mapping overlay** | A manual, additive requirement mapping in `data/mapping_overlays.json`, applied to the catalog file by the scrape pipeline. |
+| **Mapping overlay** | A manual complement to the SOC scrape in `data/mapping_overlays.json` (additive mappings, renumbered courses, mapping removals, Qatar visibility), applied to the catalog file by the scrape pipeline. |
 | **Demo mode / guest mode** | Running the frontend without a signed-in user. Everything is local to the browser. |
 | **Render** | The hosting company that runs the Flask backend and its Postgres database. |
 | **GitHub Pages** | Static hosting for the frontend. |
@@ -262,19 +262,19 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 
 | File | Purpose |
 |---|---|
-| `courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`. Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`), `soc_sections`, `offerings`. |
+| `courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`. Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`), `soc_sections`, `offerings`. Set by the overlay step (14.4): `superseded_by` on a retired number, `previous_codes` on the row that replaced it, `qatar_only`. Set by reconcile: `previous_course_name` when a number was reused for a different course. |
 | `soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 23 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
-| `mapping_overlays.json` | Manual additive requirement mappings (9 overlays as of Nov 2026). |
+| `mapping_overlays.json` | The one place for manual complements to the SOC scrape (14.4): `renumbered` (6 retired Psychology numbers), `overlays` (additive mappings, 21 entries as of Nov 2026, including the H&SS Course Offerings sheet), `remove_mappings` (85-414, 85-426) and `qatar_visibility` (85-100). |
 | `minor_courses.json` | Course lists per minor (only `business` and `cs` populated). Loaded by `fetchMinorCourses()`. |
 | `faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. Used as the directory seed in production (`SEED_USERS_PATH=data/faculty_directory.json` in `render.yaml`). |
 | `scrape_soc.py` | Scraper. Maps table cells by the `<th>` header (summer pages have an extra Session column), strips the "This Section Cancelled" note from titles and marks those sections cancelled. |
 | `soc_parse.py`, `soc_departments.py` | Shared parsing helpers. `soc_parse.clean_soc_title()` cleans titles already stored in `soc.json` (cancelled note, " : subtitle", trailing ": TBA") and returns `None` when nothing usable is left. |
 | `json_io.py` | Shared `load_json` and `save_json` helpers for the pipeline scripts. |
-| `reconcile_offerings.py` | Merges `soc.json` into `courses.json`: offerings, campus flags, units. Cancelled sections are skipped. |
-| `apply_mapping_overlays.py` | Applies `mapping_overlays.json` to `courses.json`. |
-| `validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. Courses whose sections are all cancelled are not required. |
+| `reconcile_offerings.py` | Merges `soc.json` into `courses.json`: offerings, campus flags, units, and `course_name` from the newest cleaned SOC title. Cancelled sections are skipped. Prints a review list of reused numbers. |
+| `apply_mapping_overlays.py` | Applies every section of `mapping_overlays.json` to `courses.json`, in a fixed order (14.4). |
+| `validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. Courses whose sections are all cancelled are not required; superseded rows and `previous_codes` count as present. Warns about same-title pairs that may be unlinked renumberings. |
 | `scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand. |
-| `tests/` | Pytest tests for the pipeline (52 tests). `tests/fixtures/` holds real SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar). |
+| `tests/` | Pytest tests for the pipeline (88 tests). `tests/fixtures/` holds real SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar). |
 
 ---
 
@@ -430,6 +430,7 @@ Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither R
 | `SEMESTERS_TO_TRY` | `soc_departments.py` | from the SOC form | Comma list override of semesters. |
 | `SOC_JSON_PATH`, `COURSES_JSON_PATH` | reconcile and validate | `data/soc.json`, `data/courses.json` | File locations. |
 | `CATALOG_PATHS` | `apply_mapping_overlays.py` | `data/courses.json` | Semicolon list of catalogs to patch. |
+| `MAPPING_OVERLAYS_PATH` | `apply_mapping_overlays.py`, `validate_soc_coverage.py` | `data/mapping_overlays.json` | Overlay file location. |
 
 ### 6.3 Frontend configuration (no env vars, all in HTML)
 
@@ -551,11 +552,12 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | 28 to 45 | `ACCENT_RULES`, `pickAccentColor()` | Accent color by requirement label. |
 | 48 to 108 | `LABEL_OVERRIDES` | Prettier display names for raw requirement segments. |
 | 110 to 220 | `FULFILLMENT_RULES`, `setRule()` | Hand-annotated rule chips ("pick 1", "take all", "at least N units") per major and requirement. |
-| 222 to 331 | `buildRequirementTree()`, `normalizeTree()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; split into degree and GenEd sections. |
+| 220 to 235 | `courseOfferedInQatar()`, `isCourseHidden()` | A row is hidden everywhere (tree, search, typeahead, home lists, also counts for, double counters) when it has `superseded_by`, or `qatar_only` without a running Qatar offering. |
+| 237 to 346 | `buildRequirementTree()`, `normalizeTree()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; split into degree and GenEd sections. |
 | 334 | `normalizeCourseCode()` | Canonical `NN-NNN`. |
 | 343 to 425 | `COURSE_EDIT_FIELDS`, `applyCourseOverrides(courses, overrides)` | Apply admin edits. Returns `{ courses, archived }`. Edited courses get `_edit` (the override) and `_catalog` (the scraped values replaced). Added courses get `_added`. Archived courses are removed from `courses` and returned in `archived`. Copies objects so a reload starts from scraped data. |
 | 428 | `knownRequirementPaths()` | All requirement paths per program, used by the course editor's autocomplete. |
-| 443 to 501 | `buildCourseIndex()`, `lookupCourse()`, `findTreeNode()`, `collectCoursesForRequirement()`, `formatRequirementPath()`, `requirementLeafLabel()` | Index by `15-122` and `15122`; tree lookups. |
+| 462 to 570 | `renumberedAliases()`, `buildCourseIndex()`, `lookupCourse()`, `resolveCourseCode()`, `sameCourseCode()`, `findTreeNode()`, `collectCoursesForRequirement()`, `formatRequirementPath()`, `requirementLeafLabel()` | Index by `15-122` and `15122`; a retired number (`superseded_by`, `previous_codes`) resolves to the current row, so wishlist, flag and plan entries saved under an old code still match. Tree lookups. |
 | 505 to 570 | `getCourseMappings()`, `orderCfColumns()`, `summarizeFlagsByStatus()`, `getAlsoCountsFor()` | Display data for the course card. |
 | 577 to 625 | `predictOffering()`, `sortSemesters()` | Rule-based "likely offered next term" hint (no ML). |
 | 628 to 646 | `DEPT_NAMES`, `getDeptName()` | Department number to name. |
@@ -876,7 +878,7 @@ Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequis
 
 ### 12.4 How the browser applies them
 
-`App._prepareCatalog()` calls `fetchAllCourses()`, then `apiGetCourseOverrides()` (10 s timeout; on failure it logs a warning and shows the plain scrape), then `applyCourseOverrides()`, then rebuilds the index and trees. After every save the course editor calls `_reloadCatalog()` to rebuild from scratch.
+`App._prepareCatalog()` calls `fetchAllCourses()`, then `apiGetCourseOverrides()` (10 s timeout; on failure it logs a warning and shows the plain scrape), then `applyCourseOverrides()`, then rebuilds the index and trees. An override saved under a retired number applies to the row that replaced it, and an `is_new` override on a retired number does not bring the old row back. After every save the course editor calls `_reloadCatalog()` to rebuild from scratch.
 
 ### 12.5 Using the course editor
 
@@ -944,9 +946,9 @@ Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. On
 
 1. `python -m pytest data/tests/test_scrape_soc.py data/tests/test_soc_parse.py -q`
 2. `python data/scrape_soc.py`: scrapes every semester on the SOC form for Pittsburgh and Qatar, all departments, writes `data/soc.json` only if the scrape is non-empty and above `MIN_COURSES_FOR_VALID_SCRAPE`. Columns are read from each table's header, so the summer Session column does not shift cells. Cancelled sections are kept with `cancelled: true`; a table without a header is skipped rather than guessed.
-3. `python data/reconcile_offerings.py`: merges SOC sections into `data/courses.json` (offerings, `offered`, campus flags, units). Cancelled sections do not count as offerings and do not set `offered_qatar` or `offered_pitts`. It does **not** create requirement mappings.
-4. `python data/apply_mapping_overlays.py`: adds the manual requirement mappings from `data/mapping_overlays.json` (additive only).
-5. `python data/validate_soc_coverage.py`: fails if a SOC course is missing from the catalog (courses with only cancelled sections are not required).
+3. `python data/reconcile_offerings.py`: merges SOC sections into `data/courses.json` (offerings, campus flags, units). Cancelled sections do not count as offerings and do not set `offered_qatar` or `offered_pitts`. For each field the newest semester wins. `course_name` becomes the newest SOC title after `clean_soc_title()` (the catalog name stays only when cleaning leaves nothing). When the old name and the SOC title share no words, the number was probably reused: the old name goes into `previous_course_name` and the code is printed under `REVIEW`; mappings are never removed here. `offered` on rows the SOC created (`soc_ingested`) follows their SOC offerings; catalog rows keep their history. It does **not** create requirement mappings.
+4. `python data/apply_mapping_overlays.py`: applies `data/mapping_overlays.json` (14.4): renumbered courses, additive mappings, mapping removals, Qatar visibility. It fails, without saving, if a renumbered current code is missing from the catalog.
+5. `python data/validate_soc_coverage.py`: fails if a SOC course is missing from the catalog (courses with only cancelled sections are not required; superseded rows count). It also prints a `WARNING` (not a failure) listing same-department, same-title pairs where one row is outside the SOC and the pair is not linked in `renumbered`, so new renumberings show up in the log. Nothing is linked automatically.
 6. `python scripts/bump_cf_build.py`: sets the `cf-build` meta and every `?v=` in `app.html` to `soc-YYYY-MM-DD`, so browsers fetch the new `courses.json`.
 7. Commits `data/soc.json data/courses.json app.html` as `soc-bot` with message `Update SOC data (YYYY-MM-DD)` and pushes.
 8. If it pushed, triggers `pages.yml` with `gh workflow run pages.yml --ref main` (bot pushes do not trigger workflows by themselves).
@@ -973,7 +975,7 @@ git commit -am "Sync SOC data from the hind fork"
 ```bash
 source .venv/bin/activate
 pip install pytest
-python -m pytest data/tests -q                 # 52 tests
+python -m pytest data/tests -q                 # 88 tests
 python data/scrape_soc.py                      # 30 to 90 minutes, polite delays
 python data/reconcile_offerings.py
 python data/apply_mapping_overlays.py
@@ -995,24 +997,44 @@ SOC_BASE_URL=http://localhost:5000/open/SOC/SOCServlet MIN_COURSES_FOR_VALID_SCR
 
 ### 14.4 Mapping overlays (`data/mapping_overlays.json`)
 
+The SOC scrape stays the rule. This file is the one place for manual complements on top of it (Qatar campus information that the SOC does not carry). Put only confirmed entries here; never infer a renumbering or a mapping.
+
 ```json
 {
   "description": "...",
+  "renumbered": [
+    {"old": "85-211", "current": "85-110", "source": "H&SS Course Offerings sheet", "note": "..."}
+  ],
   "overlays": [
     {
-      "id": "is-igi-modern-languages-core",
+      "id": "hss-sheet-85-110",
       "note": "why this exists",
-      "course_codes": ["82-101", "82-102"],
+      "course_codes": ["85-110"],
+      "create_missing": false,
       "requirements": {
-        "IS": [{"requirement": "GenEd---GenEd---Foundations---Intercultural and Global Inquiry", "type": true, "major": "IS"}]
+        "BA": [{"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}]
       },
-      "ensure_course_defaults": {"department": "82", "offered_qatar": true}
+      "ensure_course_defaults": {"department": "82", "offered_qatar": true},
+      "ensure_course_defaults_codes": ["82-101"]
     }
+  ],
+  "remove_mappings": [
+    {"course_code": "85-414", "programs": "all", "reason": "..."}
+  ],
+  "qatar_visibility": [
+    {"course_code": "85-100", "rule": "show_only_if_offered_qatar", "note": "..."}
   ]
 }
 ```
 
-Overlays only add mappings, never remove them. Use overlays for mapping fixes that should live in git and apply to every deploy; use the admin course editor for quick fixes by non-developers. Test: `python -m pytest data/tests/test_is_igi_modern_languages.py`.
+`apply_mapping_overlays.py` applies the sections in this order, in one step. Running it twice gives the same file.
+
+1. **`renumbered`**: copies the retired row's requirement rows onto the current row (verbatim, deduplicated by program, requirement and type), copies `description` and `prerequisites` only when the current row's are empty, sets `previous_codes` on the current row and `superseded_by` on the retired row. The retired row stays in the catalog (the validator needs every code `soc.json` ever listed, and `soc.json` keeps old semesters) and the app hides it. A retired code missing from the catalog is skipped with a warning; a current code missing from the catalog fails the run.
+2. **`overlays`**: additive mappings. `create_missing: false` skips (with a warning) a code the catalog lacks instead of creating a `manual_seed` row. `ensure_course_defaults_codes` limits `ensure_course_defaults` (and creation) to those codes.
+3. **`remove_mappings`**: removes the requirement rows of the listed programs (`["BA", "BS"]` or `"all"`). It runs last among the mapping steps, and steps 1 and 2 skip those programs, so nothing re-adds them.
+4. **`qatar_visibility`**: `show_only_if_offered_qatar` sets `qatar_only`; the app hides the course everywhere unless its SOC offerings include the Qatar campus.
+
+`superseded_by`, `previous_codes` and `qatar_only` belong to this step: a row the file no longer lists loses them. Copied requirement rows stay. Use the file for mapping fixes that should live in git and apply to every deploy; use the admin course editor for quick fixes by non-developers. Tests: `data/tests/test_mapping_overlay_sections.py` (also checks that every requirement path in the file exists in `data/courses.json`) and `data/tests/test_is_igi_modern_languages.py`.
 
 ### 14.5 Faculty directory refresh
 
@@ -1103,8 +1125,8 @@ python3 -m http.server 8765
 | Suite | Result |
 |---|---|
 | `backend/tests` | **116 passed, 6 failed** |
-| `data/tests` | 34 passed |
-| `node scripts/run-data-tests.js` | 97 passed, 1 failed (profile 46/46, data 51/52; counted after the runner started loading `profile.test.js` in November 2026) |
+| `data/tests` | 88 passed |
+| `node scripts/run-data-tests.js` | 105 passed, 1 failed (profile 46/46, data 59/60; counted after the runner started loading `profile.test.js` in November 2026) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
@@ -1127,7 +1149,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
 - `backend/tests/test_admin.py` and `test_course_overrides.py` cover the admin page.
-- `data/tests/` cover SOC parsing, title mismatch reconciliation, the modern languages overlay and `scripts/bump_cf_build.py`.
+- `data/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list and `scripts/bump_cf_build.py`.
 - `tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
 - `Testing/` (capital T) is not a test suite; it is the SOC mock server.
 
