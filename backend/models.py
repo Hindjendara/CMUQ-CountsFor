@@ -191,10 +191,6 @@ class DirectoryEntry(db.Model):
         }
 
 
-# Legacy alias — prefer DirectoryEntry
-StaffDirectoryEntry = DirectoryEntry
-
-
 class PasswordResetToken(db.Model):
     __tablename__ = "password_reset_tokens"
     __table_args__ = (Index("ix_password_reset_tokens_user_used", "user_id", "used"),)

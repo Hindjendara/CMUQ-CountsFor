@@ -57,10 +57,6 @@ function getRoleGroup(profileOrRole) {
   return 'student';
 }
 
-function isStudentRole(profile) {
-  return getRoleGroup(profile) === 'student';
-}
-
 function canManageDirectory(profile) {
   const g = getRoleGroup(profile);
   return g === 'faculty' || g === 'admin';
@@ -151,21 +147,6 @@ const ROLE_META = {
 function isFaculty(profile) {
   const g = getRoleGroup(profile);
   return g === 'faculty' || g === 'admin';
-}
-
-// Display groups for the onboarding UI.
-const ROLE_GROUPS = {
-  student:   { label: 'Student',                       roles: ['student'] },
-  professor: { label: 'Professor',                     roles: ['professor'] },
-  area_lead: { label: 'Area / Associate Area Head',    roles: ['area_head', 'associate_area_head'] },
-  advisor:   { label: 'Advisor',                       roles: ['advisor'] },
-};
-
-const FACULTY_GROUPS = ['professor', 'area_lead', 'advisor'];
-
-function getOnboardingUiGroup(role) {
-  if (!role) return null;
-  return (ROLE_META[role] && ROLE_META[role].group) || null;
 }
 
 function getRoleLabel(profile) {

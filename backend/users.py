@@ -35,10 +35,6 @@ def _audit_snapshot(user: User) -> dict:
     }
 
 
-def _can_manage_users(user: User) -> bool:
-    return user.role_group() == ROLE_GROUP_ADMIN
-
-
 @bp.route("", methods=["GET"])
 @require_role_group(ROLE_GROUP_ADMIN)
 def list_users():

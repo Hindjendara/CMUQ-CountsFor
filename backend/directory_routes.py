@@ -183,16 +183,3 @@ def revoke_access():
     record_event(g.user, "directory.revoke", email, name=row.name)
     db.session.commit()
     return jsonify(ok=True, message="Access revoked. User will be a student on next login.")
-
-
-# Legacy routes (keep for older frontend builds)
-@bp.route("/staff", methods=["GET"])
-@require_role_group(ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN)
-def list_staff_legacy():
-    return list_entries()
-
-
-@bp.route("/staff", methods=["POST"])
-@require_role_group(ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN)
-def add_staff_legacy():
-    return add_entry()

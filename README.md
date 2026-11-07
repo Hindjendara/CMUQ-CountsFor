@@ -149,16 +149,14 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 
 ### 3.3 Where the frontend finds things
 
-There are three different "base URLs" in `js/api.js`. Do not confuse them.
+There are two different "base URLs" in `js/api.js`. Do not confuse them.
 
 | Constant / function | Used for | Value / logic |
 |---|---|---|
 | `LOCAL_DATA` | The course catalog | `data/courses.json` with `?v=<cf-build meta>` appended by `_bundledDataUrl()` |
-| `API_BASE` | A historical fallback for course data only | `https://countsfor.qatar.cmu.edu/api` (only reachable on the CMU network). Tried second, only if the local file fails. |
-| `GITHUB_RAW` | Last-resort course data | `https://raw.githubusercontent.com/open-cmuq/CountsFor/main/backend/data` plus a few other candidate paths |
 | `getBackendUrl()` / `CF_BACKEND_URL` | **The Flask backend** (all `/api/...` calls) | See resolution order below |
 
-`fetchAllCourses()` order: (1) bundled `data/courses.json`, (2) `API_BASE/courses/search?searchQuery=`, (3) GitHub raw. In practice step 1 always succeeds.
+`fetchAllCourses()` loads only the bundled `data/courses.json`. There is no remote fallback: if the file cannot be loaded or has no courses, it throws and `App.loadData()` shows "Failed to load data".
 
 `getBackendUrl()` resolution order (same logic is duplicated inside `js/landing.js`):
 
@@ -568,21 +566,21 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | 787 to 1004 | `PLAN_DAY_COLUMNS`, `parseDaysTimes()`, `planOfferingKey()`, `groupOfferingsBySection()`, `findPlanConflicts()`, `layoutPlanDayBlocks()` and friends | Schedule planner math: parsing times, conflicts, calendar layout (7:00 to 22:00). |
 | 1007 to end | `courseCountsForMinor()`, `annotateDoubleCounters()`, `annotateMultiProgram()` | Profile-aware flags on courses: `_doubleCounter` (counts for major and minor) and `_programCount`. |
 
-### 8.4 `js/profile.js` (about 345 lines): roles and programs
+### 8.4 `js/profile.js` (about 325 lines): roles and programs
 
 | Item | Purpose |
 |---|---|
 | `PROGRAM_GROUPS` | Programs with labels and `dataPending` (AI and GS are pending). Derived: `VALID_PROGRAMS`, `MAJOR_LIST`, `STUDENT_PROGRAMS`, `PROGRAM_FULL_NAME`. |
 | `DEPARTMENT_LIST` | Must match `VALID_DEPARTMENTS` in `backend/models.py`. |
-| `getRoleGroup()`, `isStudentRole()`, `isFaculty()`, `isStudent()` | Role group helpers (mirror of backend). |
+| `getRoleGroup()`, `isFaculty()`, `isStudent()` | Role group helpers (mirror of backend). |
 | `canManageDirectory()`, `canFlagCourses()`, `canManageUsers()`, `canUseSchedulePlan()` | UI gates only. The backend enforces the real rules. |
 | `MINOR_LIST`, `MAJOR_TO_MINOR_CODE`, `getMinorLabel()`, `getProfileMinors()` | Minors. |
-| `VALID_ROLES`, `ROLE_META`, `ROLE_GROUPS`, `FACULTY_GROUPS` | Role labels and onboarding groups. |
+| `VALID_ROLES`, `ROLE_META` | Role labels and per-role flags. |
 | `ADVISOR_SCOPES`, `getAdvisorScopeLabel()` | Advisor scope labels. |
 | `computeViewMode()`, `validateProfile()` | Which programs to show for a profile. |
 | `saveProfile()`, `loadProfile()`, `clearProfile()` | Persist the local profile in localStorage keys `cf_role`, `cf_primary`, `cf_secondary`, `cf_minors`, `cf_scope`. |
 
-### 8.5 `js/api.js` (about 385 lines): all network calls
+### 8.5 `js/api.js` (about 325 lines): all network calls
 
 `apiFetch(path, opts)` is the single wrapper. It always sends `credentials: 'include'` and the bearer token, times out after 75 s by default (`opts.timeoutMs`), never throws on HTTP errors, saves any `auth_token` it sees in a response, and returns `{ ok, status, data, error, message }`. `status: 0` means network failure or timeout.
 
@@ -590,12 +588,12 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 |---|---|---|
 | Course data | `fetchAllCourses()`, `fetchMinorCourses()` | static files (see 3.3) |
 | Backend URL and token | `getBackendUrl()`, `isBackendConfigured()`, `getAuthToken()`, `saveAuthToken()`, `clearAuthToken()`, `getGoogleClientId()` | none |
-| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
+| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword` (these five are currently unused: only `landing.js` signs in, with its own copies), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
 | Admin console | `apiAdminOverview`, `apiAdminInsights(semester)`, `apiAdminActivity(query)` | `/api/admin/*` |
 | Course edits | `apiGetCourseOverrides` (10 s timeout), `apiAddCourse`, `apiEditCourse`, `apiArchiveCourse`, `apiRestoreCourse`, `apiRevertCourse` | `/api/courses/overrides` |
-| Directory | `apiListStaffDirectory`, `apiAddStaffMember`, `apiUpdateDirectoryEntry`, `apiUpsertDirectoryByEmail`, `apiRevokeDirectoryAccess`, `apiDeleteDirectoryEntry` | `/api/directory/entries` |
-| Flags | `apiCreateFlag`, `apiListFlags`, `apiGetMyFlags` (same endpoint; its comment about auto-scoping is wrong, scoping needs `?mine=1`), `apiUpdateFlag` | `/api/flags` |
+| Directory | `apiListStaffDirectory`, `apiAddStaffMember`, `apiUpsertDirectoryByEmail`, `apiRevokeDirectoryAccess`, `apiDeleteDirectoryEntry` | `/api/directory/entries` |
+| Flags | `apiCreateFlag`, `apiListFlags`, `apiUpdateFlag` | `/api/flags` |
 | Wishlist | `apiGetWishlist`, `apiGetWishlistRoster`, `apiAddWishlist`, `apiUpdateWishlistNote`, `apiRemoveWishlist` | `/api/wishlist` |
 | Search analytics | `apiRecordCourseSearch`, `apiGetPopularCourses` (8 s timeout) | `/api/search-analytics` |
 | Plans | `apiGetPlans`, `apiSharePlan`, `apiCreatePlanShareLink`, `apiAcceptPlanShare` | `/api/plans` |
@@ -606,46 +604,45 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 One IIFE. Main parts: backend URL and token helpers (top, lines 1 to 155), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `enterGuestMode()`, `init()`. Note: the header comment says "no browser storage", which is no longer true.
 
-There is a **second, older set of auth screens inside `js/app.js`** (`renderLogin`, `_onLogin`, `_onRegister`, `_onForgotPassword`, `_onResetPassword`, about lines 661 to 1160). The normal flow uses the landing page; keep both in sync if you change auth messages, or remove the app.js copy.
+`js/app.js` has no sign-in screens of its own (the old in-app copy was removed in November 2026). It redirects to `index.html` whenever a sign-in is needed.
 
-### 8.7 `js/app.js` (about 6,300 lines): the `App` object
+### 8.7 `js/app.js` (about 5,825 lines): the `App` object
 
-Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for commit `d0158e8`; they will drift as the file is edited. Search for the function name.
+Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for the `cleanup` branch after the November 2026 dead code removal; they will drift as the file is edited. Search for the function name.
 
 | Lines (approx.) | Section | Key functions |
 |---|---|---|
 | 5 to 11 | Home constants | `HOME_POPULAR_COURSES`, `HOME_SEARCH_CHIPS`, `HOME_RECENT_MAPPINGS` |
-| 12 to 49 | State | `courses`, `courseIndex`, `trees`, `treeSections`, `layoutMode`, `activeMajor`, `selectedCourse`, filters (`locationFilter`, `activeSemester` default `F26`, `modalityFilter`), `profile`, `authedUser`, `authMode` (`authed`, `demo`, `login`), `isGuest`, `serverFlags` |
-| 50 to 245 | Boot and auth state | `init()`, `_redirectToLogin()`, `_restorePendingSharePlan()`, `_afterAuthed()`, `_syncLocalToServer()` (one-time upload of local flags and wishlist), `_loadServerFlags()`, `_needsOnboarding()`, `_hydrateProfileFromServer()` |
-| 247 to 257 | Theme | `applyTheme()`, `toggleTheme()` |
-| 259 to 351 | Data loading | `_prepareCatalog()` (fetch catalog, fetch overrides, `applyCourseOverrides`, index, annotate, build trees), `loadData()`, `autoExpandFirstLevel()` |
-| 353 to 660 | Onboarding | `renderOnboarding()`, `_renderOnboardingScreen()`, `_obPick*`, `_obAddMinor`, `_finishOnboarding()` (PATCHes `/api/me`) |
-| 661 to 1160 | Legacy in-app auth screens | `renderLogin()`, `_onLogin`, `_onRegister`, `_onForgotPassword`, `_onResetPassword`, `_afterSignIn()`, `_onGoogleCredential()` |
-| 1161 to 1396 | Guest, sign-out, role badge | `_readGuestFlag()`, `exitGuest()`, `setGuestRole()`, `signOut()`, `_roleBadgeHtml()`, `editRole()`, `_visibleMajors()`, `_guestBannerHtml()` |
-| 1397 to 1602 | Shell rendering | `renderShell()` (navbar with Saved, Plans, Admin or Flag review buttons, directory button), `_syncDirectoryFabLayout()`, `_initPanelResizer()` (split view drag handle) |
-| 1603 to 1879 | Events and filters | `bindGlobalEvents()`, `_filterParams()`, `_refreshSemesterOptions()`, `setSemester()`, `setModalityFilter()`, `setLocation()`, `setMobileLens()`, `reset()` |
-| 1880 to 2101 | Explorer mode and course search | `enterExplorer()`, `exitExplorer()`, `handleSearchKeydown()`, `_selectCourse()`, `selectSearchResult()` |
-| 2102 to 2365 | Category search and unified home search | `_buildCategoryIndex()`, `handleCategoryKeydown()`, `handleUnifiedSearchKeydown()`, `selectUnifiedResult()`, `runHomeSearchChip()` |
-| 2366 to 2790 | Home screen | `renderLeftEmpty()`, `_renderHome()`, `_renderHomeDock()`, popular courses (`_recordCourseSearch()`, `_loadPopularCourses()`, local fallback counts), `_renderQuickStart()`, navbar counters |
-| 2791 to 3014 | Flag summaries for faculty and students, double counters | `_renderMyFlagsPanel()`, `showMyFlagsView()`, `showDoubleCounterList()` |
-| 3015 to 3215 | Course card | `renderCourseCard()`, `_renderSchedRowGroup()` |
-| 3216 to 3613 | Requirement tree | `_renderMajorTabs()`, `switchMajor()`, `toggleNode()`, `renderTree()`, `renderTreeNode()`, `downloadRequirementExcel()` (CSV), `_renderLeafCourse()`, `_renderRowActions()`, `_renderCardActions()` |
-| 3614 to 3635 | Cross-linking | `selectCourseFromTree()` |
-| 3636 to 3804 | Wishlist (Saved) | `_getWishlistItems()`, `toggleWishlist()`, `showWishlistView()`, `_saveWishlistNote()` |
-| 3805 to 4609 | Schedule plans | `_loadPlansStore()` (localStorage `cf_plans_v2`, migrates legacy `cf_plan`), `createNewPlan()`, `deletePlan()`, `renamePlan()`, `_loadServerPlans()`, `_mergeServerPlan()`, `_handlePendingSharePlanLink()`, `openSharePlanModal()`, `submitSharePlanEmail()`, `copySharePlanLink()`, `togglePlanSection()`, `_renderPlanCalendar()`, `showPlanView()`, `openPlanDetail()` |
-| 4610 to 4689 | Student flag view and favourites | `showStudentFlagsView()`, `showStudentFavorites()` |
-| 4670 to 4854 | Flags | `FLAG_REASONS` (must match `VALID_REASON_CODES` in `backend/flags.py`), `_getFlags()` (local `cf_flags`), `openFlagModal()`, `submitFlag()` |
-| 4855 to 5081 | Directory panel | `toggleDirectoryPanel()`, `_loadDirectoryPanel()`, `_renderDirectoryPanel()`, `_editDirectoryRow()`, `_revokeDirectoryRow()`, `_submitDirectoryForm()` |
-| 5082 to 5208 | Admin console shell | `_adminConsole` state, `ADMIN_TABS`, `showAdminConsole()`, `_setAdminTab()`, `_loadAdminTab()` (dispatch), helpers `_admEl()`, `_admError()`, `_admWhen()`, `_admStat()` |
-| 5209 to 5645 | Admin: Courses tab (course editor) | `_courseAdmin` state, `_renderAdminCourses()`, `_renderCourseResults()`, `_openCourseEditor()`, `_openCourseAdd()`, `_renderCourseEditor()`, `_addCourseReq()`, `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()` |
-| 5646 to 5699 | Admin: Overview tab | `_loadAdminOverview()`, `_openIncompleteUsers()` |
-| 5700 to 5739 | Admin: Faculty access tab | `_loadAdminAccess()`, `_openDirectoryFromAdmin()` |
-| 5740 to 5835 | Admin: Insights tab | `_loadAdminInsights()` |
-| 5836 to 5920 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()`, `_describeAdminEvent()` (human text per audit action) |
-| 5921 to 6139 | Admin: Users tab | `showUserManagement()`, `_loadUserAdmin()`, `_exportUsersCsv()`, `_renderUserAdmin()`, `_renderUserAdminRow()`, `_saveUserAdmin()` |
-| 6140 to 6264 | Admin and faculty: Flags review | `showFlagReview()`, `_loadFlagReview()`, `_renderFlagReview()`, `_setFlagStatus()`, `_promptFlagNote()` |
-| 6265 to 6301 | Deep links into the tree | `navigateToReqNode()` |
-| 6304 to 6310 | Bootstrap | `DOMContentLoaded` handler, picks dark theme from OS if no saved theme, calls `App.init()` |
+| 12 to 46 | State | `courses`, `courseIndex`, `trees`, `treeSections`, `layoutMode`, `activeMajor`, `selectedCourse`, filters (`locationFilter`, `activeSemester` default `F26`, `modalityFilter`), `profile`, `authedUser`, `authMode` (`authed`, `demo`, `login`), `isGuest`, `serverFlags` |
+| 47 to 240 | Boot and auth state | `init()`, `_redirectToLogin()`, `_restorePendingSharePlan()`, `_afterAuthed()`, `_syncLocalToServer()` (one-time upload of local flags and wishlist), `_loadServerFlags()`, `_needsOnboarding()`, `_hydrateProfileFromServer()` |
+| 241 to 251 | Theme | `applyTheme()`, `toggleTheme()` |
+| 252 to 329 | Data loading | `_prepareCatalog()` (fetch catalog, fetch overrides, `applyCourseOverrides`, index, annotate, build trees), `loadData()`, `autoExpandFirstLevel()` |
+| 330 to 580 | Onboarding (students only) | `renderOnboarding()`, `_renderOnboardingScreen()`, `_obPickMajor()`, `_obPickMinor()`, `_obAddMinor()`, `_obRemoveMinor()`, `_finishOnboarding()` (PATCHes `/api/me`) |
+| 581 to 833 | Sign-in result, guest, sign-out, role badge | `_afterSignIn()`, `_readGuestFlag()`, `exitGuest()`, `setGuestRole()`, `signOut()`, `_roleBadgeHtml()`, `editRole()`, `_visibleMajors()`, `_guestBannerHtml()` |
+| 834 to 1049 | Shell rendering | `renderShell()` (navbar with Saved, Plans, Admin or Flag review buttons, directory button), `_syncDirectoryFabLayout()`, `_initPanelResizer()` (split view drag handle) |
+| 1050 to 1318 | Events and filters | `bindGlobalEvents()`, `_filterParams()`, `_refreshSemesterOptions()`, `setSemester()`, `setModalityFilter()`, `setLocation()`, `setMobileLens()`, `reset()` |
+| 1319 to 1540 | Explorer mode and course search | `enterExplorer()`, `exitExplorer()`, `handleSearchKeydown()`, `_selectCourse()`, `selectSearchResult()` |
+| 1541 to 1760 | Category index and unified home search | `_buildCategoryIndex()`, `selectCategoryResult()`, `handleUnifiedSearchKeydown()`, `selectUnifiedResult()`, `runHomeSearchChip()` |
+| 1761 to 2148 | Home screen | `renderLeftEmpty()`, `_renderHome()`, `_renderHomeDock()`, popular courses (`_recordCourseSearch()`, `_loadPopularCourses()`, local fallback counts), `_renderQuickStart()`, navbar counters |
+| 2149 to 2177 | Flag counts for the home screen | `_loadStudentFlagsSummary()`, `_loadMyFlagsSummary()` |
+| 2178 to 2375 | Course card | `renderCourseCard()`, `_renderSchedRowGroup()` |
+| 2376 to 2777 | Requirement tree | `_renderMajorTabs()`, `switchMajor()`, `toggleNode()`, `renderTree()`, `renderTreeNode()`, `downloadRequirementExcel()` (CSV), `_renderLeafCourse()`, `_renderRowActions()`, `_renderCardActions()` |
+| 2778 to 2794 | Cross-linking | `selectCourseFromTree()` |
+| 2795 to 2955 | Wishlist (Saved) | `_getWishlistItems()`, `toggleWishlist()`, `showWishlistView()`, `_saveWishlistNote()` |
+| 2956 to 3738 | Schedule plans | `_loadPlansStore()` (localStorage `cf_plans_v2`, migrates legacy `cf_plan`), `createNewPlan()`, `deletePlan()`, `renamePlan()`, `_loadServerPlans()`, `_mergeServerPlan()`, `_handlePendingSharePlanLink()`, `openSharePlanModal()`, `submitSharePlanEmail()`, `copySharePlanLink()`, `togglePlanSection()`, `_renderPlanCalendar()`, `showPlanView()`, `openPlanDetail()` |
+| 3739 to 3800 | Student flag view and favourites | `showStudentFlagsView()`, `showStudentFavorites()` |
+| 3801 to 3974 | Flags | `FLAG_REASONS` (must match `VALID_REASON_CODES` in `backend/flags.py`), `_getFlags()` (local `cf_flags`), `openFlagModal()`, `submitFlag()` |
+| 3975 to 4208 | Directory panel | `toggleDirectoryPanel()`, `_loadDirectoryPanel()`, `_renderDirectoryPanel()`, `_editDirectoryRow()`, `_revokeDirectoryRow()`, `_submitDirectoryForm()` |
+| 4209 to 4338 | Admin console shell | `_adminConsole` state, `ADMIN_TABS`, `showAdminConsole()`, `_setAdminTab()`, `_loadAdminTab()` (dispatch), helpers `_admEl()`, `_admError()`, `_admWhen()`, `_admStat()` |
+| 4339 to 4890 | Admin: Courses tab (course editor) | `_courseAdmin` state, `_renderAdminCourses()`, `_renderCourseResults()`, `_openCourseEditor()`, `_openCourseAdd()`, `_renderCourseEditor()`, `_addCourseReq()`, `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()` |
+| 4891 to 5224 | Admin: Overview tab and sign-in activity | `_loadAdminOverview()`, `_openIncompleteUsers()`, `_openSignIns()`, `_renderSignIns()`, `_exportSignInsCsv()` |
+| 5225 to 5264 | Admin: Faculty access tab | `_loadAdminAccess()`, `_openDirectoryFromAdmin()` |
+| 5265 to 5360 | Admin: Insights tab | `_loadAdminInsights()` |
+| 5361 to 5440 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()`, `_describeAdminEvent()` (human text per audit action) |
+| 5441 to 5651 | Admin: Users tab | `_loadUserAdmin()`, `_exportUsersCsv()`, `_renderUserAdmin()`, `_renderUserAdminRow()`, `_saveUserAdmin()` (opened with `showAdminConsole('users')`) |
+| 5652 to 5780 | Admin and faculty: Flags review | `showFlagReview()`, `_loadFlagReview()`, `_renderFlagReview()`, `_setFlagStatus()`, `_promptFlagNote()` |
+| 5781 to 5818 | Deep links into the tree | `navigateToReqNode()` |
+| 5819 to 5826 | Bootstrap | `DOMContentLoaded` handler, picks dark theme from OS if no saved theme, calls `App.init()` |
 
 Admin tabs, in order (`ADMIN_TABS`): `courses` (Courses), `overview` (Overview), `users` (Users), `access` (Faculty access), `flags` (Flags), `insights` (Insights), `activity` (Activity log). The Admin button appears only when `canManageUsers(this.authedUser)`.
 
@@ -675,7 +672,7 @@ Note: schedule plans live only in the browser. The server stores a plan only whe
 
 ### 8.9 CSS
 
-`css/styles.css` starts with light theme custom properties in `:root` (line 9, including `--major-cs`, `--major-is` and friends), then `[data-theme="dark"]` overrides (line 107), then sections for layout (focused and split mode), search, course card, tree, onboarding, navbar, plans, directory panel (around line 5116), and the Admin page and course editor (around lines 5257 and 5412). The theme is switched by setting `data-theme` on `<html>`.
+`css/styles.css` starts with light theme custom properties in `:root` (line 9, including `--major-cs`, `--major-is` and friends), then `[data-theme="dark"]` overrides (line 107), then sections for layout (focused and split mode), search, course card, tree, onboarding, navbar, plans, directory panel (around line 3767), and the Admin page and course editor (around lines 3887 and 4042). The theme is switched by setting `data-theme` on `<html>`.
 
 ---
 
@@ -797,8 +794,6 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | PATCH | `/api/directory/entries/by-email` | faculty, admin | `directory_routes.py` | Create or update the DB overlay for an email |
 | DELETE | `/api/directory/entries/<id>` | faculty, admin | `directory_routes.py` | Delete a DB row |
 | POST | `/api/directory/entries/revoke` | faculty, admin | `directory_routes.py` | Remove elevated access |
-| GET | `/api/directory/staff` | faculty, admin | `directory_routes.py` | Legacy alias of GET entries |
-| POST | `/api/directory/staff` | faculty, admin | `directory_routes.py` | Legacy alias of POST entries |
 | POST | `/api/search-analytics/events` | role `student` | `search_analytics.py` | Count a course lookup |
 | GET | `/api/search-analytics/popular` | public | `search_analytics.py` | Top courses per program and semester |
 | GET | `/api/plans` | login | `plans.py` | Shared plans in my account |
@@ -1069,7 +1064,7 @@ Deploying the backend: push or merge to `main`; Render builds, runs the pre-depl
 
 ### 15.4 `countsfor.qatar.cmu.edu`
 
-The hostname resolves to a private address (`172.20.245.41`), so it is reachable only on the CMU-Q network. Older docs described it as "the CMU-Q deployment" and the original CountsFor production API. The code uses it only as the second-choice course data source (`API_BASE`). **Uncertain:** whether it currently serves this repository's frontend or the older open-cmuq CountsFor app, and who at CMU-Q IT administers it. Nothing in this repo deploys to it. Ask CMU-Q IT.
+The hostname resolves to a private address (`172.20.245.41`), so it is reachable only on the CMU-Q network. Older docs described it as "the CMU-Q deployment" and the original CountsFor production API. The code no longer references it (the old `API_BASE` course data fallback was removed in November 2026). **Uncertain:** whether it currently serves this repository's frontend or the older open-cmuq CountsFor app, and who at CMU-Q IT administers it. Nothing in this repo deploys to it. Ask CMU-Q IT.
 
 ### 15.5 Supabase
 
@@ -1371,8 +1366,8 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 ### 21.3 Code hygiene
 
 - The no-dash rule (section 18) was fully applied to user-facing text on November 3, 2026. Check new strings before committing: `grep -n "[—–]" js/*.js *.html` should only find code comments.
-- Duplicate auth UIs in `js/landing.js` and `js/app.js`.
-- Dead code: `_ensure_staff_directory_table()` in `migrate.py`, `StaffDirectoryEntry` alias, unused `users.reset_token_hash` and `reset_token_expires` columns, legacy `/api/directory/staff` routes, `API_BASE` and `GITHUB_RAW` fallbacks.
+- `js/landing.js` keeps private copies of the auth calls in `js/api.js` (`apiLogin`, `apiRegister`, `apiForgotPassword`, `apiResetPassword`, `apiGetMe`); the `api.js` sign-in versions are currently unused.
+- Dead code: unused `users.reset_token_hash` and `reset_token_expires` columns (kept on purpose: dropping them is a schema change). The rest of the dead code found in the November 2026 audit was removed: the old in-app sign-in screens and their CSS, unused `App` methods, `isStudentRole`, `ROLE_GROUPS`, `FACULTY_GROUPS`, `getOnboardingUiGroup`, `apiUpdateDirectoryEntry`, `apiGetMyFlags`, the `API_BASE` and `GITHUB_RAW` course data fallbacks, `role_group_for`, `_can_manage_users`, `_ensure_staff_directory_table`, the `StaffDirectoryEntry` alias, the legacy `/api/directory/staff` routes, and about 170 CSS classes that nothing rendered.
 - `data_all_courses.json`: nothing in the app reads it, but `data/reconcile_offerings.py`, `data/apply_mapping_overlays.py`, a data test and `scrape.yml` still write or check it. Remove those references together, and sync the partner fork, if you want it gone.
 - `backend/schema.sql` covers 7 of 14 tables.
 - `index.html` `?v=` tags are not bumped by `bump_cf_build.py`.
@@ -1402,7 +1397,7 @@ What is still out of date:
 | `landing/DESIGN_NOTES.md` | Design notes for the landing page; refers to `docs/scotty-head.png` (the image is `assets/img/scotty-head.png`). |
 | `backend/.env.example` | Presents `ALLOW_SQLITE=1` as required; it has no effect. |
 | `backend/.env` (local, not in git) | Comment says an empty `SMTP_HOST` returns the reset link inline; that only happens with `EXPOSE_RESET_TOKEN=1`. |
-| Code comments | `js/api.js` says `apiGetMyFlags` is auto-scoped; `backend/users.py` mentions area heads managing users; `backend/models.py` says there is no password column. |
+| Code comments | `backend/users.py` mentions area heads managing users; `backend/models.py` says there is no password column. |
 | `CONTEXT.md` | Not in git at all (gitignored). Successors will not have it. |
 
 ---

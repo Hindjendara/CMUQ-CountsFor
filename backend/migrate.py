@@ -289,35 +289,3 @@ def _ensure_user_minors_table() -> bool:
     db.session.execute(text("CREATE INDEX ix_user_minors_user_id ON user_minors (user_id)"))
     db.session.commit()
     return True
-
-
-def _ensure_staff_directory_table() -> bool:
-    if _table_exists("staff_directory_entries"):
-        return False
-    dialect = db.engine.dialect.name
-    if dialect == "postgresql":
-        ddl = """
-            CREATE TABLE staff_directory_entries (
-                id SERIAL PRIMARY KEY,
-                email VARCHAR(255) NOT NULL UNIQUE,
-                name VARCHAR(200) NOT NULL,
-                role VARCHAR(32) NOT NULL DEFAULT 'professor',
-                added_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        """
-    else:
-        ddl = """
-            CREATE TABLE staff_directory_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email VARCHAR(255) NOT NULL UNIQUE,
-                name VARCHAR(200) NOT NULL,
-                role VARCHAR(32) NOT NULL DEFAULT 'professor',
-                added_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """
-    db.session.execute(text(ddl))
-    db.session.execute(text("CREATE INDEX ix_staff_directory_entries_email ON staff_directory_entries (email)"))
-    db.session.commit()
-    return True

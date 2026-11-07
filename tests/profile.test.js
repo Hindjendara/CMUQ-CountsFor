@@ -94,11 +94,6 @@ test('getRoleGroup: maps student/professor/advisor to their own groups', () => {
   assertEqual(getRoleGroup('advisor'),   'advisor');
 });
 
-test('ROLE_GROUPS.area_lead contains both Area Head sub-roles', () => {
-  assertTrue(ROLE_GROUPS.area_lead.roles.includes('area_head'));
-  assertTrue(ROLE_GROUPS.area_lead.roles.includes('associate_area_head'));
-});
-
 // ── Advisor scope validation ─────────────────────────────
 
 test('validateProfile: advisor with major scope + valid major', () => {

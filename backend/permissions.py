@@ -22,10 +22,6 @@ ROLE_GROUP_ADMIN = "admin"
 FACULTY_OR_ADMIN = FACULTY_ROLES | {ROLE_GROUP_ADMIN}
 
 
-def role_group_for(user: User) -> str:
-    return user.role_group()
-
-
 def _load_user() -> User | None:
     if hasattr(g, "_current_user"):
         return g._current_user

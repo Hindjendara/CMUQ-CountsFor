@@ -1,13 +1,9 @@
 // ============================================================
 // CountsFor — API Client
-// Priority order:
-//   1. Live CMU-Q API (when deployed / connected)
-//   2. GitHub raw data (open-cmuq/CountsFor)
-//   3. Bundled local JSON (always available in dev)
+// Course data comes only from the catalog bundled with the frontend
+// (data/courses.json, refreshed by the scraper).
 // ============================================================
 
-const API_BASE = 'https://countsfor.qatar.cmu.edu/api';
-const GITHUB_RAW = 'https://raw.githubusercontent.com/open-cmuq/CountsFor/main/backend/data';
 const LOCAL_DATA = 'data/courses.json';
 
 function _bundledDataUrl(path) {
@@ -33,67 +29,19 @@ async function _get(url) {
   return data;
 }
 
-// ── Merge courses from multiple JSON files from GitHub ───────
-// The GitHub repo stores data as separate JSON files per major
-// (courses.json, requirements.json, etc.). We try to fetch
-// courses.json at the repo root first, then fall back to
-// a known pattern.
-async function _fetchFromGitHub() {
-  // Try known GitHub paths
-  const candidates = [
-    `${GITHUB_RAW}/courses.json`,
-    `${GITHUB_RAW}/all_courses.json`,
-    `https://raw.githubusercontent.com/open-cmuq/CountsFor/main/data/courses.json`,
-    `https://raw.githubusercontent.com/open-cmuq/CountsFor/main/courses.json`,
-  ];
-  for (const url of candidates) {
-    try {
-      const data = await _get(url);
-      const courses = data.courses || data;
-      if (Array.isArray(courses) && courses.length > 0) {
-        console.log(`[API] Loaded ${courses.length} courses from GitHub: ${url}`);
-        return courses;
-      }
-    } catch { /* try next */ }
-  }
-  throw new Error('No valid course data found on GitHub');
-}
-
 // ── Main exported function ───────────────────────────────────
+// Throws when the catalog cannot be loaded; App.loadData() catches it and
+// shows the "Failed to load data" message.
 async function fetchAllCourses() {
-  // 1. Bundled data first — it ships with every deploy (kept fresh by the
-  //    scrape workflow), so nobody waits on a remote fetch failing.
+  let data;
   try {
-    const data = await _get(_bundledDataUrl(LOCAL_DATA));
-    const courses = data.courses || [];
-    if (courses.length > 0) {
-      console.log(`[API] ✓ Local data — ${courses.length} courses`);
-      return courses;
-    }
+    data = await _get(_bundledDataUrl(LOCAL_DATA));
   } catch (e) {
-    console.warn('[API] Local data failed:', e.message);
+    throw new Error(`Could not load ${LOCAL_DATA} (${e.message})`);
   }
-
-  // 2. Live CMU-Q API (future hosting migration path)
-  try {
-    const data = await _get(`${API_BASE}/courses/search?searchQuery=`);
-    const courses = data.courses || [];
-    if (courses.length > 0) {
-      console.log(`[API] ✓ Live API — ${courses.length} courses`);
-      return courses;
-    }
-  } catch (e) {
-    console.warn('[API] Live API failed:', e.message);
-  }
-
-  // 3. Last resort: GitHub raw
-  try {
-    return await _fetchFromGitHub();
-  } catch (e) {
-    console.error('[API] GitHub failed:', e.message);
-  }
-
-  throw new Error('Could not load course data from any source (local file, API, or GitHub).');
+  const courses = (data && data.courses) || [];
+  if (courses.length === 0) throw new Error(`${LOCAL_DATA} has no courses.`);
+  return courses;
 }
 
 // ============================================================
@@ -312,9 +260,6 @@ async function apiListStaffDirectory() {
 async function apiAddStaffMember(body) {
   return apiFetch('/api/directory/entries', { method: 'POST', body });
 }
-async function apiUpdateDirectoryEntry(id, body) {
-  return apiFetch('/api/directory/entries/' + encodeURIComponent(id), { method: 'PATCH', body });
-}
 async function apiUpsertDirectoryByEmail(body) {
   return apiFetch('/api/directory/entries/by-email', { method: 'PATCH', body });
 }
@@ -338,9 +283,6 @@ async function fetchMinorCourses() {
 // ── Flags ────────────────────────────────────────────────────
 async function apiCreateFlag(flag)        { return apiFetch('/api/flags', { method: 'POST', body: flag }); }
 async function apiListFlags(query = '')   { return apiFetch('/api/flags' + (query ? '?' + query : '')); }
-// Same endpoint as apiListFlags, named for intent: the server auto-scopes
-// GET /api/flags to the caller's own submissions for non-admin faculty.
-async function apiGetMyFlags(query = '')  { return apiFetch('/api/flags' + (query ? '?' + query : '')); }
 async function apiUpdateFlag(id, patch)   { return apiFetch('/api/flags/' + encodeURIComponent(id), { method: 'PATCH', body: patch }); }
 
 // ── Wishlist ─────────────────────────────────────────────────
