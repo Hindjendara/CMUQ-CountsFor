@@ -632,3 +632,73 @@ def test_faculty_directory_reapplied_on_login(client, tmp_path):
         ok = c.post("/api/auth/login", json={"email": "prof@andrew.cmu.edu", "password": "password12"})
     assert ok.get_json()["role"] == "professor"
     assert ok.get_json()["role_group"] == "faculty"
+
+
+# ── Non-CMU and domain-restricted emails at the route level ─
+
+@pytest.mark.parametrize("path", [
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/forgot-password",
+])
+@pytest.mark.parametrize("email", ["user@gmail.com", "@andrew.cmu.edu", "al ice@andrew.cmu.edu"])
+def test_auth_routes_reject_non_cmu_email(client, path, email):
+    r = client.post(path, json={
+        "email": email,
+        "password": "password12",
+        "confirm_password": "password12",
+    })
+    assert r.status_code == 400, r.get_json()
+    assert r.get_json()["error"] == "invalid_email"
+    with client.application.app_context():
+        assert db.session.query(User).count() == 0
+
+
+def test_google_signin_rejects_non_cmu_email(client):
+    payload = _fake_google_payload(email="user@gmail.com")
+    with patch("backend.auth.id_token.verify_oauth2_token", return_value=payload):
+        r = client.post("/api/auth/google", json={"credential": "stub"})
+    assert r.status_code == 401, r.get_json()
+    with client.application.app_context():
+        assert db.session.query(User).count() == 0
+
+
+def _domain_app(domain):
+    class DomainConfig(TestConfig):
+        ALLOWED_EMAIL_DOMAIN = domain
+
+    return create_app(DomainConfig)
+
+
+def test_allowed_domain_accepts_cmu_aliases():
+    app = _domain_app("andrew.cmu.edu")
+    payload = _fake_google_payload(email="Alice@Qatar.CMU.edu")
+    with app.test_client() as c:
+        with patch("backend.auth.id_token.verify_oauth2_token", return_value=payload):
+            g = c.post("/api/auth/google", json={"credential": "stub"})
+        c.post("/api/auth/logout")
+        reg = c.post("/api/auth/register", json={
+            "email": "Bob@cmu.edu",
+            "password": "password12",
+            "confirm_password": "password12",
+        })
+    assert g.status_code == 200, g.get_json()
+    assert g.get_json()["email"] == "alice@andrew.cmu.edu"
+    assert reg.status_code == 201, reg.get_json()
+    assert reg.get_json()["email"] == "bob@andrew.cmu.edu"
+
+
+def test_allowed_domain_rejects_other_domain():
+    app = _domain_app("example.edu")
+    payload = _fake_google_payload(email="alice@andrew.cmu.edu")
+    with app.test_client() as c:
+        reg = c.post("/api/auth/register", json={
+            "email": "bob@andrew.cmu.edu",
+            "password": "password12",
+            "confirm_password": "password12",
+        })
+        with patch("backend.auth.id_token.verify_oauth2_token", return_value=payload):
+            g = c.post("/api/auth/google", json={"credential": "stub"})
+    for r in (reg, g):
+        assert r.status_code == 403, r.get_json()
+        assert r.get_json()["error"] == "domain_not_allowed"

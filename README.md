@@ -236,7 +236,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `permissions.py` | `require_login`, `require_role_group`, `require_role`, `current_user`, user loading from cookie or bearer token. |
 | `tokens.py` | Bearer token sign and verify. |
 | `cmu.py` | The one backend CMU email check: `normalize_cmu_email()` (accepts `andrew.cmu.edu`, `cmu.edu`, `qatar.cmu.edu`, always returns `@andrew.cmu.edu`, rejects an empty local part, whitespace or a second `@`; same rules as `normalizeCmuEmail()` in `js/utils.js`) and `email_in_domain()` (the `ALLOWED_EMAIL_DOMAIN` check). Also seed file helpers. Used by `auth.py`, `directory.py`, `directory_routes.py` and `plans.py`. |
-| `auth.py` | Register, login, forgot and reset password, set password, Google sign-in, legacy email sign-in, logout, `GET/PATCH /api/me`, role and profile validation. |
+| `auth.py` | Register, login, forgot and reset password, set password, Google sign-in, logout, `GET/PATCH /api/me`, role and profile validation. |
 | `directory.py` | Directory lookup logic (DB first, then JSON seed). |
 | `directory_routes.py` | `/api/directory/...` routes. |
 | `users.py` | `/api/users` list and role edit (admin only). |
@@ -973,7 +973,7 @@ git commit -am "Sync SOC data from the hind fork"
 ```bash
 source .venv/bin/activate
 pip install pytest
-python -m pytest data/tests -q                 # 30 tests
+python -m pytest data/tests -q                 # 34 tests
 python data/scrape_soc.py                      # 30 to 90 minutes, polite delays
 python data/reconcile_offerings.py
 python data/apply_mapping_overlays.py
@@ -1098,12 +1098,12 @@ python3 -m http.server 8765
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 3, 2026 (`main`)
+### 16.2 Results on November 7, 2026 (`cleanup` branch)
 
 | Suite | Result |
 |---|---|
-| `backend/tests` | **90 passed, 7 failed** |
-| `data/tests` | 30 passed |
+| `backend/tests` | **116 passed, 6 failed** |
+| `data/tests` | 34 passed |
 | `node scripts/run-data-tests.js` | 97 passed, 1 failed (profile 46/46, data 51/52; counted after the runner started loading `profile.test.js` in November 2026) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
@@ -1127,7 +1127,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
 - `backend/tests/test_admin.py` and `test_course_overrides.py` cover the admin page.
-- `data/tests/` cover SOC parsing, title mismatch reconciliation and the modern languages overlay.
+- `data/tests/` cover SOC parsing, title mismatch reconciliation, the modern languages overlay and `scripts/bump_cf_build.py`.
 - `tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
 - `Testing/` (capital T) is not a test suite; it is the SOC mock server.
 
