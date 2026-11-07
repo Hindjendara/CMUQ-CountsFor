@@ -122,3 +122,171 @@ def test_semester_list_parses_soc_form():
     """
     sems = parse_semester_list(html)
     assert sems == [("F26", "Fall 2026"), ("M26", "Summer 2026"), ("S26", "Spring 2026")]
+
+
+def test_clean_soc_title_strips_cancelled_note():
+    from soc_parse import clean_soc_title
+
+    assert clean_soc_title("Psychology of Aging This Section Cancelled") == "Psychology of Aging"
+    assert clean_soc_title("Proseminar  This Section Cancelled ") == "Proseminar"
+
+
+def test_clean_soc_title_strips_subtitle_and_tba():
+    from soc_parse import clean_soc_title
+
+    assert clean_soc_title(
+        "Research Methods in Cognitive Psychology : Rearch Methods in Cognitive Psychology"
+    ) == "Research Methods in Cognitive Psychology"
+    assert clean_soc_title("M.Arch Studio: Praxis II : Praxis 2:") == "M.Arch Studio: Praxis II"
+    assert clean_soc_title(
+        "Domains in dialogue: Interactions shaping child development : TBAThis Section Cancelled"
+    ) == "Domains in dialogue: Interactions shaping child development"
+    assert clean_soc_title("Production Prep SOM: TBA : Directing") == "Production Prep SOM"
+    assert clean_soc_title("Production Prep: TBA 5 : Directing") == "Production Prep: TBA 5"
+    assert clean_soc_title("Graduate Research Communication :") == "Graduate Research Communication"
+
+
+def test_clean_soc_title_keeps_clean_titles():
+    from soc_parse import clean_soc_title
+
+    assert clean_soc_title("Cognition in the Age of AI") == "Cognition in the Age of AI"
+    assert clean_soc_title("Influence: From Social Media to IRL") == "Influence: From Social Media to IRL"
+
+
+def test_clean_soc_title_never_returns_empty_or_tba():
+    from soc_parse import clean_soc_title
+
+    for raw in (None, "", "   ", "TBA", "tba", ": TBA", " : TBA", "This Section Cancelled", ": Directing"):
+        assert clean_soc_title(raw) is None, raw
+
+
+def test_build_offering_marks_cancelled_section():
+    from soc_parse import build_offering, is_cancelled_course
+
+    live = {"section": "A", "location": "Pittsburgh, Pennsylvania", "campus": "Pittsburgh"}
+    dead = dict(live, section="B", cancelled=True)
+    assert "cancelled" not in build_offering(semester_code="F26", section=live)
+    assert build_offering(semester_code="F26", section=dead)["cancelled"] is True
+    assert is_cancelled_course({"sections": [dead]})
+    assert not is_cancelled_course({"sections": [dead, live]})
+    assert not is_cancelled_course({"sections": []})
+
+
+def _soc_with_sections(*courses):
+    return {"semesters": {"S27": {"courses": list(courses)}}}
+
+
+def test_reconcile_ignores_cancelled_sections_for_offerings_and_flags():
+    from reconcile_offerings import campus_flags_from_offerings, offerings_from_soc
+
+    soc = _soc_with_sections(
+        {
+            "course_number": "85110",
+            "title": "Cognitive Psychology",
+            "units": "9",
+            "sections": [
+                {"section": "W", "location": "Doha, Qatar", "campus": "Qatar", "cancelled": True},
+                {"section": "A", "location": "Pittsburgh, Pennsylvania", "campus": "Pittsburgh"},
+            ],
+        },
+        {
+            "course_number": "85270",
+            "title": "Computational Approaches for Neuroscience Questions",
+            "units": "9",
+            "sections": [
+                {"section": "A", "location": "Pittsburgh, Pennsylvania", "campus": "Pittsburgh", "cancelled": True},
+            ],
+        },
+    )
+    by_code, meta = offerings_from_soc(soc)
+    assert [o["section"] for o in by_code["85-110"]] == ["A"]
+    assert campus_flags_from_offerings(by_code["85-110"]) == (False, True)
+    assert "85-270" not in by_code
+    assert meta["85-270"]["title"] == "Computational Approaches for Neuroscience Questions"
+    assert campus_flags_from_offerings([{"campus": "Qatar", "cancelled": True}]) == (False, False)
+
+
+def test_reconcile_file_with_cancelled_qatar_section(tmp_path):
+    import json
+
+    from reconcile_offerings import reconcile_file
+    from validate_soc_coverage import soc_course_codes
+
+    soc = _soc_with_sections(
+        {
+            "course_number": "85110",
+            "title": "Cognitive Psychology",
+            "units": "9",
+            "sections": [
+                {"section": "W", "location": "Doha, Qatar", "campus": "Qatar", "cancelled": True},
+                {"section": "A", "location": "Pittsburgh, Pennsylvania", "campus": "Pittsburgh"},
+            ],
+        },
+        {
+            "course_number": "85270",
+            "title": "Computational Approaches for Neuroscience Questions",
+            "units": "9",
+            "sections": [
+                {"section": "A", "location": "Pittsburgh, Pennsylvania", "campus": "Pittsburgh", "cancelled": True},
+            ],
+        },
+    )
+    courses = [
+        {
+            "course_code": "85-110",
+            "course_name": "Cognitive Psychology",
+            "units": 9,
+            "offered": [],
+            "offered_qatar": True,
+            "offered_pitts": False,
+            "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
+            "offerings": [],
+            "soc_sections": [],
+        }
+    ]
+    soc_path = tmp_path / "soc.json"
+    courses_path = tmp_path / "courses.json"
+    soc_path.write_text(json.dumps(soc), encoding="utf-8")
+    courses_path.write_text(json.dumps(courses), encoding="utf-8")
+
+    stats = reconcile_file(str(courses_path), str(soc_path))
+    updated = json.loads(courses_path.read_text(encoding="utf-8"))
+
+    assert stats["courses_added"] == 0
+    assert [c["course_code"] for c in updated] == ["85-110"]
+    cog = updated[0]
+    assert cog["offered_qatar"] is False
+    assert cog["offered_pitts"] is True
+    assert [o["section"] for o in cog["offerings"]] == ["A"]
+    # The validator does not require a catalog row for an all-cancelled course.
+    assert soc_course_codes(soc) == {"S27": {"85-110"}}
+
+
+def test_reconcile_from_real_cancelled_fixture(tmp_path):
+    """Parse the saved F26 page, then reconcile: 85-103 is cancelled."""
+    import json
+
+    from reconcile_offerings import reconcile_file
+    from scrape_soc import attach_offerings, parse_courses
+
+    html = (Path(__file__).resolve().parent / "fixtures" / "soc_psy_F26_PIT.html").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    parsed = parse_courses(html, "PSY", "Psychology")
+    for course in parsed:
+        for sec in course["sections"]:
+            sec["campus"] = "Pittsburgh"
+        attach_offerings(course, "F26")
+    soc = {"semesters": {"F26": {"courses": parsed}}}
+    soc_path = tmp_path / "soc.json"
+    courses_path = tmp_path / "courses.json"
+    soc_path.write_text(json.dumps(soc), encoding="utf-8")
+    courses_path.write_text(json.dumps({"courses": []}), encoding="utf-8")
+
+    reconcile_file(str(courses_path), str(soc_path))
+    by_code = {c["course_code"]: c for c in json.loads(courses_path.read_text(encoding="utf-8"))["courses"]}
+
+    assert "85-103" not in by_code
+    assert by_code["85-105"]["course_name"] == "Hack Your Life"
+    assert by_code["85-105"]["offered"] == ["F26"]
+    assert by_code["85-105"]["offered_pitts"] is True

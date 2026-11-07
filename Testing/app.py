@@ -70,7 +70,8 @@ def render_search_form(data):
 
 def render_courses_table(courses_for_dept):
     """
-    POST /search response — must match the scraper's 10-cell row format:
+    POST /search response. The scraper maps cells by the <th class="col-...">
+    header, like the real SOC page (fall and spring layout, 10 columns):
       cell 0: course number (5 digits) on course rows, empty on section rows
       cell 1: title
       cell 2: units
@@ -109,6 +110,14 @@ def render_courses_table(courses_for_dept):
     return f"""<!doctype html>
 <html><body>
 <table border="1">
+<thead><tr>
+<th class="col-course">Course</th><th class="col-title">Course Title</th>
+<th class="col-units">Units</th><th class="col-section">Sec</th>
+<th class="col-mini">Mini</th><th class="col-days">Days</th>
+<th class="col-begin">Begin</th><th class="col-end">End</th>
+<th class="col-location">Teaching Location</th>
+<th class="col-deliverymode">Delivery Mode</th>
+</tr></thead>
 {''.join(rows)}
 </table>
 </body></html>

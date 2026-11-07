@@ -8,9 +8,16 @@ Scrapes each (semester, department) once per configured campus, then merges
 courses that appear at multiple campuses. Each section is tagged with its
 campus; each course's `campus` field lists every campus it runs at.
 
+Columns are mapped from each results table's header, because summer pages
+add a "Session" column after the title.
+
 Continuation rows: SOC often lists extra meeting times on rows with a blank
 section cell (same section, different days/times). parse_courses() inherits
 the previous section letter for those rows.
+
+Cancelled sections stay in `sections` with `cancelled: true` (the SOC note is
+stripped from the title) but are not offerings and add no campus. A section
+subtitle ("Title <br />: subtitle") goes in the section's `section_title`.
 
 Scheduled daily via .github/workflows/scrape.yml on Adicmu/main:
   scrape_soc.py → reconcile_offerings.py → mapping overlays → validate → commit → Pages
@@ -48,15 +55,17 @@ import json
 import time
 import sys
 import os
-import sys
+import html as html_lib
 from datetime import datetime, timezone
 
 # Shared parsers live alongside this script.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from soc_parse import (  # noqa: E402
+    active_sections,
     apply_campus_fix,
     build_offering,
     course_number_to_code,
+    is_cancelled_course,
     semester_code_to_label,
 )
 from soc_departments import (  # noqa: E402
@@ -98,24 +107,116 @@ def fetch_post(params):
 
 # ---------- Parsing ----------
 
-def parse_courses(html, dept_code, dept_name):
-    """Group every 10 <td> elements into a logical course/section row."""
-    courses = []
-    all_tds = re.findall(r'<td[^>]*>(.*?)</td>', html, re.DOTALL)
+# SOC result tables label each column with a th class (col-course, ...).
+# Fall and spring pages have 10 columns; summer pages add "Session" after the
+# title, so cells are mapped by header instead of by fixed position.
+_HEADER_CLASS_FIELDS = {
+    'col-course': 'course_number',
+    'col-title': 'title',
+    'col-session': 'session',
+    'col-units': 'units',
+    'col-section': 'section',
+    'col-mini': 'mini',
+    'col-days': 'days',
+    'col-begin': 'begin_time',
+    'col-end': 'end_time',
+    'col-location': 'location',
+    'col-deliverymode': 'delivery_mode',
+}
+_HEADER_TEXT_FIELDS = {
+    'course': 'course_number',
+    'course title': 'title',
+    'session': 'session',
+    'units': 'units',
+    'sec': 'section',
+    'mini': 'mini',
+    'days': 'days',
+    'begin': 'begin_time',
+    'end': 'end_time',
+    'teaching location': 'location',
+    'delivery mode': 'delivery_mode',
+}
 
+_TABLE_RE = re.compile(r'<table\b[^>]*>(.*?)</table>', re.DOTALL | re.IGNORECASE)
+_ROW_RE = re.compile(r'<tr\b[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
+_TH_RE = re.compile(r'<th\b([^>]*)>(.*?)</th>', re.DOTALL | re.IGNORECASE)
+_TD_RE = re.compile(r'<td\b[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
+_CANCELLED_DIV_RE = re.compile(
+    r'<div\b[^>]*class="[^"]*\bcancelled\b[^"]*"[^>]*>', re.IGNORECASE)
+# The title cell carries the note as <div class="cancelled"><small>...</small></div>.
+_CANCELLED_NOTE_RE = re.compile(
+    r'<div\b[^>]*class="[^"]*\bcancelled\b[^"]*"[^>]*>.*?</div>',
+    re.DOTALL | re.IGNORECASE)
+_BR_RE = re.compile(r'<br\s*/?>', re.IGNORECASE)
+
+
+def _cell_text(cell_html):
+    """Strip tags and entities, collapse whitespace."""
+    text = re.sub(r'<[^>]+>', ' ', cell_html or '')
+    text = html_lib.unescape(text).replace('\xa0', ' ')
+    return ' '.join(text.split())
+
+
+def _header_fields(table_html):
+    """Return the field name for each column, or None if the table has no header."""
+    ths = _TH_RE.findall(table_html)
+    if not ths:
+        return None
+    fields = []
+    for attrs, label in ths:
+        field = None
+        cls = re.search(r'class="([^"]*)"', attrs)
+        for name in (cls.group(1).split() if cls else []):
+            if name in _HEADER_CLASS_FIELDS:
+                field = _HEADER_CLASS_FIELDS[name]
+                break
+        if field is None:
+            field = _HEADER_TEXT_FIELDS.get(_cell_text(label).lower())
+        fields.append(field)
+    if 'course_number' not in fields or 'section' not in fields:
+        return None
+    return fields
+
+
+def parse_title_cell(cell_html):
+    """Split a SOC title cell into (title, section_title, cancelled).
+
+    The SOC renders a section subtitle as "Title <br />: subtitle" and a
+    cancelled section as "Title <div class="cancelled">...This Section
+    Cancelled...</div>". Continuation rows may hold only the subtitle.
+    """
+    cell_html = cell_html or ''
+    cancelled = bool(_CANCELLED_DIV_RE.search(cell_html))
+    cell_html = _CANCELLED_NOTE_RE.sub(' ', cell_html)
+    parts = _BR_RE.split(cell_html, maxsplit=1)
+    title = _cell_text(parts[0])
+    section_title = ''
+    if len(parts) > 1:
+        section_title = _cell_text(parts[1])
+        if section_title.startswith(':'):
+            section_title = section_title[1:].strip()
+    return title, section_title, cancelled
+
+
+def _parse_table(table_html, dept_code, dept_name, courses):
+    fields = _header_fields(table_html)
+    if fields is None:
+        return
     current_course = None
     last_section = None
     last_section_row = None
-    for i in range(0, len(all_tds) - 9, 10):
-        cells = [re.sub(r'<[^>]+>', '', t).replace('&nbsp;', '').strip()
-                 for t in all_tds[i:i + 10]]
-        cnum, title, units, sec = cells[0], cells[1], cells[2], cells[3]
-        mini, days, begin, end = cells[4], cells[5], cells[6], cells[7]
-        location, delivery = cells[8], cells[9]
+    for row_html in _ROW_RE.findall(table_html):
+        tds = _TD_RE.findall(row_html)
+        if not tds:
+            continue  # header row
+        raw = {field: cell for field, cell in zip(fields, tds) if field}
+        cells = {f: _cell_text(raw.get(f)) for f in _HEADER_CLASS_FIELDS.values()}
+        title, section_title, title_cancelled = parse_title_cell(raw.get('title'))
+        cnum = cells['course_number']
 
-        if cnum and cnum.isdigit() and len(cnum) == 5 and title:
+        if cnum.isdigit() and len(cnum) == 5:
             current_course = {
-                'course_number': cnum, 'title': title, 'units': units,
+                'course_number': cnum, 'title': title, 'units': cells['units'],
                 'department_code': dept_code, 'department': dept_name,
                 'sections': []
             }
@@ -126,7 +227,10 @@ def parse_courses(html, dept_code, dept_name):
         if not current_course:
             continue
 
-        sec = (sec or '').strip()
+        sec = cells['section']
+        days, begin, end = cells['days'], cells['begin_time'], cells['end_time']
+        location, delivery = cells['location'], cells['delivery_mode']
+        cancelled = title_cancelled or bool(_CANCELLED_DIV_RE.search(raw.get('section') or ''))
         has_schedule = bool(days or begin or end)
         if sec:
             last_section = sec
@@ -135,17 +239,40 @@ def parse_courses(html, dept_code, dept_name):
         # SOC continuation rows leave section blank but repeat meeting times
         # for the same section (e.g. W meets MW and UT at different hours).
         if effective_sec and (sec or has_schedule):
+            if not sec and last_section_row:
+                cancelled = cancelled or bool(last_section_row.get('cancelled'))
+                section_title = section_title or last_section_row.get('section_title', '')
             if not location and last_section_row:
                 location = last_section_row.get('location') or location
             if not delivery and last_section_row:
                 delivery = last_section_row.get('delivery_mode') or delivery
             row = {
-                'section': effective_sec, 'mini': mini, 'days': days,
+                'section': effective_sec, 'mini': cells['mini'], 'days': days,
                 'begin_time': begin, 'end_time': end,
                 'location': location, 'delivery_mode': delivery
             }
+            if 'session' in fields:
+                row['session'] = cells['session']
+            if section_title:
+                row['section_title'] = section_title
+            if cancelled:
+                row['cancelled'] = True
             current_course['sections'].append(row)
             last_section_row = row
+
+
+def parse_courses(html, dept_code, dept_name):
+    """Parse every SOC results table, mapping cells to columns by header.
+
+    A section row carries `cancelled: True` when the SOC marks it cancelled
+    and `section_title` when its title cell has a "<br />: subtitle". Tables
+    without a recognisable header are skipped: an empty result falls under
+    the course threshold and keeps the prior scrape instead of misreading
+    cells.
+    """
+    courses = []
+    for table_html in _TABLE_RE.findall(html or ''):
+        _parse_table(table_html, dept_code, dept_name, courses)
     return courses
 
 
@@ -158,6 +285,38 @@ def get_semester_list_for_scrape(form_html=None):
 
 
 # ---------- Main scrape per semester ----------
+
+def attach_offerings(course, semester_code):
+    """Attach normalized offerings and the campus list to a merged course.
+
+    Cancelled sections stay in `sections` (with `cancelled: True`) but are
+    not offerings and do not put a campus in `campus`. A course whose
+    sections are all cancelled gets `cancelled: True` and an empty `campus`.
+    """
+    offerings = []
+    campuses = []
+    for section in active_sections(course.get('sections')):
+        off = build_offering(
+            semester_code=semester_code,
+            section=section,
+            units=course.get('units'),
+        )
+        off['campus'] = apply_campus_fix(
+            course.get('course_number', ''),
+            course.get('title'),
+            off.get('campus'),
+        )
+        offerings.append(off)
+        if section.get('campus') and section['campus'] not in campuses:
+            campuses.append(section['campus'])
+    course['offerings'] = offerings
+    course['campus'] = campuses
+    if is_cancelled_course(course):
+        course['cancelled'] = True
+    course['semester'] = semester_code_to_label(semester_code)
+    course['semester_code'] = semester_code
+    return course
+
 
 def scrape_semester(semester_code, dept_list, min_courses=None):
     """
@@ -229,25 +388,8 @@ def scrape_semester(semester_code, dept_list, min_courses=None):
               f"treating as not-yet-released.")
         return None, None
 
-    # Attach normalized per-semester offerings on each course.
-    sem_label = semester_code_to_label(semester_code)
     for course in all_courses:
-        offerings = []
-        for section in course.get('sections') or []:
-            off = build_offering(
-                semester_code=semester_code,
-                section=section,
-                units=course.get('units'),
-            )
-            off['campus'] = apply_campus_fix(
-                course.get('course_number', ''),
-                course.get('title'),
-                off.get('campus'),
-            )
-            offerings.append(off)
-        course['offerings'] = offerings
-        course['semester'] = sem_label
-        course['semester_code'] = semester_code
+        attach_offerings(course, semester_code)
 
     return all_courses, dept_summary
 

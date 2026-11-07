@@ -10,20 +10,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data"))
 
-from soc_parse import course_number_to_code  # noqa: E402
+from soc_parse import course_number_to_code, is_cancelled_course  # noqa: E402
 
 SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
 COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(ROOT / "data" / "courses.json"))
 
 
 def soc_course_codes(soc: dict) -> dict[str, set[str]]:
-    """Return {semester_code: set(course_code)} from scraped SOC data."""
+    """Return {semester_code: set(course_code)} from scraped SOC data.
+
+    Courses whose sections are all cancelled are left out: reconcile does not
+    add a catalog row for a course that has no running section.
+    """
     by_sem: dict[str, set[str]] = {}
     for sem_code, sem_data in (soc.get("semesters") or {}).items():
         codes = set()
         for course in sem_data.get("courses") or []:
             num = course.get("course_number") or ""
-            if num:
+            if num and not is_cancelled_course(course):
                 codes.add(course_number_to_code(num))
         by_sem[sem_code] = codes
     return by_sem

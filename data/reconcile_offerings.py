@@ -11,10 +11,12 @@ sys.path.insert(0, str(ROOT / "data"))
 
 from json_io import load_json, save_json  # noqa: E402
 from soc_parse import (  # noqa: E402
+    active_sections,
     apply_campus_fix,
     build_offering,
     code_to_course_number,
     course_number_to_code,
+    is_cancelled_section,
     normalize_course_code,
     parse_soc_units,
     titles_match,
@@ -65,7 +67,9 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
                 dept = course.get("department") or course.get("department_code")
                 if dept:
                     prev["department"] = dept
-            for section in course.get("sections") or []:
+            # Cancelled sections are not offerings: they must not set campus
+            # flags or the `offered` list of a new stub course.
+            for section in active_sections(course.get("sections")):
                 off = build_offering(
                     semester_code=sem_code,
                     section=section,
@@ -78,8 +82,9 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
 
 
 def campus_flags_from_offerings(offerings: list[dict]) -> tuple[bool, bool]:
-    qatar = any(o.get("campus") == "Qatar" for o in offerings)
-    pitts = any(o.get("campus") == "Pittsburgh" for o in offerings)
+    running = [o for o in offerings if not is_cancelled_section(o)]
+    qatar = any(o.get("campus") == "Qatar" for o in running)
+    pitts = any(o.get("campus") == "Pittsburgh" for o in running)
     return qatar, pitts
 
 

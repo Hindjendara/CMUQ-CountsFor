@@ -143,11 +143,16 @@ def build_offering(
     units: str | None = None,
     instructor: str | None = None,
 ) -> dict:
+    """Normalized offering for one SOC section.
+
+    A cancelled section gets `cancelled: True`. Callers skip those (see
+    is_cancelled_section) so they never count as offerings or set campus flags.
+    """
     campus = parse_campus_from_location(
         section.get("location"),
         section.get("campus"),
     )
-    return {
+    offering = {
         "semester": semester_code_to_label(semester_code),
         "semester_code": semester_code,
         "campus": campus,
@@ -159,6 +164,54 @@ def build_offering(
         "location": section.get("location") or "",
         "delivery_mode_raw": section.get("delivery_mode") or "",
     }
+    if is_cancelled_section(section):
+        offering["cancelled"] = True
+    return offering
+
+
+def is_cancelled_section(section: dict | None) -> bool:
+    """True when the scraper marked this SOC section (or offering) cancelled."""
+    return bool((section or {}).get("cancelled"))
+
+
+def active_sections(sections: list[dict] | None) -> list[dict]:
+    """SOC sections that still run (cancelled ones removed)."""
+    return [s for s in sections or [] if not is_cancelled_section(s)]
+
+
+def is_cancelled_course(course: dict) -> bool:
+    """True when a SOC course has sections and every one is cancelled."""
+    sections = course.get("sections") or []
+    return bool(sections) and not active_sections(sections)
+
+
+_CANCELLED_SUFFIX_RE = re.compile(r"\s*This Section Cancelled\s*$", re.IGNORECASE)
+_TRAILING_TBA_RE = re.compile(r"\s*:\s*TBA\s*$", re.IGNORECASE)
+
+
+def clean_soc_title(title: str | None) -> str | None:
+    """Clean a course title stored by the old scraper.
+
+    Before titles were parsed cell by cell, soc.json titles could end in
+    "This Section Cancelled", carry a section subtitle as "Title : subtitle"
+    (from "<br />: subtitle"), or end in ": TBA". Returns the bare course
+    title, or None when nothing usable is left (empty or only "TBA"), so
+    callers can fall back to another title.
+    """
+    if title is None:
+        return None
+    t = " ".join(str(title).split())
+    t = _CANCELLED_SUFFIX_RE.sub("", t)
+    if t.startswith(":"):
+        return None  # only a subtitle, no course title
+    cut = t.find(" : ")
+    if cut >= 0:
+        t = t[:cut]
+    t = _TRAILING_TBA_RE.sub("", t)
+    t = t.rstrip(" :").strip()
+    if not t or t.lower() == "tba":
+        return None
+    return t
 
 
 def expected_campus_for_course(course_number: str, title: str | None = None) -> str | None:

@@ -263,18 +263,18 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | File | Purpose |
 |---|---|
 | `courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`. Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`), `soc_sections`, `offerings`. |
-| `soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 23 MB. The admin Overview reads `last_scrape` from its first 4 KB. |
+| `soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 23 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
 | `mapping_overlays.json` | Manual additive requirement mappings (9 overlays as of Nov 2026). |
 | `minor_courses.json` | Course lists per minor (only `business` and `cs` populated). Loaded by `fetchMinorCourses()`. |
 | `faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. Used as the directory seed in production (`SEED_USERS_PATH=data/faculty_directory.json` in `render.yaml`). |
-| `scrape_soc.py` | Scraper. |
-| `soc_parse.py`, `soc_departments.py` | Shared parsing helpers. |
+| `scrape_soc.py` | Scraper. Maps table cells by the `<th>` header (summer pages have an extra Session column), strips the "This Section Cancelled" note from titles and marks those sections cancelled. |
+| `soc_parse.py`, `soc_departments.py` | Shared parsing helpers. `soc_parse.clean_soc_title()` cleans titles already stored in `soc.json` (cancelled note, " : subtitle", trailing ": TBA") and returns `None` when nothing usable is left. |
 | `json_io.py` | Shared `load_json` and `save_json` helpers for the pipeline scripts. |
-| `reconcile_offerings.py` | Merges `soc.json` into `courses.json`: offerings, campus flags, units. |
+| `reconcile_offerings.py` | Merges `soc.json` into `courses.json`: offerings, campus flags, units. Cancelled sections are skipped. |
 | `apply_mapping_overlays.py` | Applies `mapping_overlays.json` to `courses.json`. |
-| `validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. |
+| `validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. Courses whose sections are all cancelled are not required. |
 | `scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand. |
-| `tests/` | Pytest tests for the pipeline (29 tests). |
+| `tests/` | Pytest tests for the pipeline (52 tests). `tests/fixtures/` holds real SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar). |
 
 ---
 
@@ -943,10 +943,10 @@ Store counts, not behaviour: no IP addresses, user agents, locations or per-pers
 Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. Only runs when `github.repository == 'Adicmu/Countsfor-Summer-26'`.
 
 1. `python -m pytest data/tests/test_scrape_soc.py data/tests/test_soc_parse.py -q`
-2. `python data/scrape_soc.py`: scrapes every semester on the SOC form for Pittsburgh and Qatar, all departments, writes `data/soc.json` only if the scrape is non-empty and above `MIN_COURSES_FOR_VALID_SCRAPE`.
-3. `python data/reconcile_offerings.py`: merges SOC sections into `data/courses.json` (offerings, `offered`, campus flags, units). It does **not** create requirement mappings.
+2. `python data/scrape_soc.py`: scrapes every semester on the SOC form for Pittsburgh and Qatar, all departments, writes `data/soc.json` only if the scrape is non-empty and above `MIN_COURSES_FOR_VALID_SCRAPE`. Columns are read from each table's header, so the summer Session column does not shift cells. Cancelled sections are kept with `cancelled: true`; a table without a header is skipped rather than guessed.
+3. `python data/reconcile_offerings.py`: merges SOC sections into `data/courses.json` (offerings, `offered`, campus flags, units). Cancelled sections do not count as offerings and do not set `offered_qatar` or `offered_pitts`. It does **not** create requirement mappings.
 4. `python data/apply_mapping_overlays.py`: adds the manual requirement mappings from `data/mapping_overlays.json` (additive only).
-5. `python data/validate_soc_coverage.py`: fails if a SOC course is missing from the catalog.
+5. `python data/validate_soc_coverage.py`: fails if a SOC course is missing from the catalog (courses with only cancelled sections are not required).
 6. `python scripts/bump_cf_build.py`: sets the `cf-build` meta and every `?v=` in `app.html` to `soc-YYYY-MM-DD`, so browsers fetch the new `courses.json`.
 7. Commits `data/soc.json data/courses.json app.html` as `soc-bot` with message `Update SOC data (YYYY-MM-DD)` and pushes.
 8. If it pushed, triggers `pages.yml` with `gh workflow run pages.yml --ref main` (bot pushes do not trigger workflows by themselves).
@@ -973,7 +973,7 @@ git commit -am "Sync SOC data from the hind fork"
 ```bash
 source .venv/bin/activate
 pip install pytest
-python -m pytest data/tests -q                 # 34 tests
+python -m pytest data/tests -q                 # 52 tests
 python data/scrape_soc.py                      # 30 to 90 minutes, polite delays
 python data/reconcile_offerings.py
 python data/apply_mapping_overlays.py
@@ -1358,6 +1358,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 3. Render service naming and ownership are unclear (15.2). Confirm in the dashboard; remove the stray `countsfor-backend` service and `countsfor-db` database if they still exist.
 4. 6 backend tests and 1 JS test fail (16.2). No CI runs the backend tests.
 5. Email reset provider status in production unknown.
+6. `data/soc.json` was written by the old scraper, which read every row as 10 cells. Until the next scrape: titles of cancelled sections end in "This Section Cancelled", cancelled sections have no `cancelled` flag and still count as offerings, subtitles are joined into titles as "Title : subtitle", and in M26 about 300 courses sit inside other courses' `sections` (the Session column shifted the cells). M25 is no longer on the SOC form, so a new scrape cannot repair it; it needs a one time cleanup. `soc_parse.clean_soc_title()` can clean the stored titles.
 
 ### 21.3 Code hygiene
 
