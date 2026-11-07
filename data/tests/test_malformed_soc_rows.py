@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "data"))
 
 from reconcile_offerings import offerings_from_soc, reconcile_file  # noqa: E402
 from soc_parse import (  # noqa: E402
+    is_ignored_course,
     is_malformed_course,
     is_malformed_section,
     is_section_id,
@@ -148,3 +149,33 @@ def test_soc_ingested_offered_keeps_semesters_seen_only_as_malformed(tmp_path):
     _, rows = _reconcile(tmp_path, soc, [stub, gone])
     assert rows["79-234"]["offered"] == ["M25", "S26"], "M25 is ignored, not removed"
     assert rows["85-150"]["offered"] == ["M26"]
+
+
+def _all_sections_malformed(num="62318"):
+    """Units cell fine, but every section cell is not a section id."""
+    secs = [dict(_good_79234()["sections"][0], section="summer"),
+            dict(_good_79234()["sections"][0], section="TBA", cancelled=True)]
+    return {"course_number": num, "title": "Spatial Practice", "units": "9",
+            "department": "Design", "sections": secs}
+
+
+def test_all_sections_malformed_but_units_ok_is_ignored(tmp_path):
+    course = _all_sections_malformed()
+    assert not is_malformed_course(course) and is_ignored_course(course)
+    cancelled_only = dict(_good_79234(), sections=[dict(_good_79234()["sections"][0], cancelled=True)])
+    assert not is_ignored_course(cancelled_only), "a cancelled-only course is listed, not ignored"
+    assert not is_ignored_course(_good_79234())
+
+    soc = {"semesters": {"F26": {"courses": [course]}, "S26": {"courses": [_good_79234()]}}}
+    by_code, meta = offerings_from_soc(soc)
+    assert "62-318" not in by_code and "62-318" not in meta, "no offerings or title from it"
+    assert soc_course_codes(soc)["F26"] == set()
+    assert malformed_counts(soc)["F26"] == {"courses": 1, "sections": 2}
+
+    # Reconcile and the validator agree: F26 is ignored data, so a SOC-created
+    # row keeps it (as with a malformed course) instead of losing it.
+    soc["semesters"]["S26"]["courses"].append(dict(_all_sections_malformed(), sections=[
+        dict(_good_79234()["sections"][0], section="A")]))
+    stub = _catalog_row("62-318", "Spatial Practice", offered=["F26"], soc_ingested=True)
+    _, rows = _reconcile(tmp_path, soc, [stub])
+    assert rows["62-318"]["offered"] == ["S26", "F26"]

@@ -17,7 +17,7 @@ from soc_parse import (  # noqa: E402
     code_to_course_number,
     course_number_to_code,
     is_cancelled_section,
-    is_malformed_course,
+    is_ignored_course,
     is_placeholder_title,
     malformed_counts,
     normalize_course_code,
@@ -54,9 +54,10 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
     for sem_code in sorted(semesters.keys(), key=_semester_sort_key, reverse=True):
         sem_data = semesters[sem_code]
         for course in sem_data.get("courses") or []:
-            if is_malformed_course(course):
-                # Shifted summer row from the old fixed-column parser: kept in
-                # soc.json, ignored here (see soc_parse.is_malformed_course).
+            if is_ignored_course(course):
+                # Shifted summer row from the old fixed-column parser, or a
+                # course whose only non-cancelled sections are malformed: kept
+                # in soc.json, ignored here (see soc_parse.is_ignored_course).
                 continue
             num = course.get("course_number") or ""
             code = course_number_to_code(num)
@@ -103,7 +104,7 @@ def soc_presence(soc: dict) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
 
     present: semesters where soc.json lists the course in a usable form
     (cancelled-only included). ignored_only: semesters where it appears only
-    as malformed rows, which the pipeline ignores.
+    as ignored malformed data (soc_parse.is_ignored_course).
     """
     present: dict[str, set[str]] = {}
     seen: dict[str, set[str]] = {}
@@ -111,7 +112,7 @@ def soc_presence(soc: dict) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
         for course in sem_data.get("courses") or []:
             code = course_number_to_code(course.get("course_number") or "")
             seen.setdefault(code, set()).add(sem_code)
-            if not is_malformed_course(course):
+            if not is_ignored_course(course):
                 present.setdefault(code, set()).add(sem_code)
     ignored_only = {code: sems - present.get(code, set()) for code, sems in seen.items()}
     return present, {code: sems for code, sems in ignored_only.items() if sems}
@@ -129,7 +130,9 @@ def adopt_soc_title(course: dict, meta: dict | None) -> dict:
 
     The SOC is the rule for names. When cleaning leaves nothing usable (for
     example "tba This Section Cancelled") the catalog name is kept.
-    titles_match only detects a reused number: the old name goes into
+    titles_match only detects a reused number: the old name, cleaned with
+    clean_soc_title like any SOC title (old SOC-created names can still end in
+    "This Section Cancelled" or carry " : subtitle"), goes into
     previous_course_name for review, unless the row already has one (the
     first recorded name is kept). A SOC title that matches the stored
     previous_course_name is a return to that name, not a reuse.
@@ -141,15 +144,16 @@ def adopt_soc_title(course: dict, meta: dict | None) -> dict:
     if not soc_title:
         return {"changed": False, "reused": False, "replaced": ""}
     catalog_name = (course.get("course_name") or "").strip()
+    clean_catalog_name = clean_soc_title(catalog_name) or catalog_name
     previous = (course.get("previous_course_name") or "").strip()
     reused = (
         bool(catalog_name)
-        and not titles_match(catalog_name, soc_title)
+        and not titles_match(clean_catalog_name, soc_title)
         and not (previous and titles_match(previous, soc_title))
     )
     if reused:
         if not previous:
-            course["previous_course_name"] = catalog_name
+            course["previous_course_name"] = clean_catalog_name
         course.pop("soc_title", None)
         parsed_units = parse_soc_units((meta or {}).get("units"))
         if parsed_units is not None:
@@ -287,11 +291,12 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         reconcile_course(course, offs, meta)
         if course.get("soc_ingested") and code in present:
             # Rows the SOC created follow the SOC for every semester soc.json
-            # holds (cancelled-only semesters drop out). Semesters soc.json
-            # does not hold, and semesters where the row appears only as
-            # ignored malformed data, are kept. A row soc.json no longer lists
-            # at all keeps its `offered` unchanged (rows are never emptied).
-            # Catalog rows keep their history.
+            # holds: a semester the row is not listed in, or listed only with
+            # cancelled sections, drops out, which can leave `offered` empty.
+            # Semesters soc.json does not hold, and semesters where the row
+            # appears only as ignored malformed data, are kept. A row soc.json
+            # no longer lists in any semester is not handled here and keeps
+            # its `offered` unchanged. Catalog rows keep their history.
             skip = ignored_only.get(code, set())
             kept = [s for s in course.get("offered") or []
                     if s not in soc_semesters or s in skip]

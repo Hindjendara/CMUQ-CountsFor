@@ -255,3 +255,46 @@ def test_validator_prints_no_warning_without_pairs(tmp_path, monkeypatch, capsys
     soc = {"semesters": {"S27": {"courses": [soc_course("85190", "Psychopathology")]}}}
     assert run_validator(tmp_path, monkeypatch, soc, [catalog_row("85-190", "Psychopathology")]) == 0
     assert "WARNING" not in capsys.readouterr().out
+
+
+def test_reused_number_stores_the_cleaned_old_name(tmp_path):
+    # Old SOC-created names can still hold scraper text; previous_course_name
+    # gets the name clean_soc_title gives, as course_name would.
+    soc = {"semesters": {"F26": {"courses": [
+        soc_course("48616", "Carnival Gateway Special Project"),
+        soc_course("54152", "Stage and Shop Craft"),
+    ]}}}
+    rows_in = [catalog_row("48-616", "NOMAS Competition This Section Cancelled", soc_ingested=True),
+               catalog_row("54-152", "Stagecraft : Scenery (3 units)", soc_ingested=True)]
+    stats, rows, _ = run_reconcile(tmp_path, soc, rows_in)
+    assert rows["48-616"]["previous_course_name"] == "NOMAS Competition"
+    assert rows["54-152"]["previous_course_name"] == "Stagecraft"
+    assert len(stats["reused_numbers"]) == 2
+
+
+def test_cancelled_suffix_alone_does_not_make_titles_match(tmp_path):
+    soc = {"semesters": {"F26": {"courses": [soc_course("82196", "Section Seminar")]}}}
+    row = catalog_row("82-196", "Russian Drama This Section Cancelled")
+    stats, rows, _ = run_reconcile(tmp_path, soc, [row])
+    assert rows["82-196"]["previous_course_name"] == "Russian Drama"
+    assert stats["reused_numbers"]
+
+
+def write_validator_soc(scraped_at, last_scrape):
+    bad = soc_course("62318", "Spatial Practice", units="summer")
+    return {"metadata": {"last_scrape": last_scrape},
+            "semesters": {"F26": {"scraped_at": scraped_at, "courses": [bad]}}}
+
+
+def test_validator_fails_on_malformed_data_in_the_newest_scrape(tmp_path, monkeypatch, capsys):
+    soc = write_validator_soc("2026-11-07T22:10:04", "2026-11-07T22:10:04")
+    assert vsc.fresh_malformed(soc) == {"F26": {"courses": 1, "sections": 1}}
+    assert run_validator(tmp_path, monkeypatch, soc, []) == 1
+    assert "FAIL: the newest scrape has malformed SOC data" in capsys.readouterr().out
+
+
+def test_validator_allows_malformed_data_in_carried_forward_semesters(tmp_path, monkeypatch, capsys):
+    soc = write_validator_soc("2026-08-13T07:51:25", "2026-11-07T22:10:04")
+    assert vsc.fresh_malformed(soc) == {}
+    assert run_validator(tmp_path, monkeypatch, soc, []) == 0
+    assert "OK: every SOC course" in capsys.readouterr().out

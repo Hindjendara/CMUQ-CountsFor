@@ -235,19 +235,38 @@ def usable_sections(course: dict | None) -> list[dict]:
             if not is_malformed_section(s)]
 
 
+def is_ignored_course(course: dict | None) -> bool:
+    """True when the pipeline ignores this SOC course entirely.
+
+    That is a malformed course (units cell not units), or a course with
+    sections where none is usable and at least one is malformed (every
+    section is cancelled or malformed). A course whose sections are all
+    cancelled is not ignored: the SOC lists it, it just does not run.
+    reconcile (offerings, titles, presence) and validate_soc_coverage both
+    use this, so they agree on which courses the SOC lists.
+    """
+    if is_malformed_course(course):
+        return True
+    secs = (course or {}).get("sections") or []
+    return (bool(secs) and not usable_sections(course)
+            and any(is_malformed_section(s) for s in secs))
+
+
 def malformed_counts(soc: dict) -> dict[str, dict[str, int]]:
     """{semester: {"courses": n, "sections": m}} that the pipeline ignores.
 
-    "courses" counts malformed courses; "sections" counts every section of a
-    malformed course plus malformed sections of well-formed courses.
+    "courses" counts ignored courses (is_ignored_course); "sections" counts
+    every section of a malformed course plus malformed sections of
+    well-formed courses.
     """
     out: dict[str, dict[str, int]] = {}
     for sem_code, sem_data in (soc.get("semesters") or {}).items():
         courses = sections = 0
         for course in sem_data.get("courses") or []:
             secs = course.get("sections") or []
-            if is_malformed_course(course):
+            if is_ignored_course(course):
                 courses += 1
+            if is_malformed_course(course):
                 sections += len(secs)
             else:
                 sections += sum(1 for s in secs if is_malformed_section(s))

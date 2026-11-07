@@ -20,10 +20,10 @@ from soc_parse import (  # noqa: E402
     clean_soc_title,
     course_number_to_code,
     is_cancelled_course,
-    is_malformed_course,
+    is_ignored_course,
+    malformed_counts,
     normalize_course_code,
     normalize_title,
-    usable_sections,
 )
 
 SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
@@ -37,22 +37,36 @@ def soc_course_codes(soc: dict) -> dict[str, set[str]]:
     """Return {semester_code: set(course_code)} from scraped SOC data.
 
     Courses whose sections are all cancelled are left out: reconcile does not
-    add a catalog row for a course that has no running section. Malformed
-    courses and courses whose sections are all malformed are left out for the
-    same reason (see soc_parse.usable_sections).
+    add a catalog row for a course that has no running section. Courses the
+    pipeline ignores as malformed are left out for the same reason (see
+    soc_parse.is_ignored_course, which reconcile uses too).
     """
     by_sem: dict[str, set[str]] = {}
     for sem_code, sem_data in (soc.get("semesters") or {}).items():
         codes = set()
         for course in sem_data.get("courses") or []:
             num = course.get("course_number") or ""
-            if not num or is_cancelled_course(course) or is_malformed_course(course):
-                continue
-            if course.get("sections") and not usable_sections(course):
+            if not num or is_cancelled_course(course) or is_ignored_course(course):
                 continue
             codes.add(course_number_to_code(num))
         by_sem[sem_code] = codes
     return by_sem
+
+
+def fresh_malformed(soc: dict) -> dict[str, dict[str, int]]:
+    """Malformed data in semesters the newest scrape wrote.
+
+    Those are the semesters whose scraped_at equals metadata.last_scrape.
+    The current parser should never produce malformed data, so any here
+    means the SOC format changed and courses would be dropped silently.
+    Semesters carried forward from older scrapes (M25) are not counted.
+    """
+    last = (soc.get("metadata") or {}).get("last_scrape")
+    if not last:
+        return {}
+    fresh = {s for s, d in (soc.get("semesters") or {}).items() if d.get("scraped_at") == last}
+    return {s: n for s, n in malformed_counts(soc).items()
+            if s in fresh and (n["courses"] or n["sections"])}
 
 
 def catalog_codes(courses: list[dict]) -> set[str]:
@@ -150,6 +164,7 @@ def main() -> int:
     courses = data["courses"] if isinstance(data, dict) else data
     known = catalog_codes(courses)
 
+    fresh_bad = fresh_malformed(soc)
     all_missing: set[str] = set()
     print("SOC coverage check (PIT + Qatar)")
     print("=" * 50)
@@ -175,12 +190,21 @@ def main() -> int:
         unlinked_title_pairs(courses, all_soc_codes(soc), linked_pairs(courses, overlays_doc))
     )
 
+    if fresh_bad:
+        print("\nFAIL: the newest scrape has malformed SOC data, which the pipeline ignores "
+              "(units cell not units, or section cell not a section id). Check the SOC "
+              "page format and the parser before adopting this soc.json:")
+        for sem, n in sorted(fresh_bad.items()):
+            print(f"  - {sem}: {n['courses']} course(s), {n['sections']} section(s)")
+
     if all_missing:
         print(f"\nFAIL: {len(all_missing)} SOC course(s) not in CountsFor catalog:")
         for code in sorted(all_missing)[:30]:
             print(f"  - {code}")
         if len(all_missing) > 30:
             print(f"  ... and {len(all_missing) - 30} more")
+        return 1
+    if fresh_bad:
         return 1
 
     print("\nOK: every SOC course is present in courses.json.")
