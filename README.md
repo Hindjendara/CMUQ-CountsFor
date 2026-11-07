@@ -206,7 +206,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `backend/` | yes | Flask API. See [section 9](#9-backend-walkthrough). | Live |
 | `data/` | yes | Catalog JSON files and the scrape pipeline scripts. See [section 14](#14-data-pipeline-soc-scrape). | Live |
 | `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `app.html`, and every `?v=` tag in `index.html`. Run by the scrape workflow. | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `tests/data.test.js`. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `tests/profile.test.js` and `tests/data.test.js`, with an in-memory `localStorage`. | Live |
 | `tests/` | yes | Browser test page (`tests/test.html`) and JS unit tests. | Live |
 | `.github/workflows/` | yes | `scrape.yml`, `pages.yml`, `keepalive.yml`. | Live |
 | `render.yaml` | yes | Render Blueprint for the backend and database. | Live |
@@ -1090,7 +1090,7 @@ python -m pytest backend/tests -q
 # Data pipeline
 python -m pytest data/tests -q
 
-# Frontend pure functions (Node, runs tests/data.test.js only)
+# Frontend (Node, runs tests/profile.test.js and tests/data.test.js like tests/test.html)
 node scripts/run-data-tests.js
 
 # Frontend in the browser (runs tests/profile.test.js and tests/data.test.js)
@@ -1104,7 +1104,7 @@ python3 -m http.server 8765
 |---|---|
 | `backend/tests` | **90 passed, 7 failed** |
 | `data/tests` | 30 passed |
-| `node scripts/run-data-tests.js` | 49 passed, 1 failed |
+| `node scripts/run-data-tests.js` | 97 passed, 1 failed (profile 46/46, data 51/52; counted after the runner started loading `profile.test.js` in November 2026) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
@@ -1128,7 +1128,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
 - `backend/tests/test_admin.py` and `test_course_overrides.py` cover the admin page.
 - `data/tests/` cover SOC parsing, title mismatch reconciliation and the modern languages overlay.
-- `tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`.
+- `tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
 - `Testing/` (capital T) is not a test suite; it is the SOC mock server.
 
 There is no CI that runs the backend tests. Only the scrape workflow runs the two SOC parser test files.
@@ -1357,8 +1357,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 2. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
 3. Render service naming and ownership are unclear (15.2). Confirm in the dashboard; remove the stray `countsfor-backend` service and `countsfor-db` database if they still exist.
 4. 6 backend tests and 1 JS test fail (16.2). No CI runs the backend tests.
-5. `scripts/run-data-tests.js` does not load `tests/profile.test.js`.
-6. Email reset provider status in production unknown.
+5. Email reset provider status in production unknown.
 
 ### 21.3 Code hygiene
 

@@ -83,15 +83,18 @@ test('computeViewMode: advisor with all_programs scope → cross-program', () =>
 
 // ── Role groups ──────────────────────────────────────────
 
-test('getRoleGroup: maps area_head + associate_area_head to the same group', () => {
-  assertEqual(getRoleGroup('area_head'),           'area_lead');
-  assertEqual(getRoleGroup('associate_area_head'), 'area_lead');
+test('getRoleGroup: maps every faculty title to the faculty group', () => {
+  assertEqual(getRoleGroup('professor'),           'faculty');
+  assertEqual(getRoleGroup('area_head'),           'faculty');
+  assertEqual(getRoleGroup('associate_area_head'), 'faculty');
+  assertEqual(getRoleGroup('advisor'),             'faculty');
 });
 
-test('getRoleGroup: maps student/professor/advisor to their own groups', () => {
-  assertEqual(getRoleGroup('student'),   'student');
-  assertEqual(getRoleGroup('professor'), 'professor');
-  assertEqual(getRoleGroup('advisor'),   'advisor');
+test('getRoleGroup: maps student and admin to their own groups', () => {
+  assertEqual(getRoleGroup('student'), 'student');
+  assertEqual(getRoleGroup('admin'),   'admin');
+  assertEqual(getRoleGroup(null),      'student');
+  assertEqual(getRoleGroup({ role: 'professor', role_group: 'admin' }), 'admin');
 });
 
 // ── Advisor scope validation ─────────────────────────────
