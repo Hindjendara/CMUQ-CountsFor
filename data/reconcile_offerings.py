@@ -22,7 +22,6 @@ from soc_parse import (  # noqa: E402
 
 SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
 COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(ROOT / "data" / "courses.json"))
-ALL_COURSES_PATH = os.environ.get("ALL_COURSES_PATH", str(ROOT / "data_all_courses.json"))
 
 
 
@@ -244,10 +243,6 @@ def main():
 
     stats = reconcile_file(COURSES_PATH, SOC_PATH)
     print(f"Reconciled {COURSES_PATH}: {stats}")
-
-    if os.path.exists(ALL_COURSES_PATH):
-        stats2 = reconcile_file(ALL_COURSES_PATH, SOC_PATH)
-        print(f"Reconciled {ALL_COURSES_PATH}: {stats2}")
 
 
 if __name__ == "__main__":

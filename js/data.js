@@ -13,7 +13,7 @@ const MAJOR_META = {
 };
 
 const MAJOR_ORDER = ['CS', 'IS', 'BA', 'BS'];
-// AI and GS scaffolded — add to MAJOR_ORDER once Hind supplies requirement specs (T7/T8).
+// AI and GS have no requirement data yet; add them to MAJOR_ORDER once their specs exist.
 
 const MAJOR_BRAND = {
   CS: '#C41230',

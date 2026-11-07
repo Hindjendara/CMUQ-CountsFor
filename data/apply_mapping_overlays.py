@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply manual requirement overlays to bundled course catalogs.
+"""Apply manual requirement overlays to the bundled course catalog.
 
 Mappings live in course records inside JSON catalogs — not in Postgres.
 Run after reconcile_offerings.py so overlays survive daily SOC scrapes.
@@ -19,7 +19,6 @@ from soc_parse import normalize_course_code  # noqa: E402
 OVERLAYS_PATH = Path(__file__).resolve().parent / "mapping_overlays.json"
 DEFAULT_CATALOGS = [
     ROOT / "data" / "courses.json",
-    ROOT / "data_all_courses.json",
 ]
 
 IS_IGI_PATH = "GenEd---GenEd---Foundations---Intercultural and Global Inquiry"

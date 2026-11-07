@@ -164,7 +164,7 @@
   <thead><tr><th>Piece</th><th>File</th></tr></thead>
   <tbody>
     <tr><td>Tracking</td><td><code>backend/activity.py</code> (<code>mark_signed_in</code>, <code>record_visit</code>, Qatar day helper)</td></tr>
-    <tr><td>Tables</td><td><code>backend/models.py</code>: <code>SignInEvent</code>, <code>UserActivityDay</code>; documented in <code>backend/schema.sql</code></td></tr>
+    <tr><td>Tables</td><td><code>backend/models.py</code>: <code>SignInEvent</code>, <code>UserActivityDay</code></td></tr>
     <tr><td>One-time backfill</td><td><code>backend/migrate.py</code>: <code>_backfill_sign_in_history</code></td></tr>
     <tr><td>API</td><td><code>backend/admin.py</code>: <code>GET /api/admin/sign-ins</code>; Overview "Signed in this week" uses the same data</td></tr>
     <tr><td>Page</td><td><code>js/app.js</code>: <code>_openSignIns</code>, <code>_renderSignIns</code>, <code>_renderSignInTable</code>; styles in <code>css/styles.css</code></td></tr>

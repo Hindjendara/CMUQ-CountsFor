@@ -58,7 +58,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 ### 1.2 Stakeholders and people
 
 - **Aditya Vivek** (GitHub `Adicmu`): original author and owner of the main repo `Adicmu/Countsfor-Summer-26`. CMU-Q student.
-- **Hind Jendara** (GitHub `Hindjendara`): co-developer. Owns the fork `Hindjendara/Countsfor-Summer-26` (git remote `hind`). Several in-code comments say AI and GS requirement data must come from her (`js/data.js` line 16, `data/requirements_ai.json`).
+- **Hind Jendara** (GitHub `Hindjendara`): co-developer. Owns the fork `Hindjendara/Countsfor-Summer-26` (git remote `hind`). AI and GS requirement data was expected to come from her (see `js/data.js` line 16).
 - CMU-Q faculty, area heads and advisors: the faculty directory in `data/faculty_directory.json` (65 people scraped from the public CMU-Q People page) decides who gets faculty access.
 - CMU-Q IT: owns the `countsfor.qatar.cmu.edu` hostname (see [15.4](#154-countsforqatarcmuedu)).
 - Upstream data source: the course-to-requirement mappings originally came from the older open-source project [open-cmuq/CountsFor](https://github.com/open-cmuq/CountsFor) (credited in `README.md`).
@@ -66,7 +66,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 ### 1.3 What it is not
 
 - It is not an official degree audit. Mappings come from upstream data plus manual overlays and admin edits.
-- AI (Artificial Intelligence) and GS (General Studies) majors are scaffolded but have **no requirement data** (`data/requirements_ai.json` and `data/requirements_gs.json` say "SCAFFOLD ONLY").
+- AI (Artificial Intelligence) and GS (General Studies) majors are defined in `js/data.js` (marked `dataPending`) but have **no requirement data** and are not in `MAJOR_ORDER`.
 
 ---
 
@@ -215,7 +215,6 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `README.md` | yes | This manual. | Keep current |
 | `docs/` | yes | `docs/analytics-plan/` (the team analytics plan, HTML source and PDF) and `docs/archive/` (sprint plans, proposals, progress report, wireframes, UX review and design specs from 2026; history only, not current truth). | Reference |
 | `Testing/` | yes | A tiny mock SOC Flask server for testing the scraper offline (`Testing/app.py`, `Testing/readMe`). Its readme references `scraper/scrape_soc.py`, which is now `data/scrape_soc.py`. | Legacy but usable |
-| `data_all_courses.json` | yes | 24 MB near-duplicate of `data/courses.json` written by `reconcile_offerings.py` and `apply_mapping_overlays.py` and committed by the scrape. **No frontend code reads it.** | Legacy, still written by the pipeline |
 | `CONTEXT.md` | **no** (gitignored) | A long "complete project context" doc that exists only on the original author's laptop. A successor cloning the repo will not have it. | Local only |
 | `server.log` | no (gitignored) | Local log file. | Local only |
 | `instance/` | no (gitignored) | Local SQLite databases. | Local only |
@@ -249,7 +248,6 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `plans.py` | `/api/plans` routes (list, share by email, share link, accept link). |
 | `search_analytics.py` | `/api/search-analytics` (course lookup counts per program and semester). |
 | `email_util.py` | Password reset email via Resend API or SMTP. **This is the one in use.** |
-| `schema.sql` | Hand-written SQL describing 7 of the 14 tables (users, flags, wishlist, audit log, course overrides, sign-in analytics). Documentation only; never executed. `models.py` is the source of truth. |
 | `Procfile` | `web:` gunicorn command (same as `render.yaml` start command). |
 | `requirements.txt` | Pinned Python dependencies (Flask 3.0.3, Flask-SQLAlchemy 3.1.1, flask-cors, SQLAlchemy 2.0.51, psycopg2-binary, google-auth, requests, itsdangerous, gunicorn, python-dotenv, pytest). |
 | `runtime.txt` | `python-3.11.9`. |
@@ -269,16 +267,14 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `mapping_overlays.json` | Manual additive requirement mappings (9 overlays as of Nov 2026). |
 | `minor_courses.json` | Course lists per minor (only `business` and `cs` populated). Loaded by `fetchMinorCourses()`. |
 | `faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. Used as the directory seed in production (`SEED_USERS_PATH=data/faculty_directory.json` in `render.yaml`). |
-| `requirements_ai.json`, `requirements_gs.json` | Empty scaffolds for future majors. Unreferenced. |
 | `scrape_soc.py` | Scraper. |
 | `soc_parse.py`, `soc_departments.py` | Shared parsing helpers. |
 | `json_io.py` | Shared `load_json` and `save_json` helpers for the pipeline scripts. |
-| `reconcile_offerings.py` | Merges `soc.json` into `courses.json` (and `data_all_courses.json`): offerings, campus flags, units. |
-| `apply_mapping_overlays.py` | Applies `mapping_overlays.json` to the catalogs. |
+| `reconcile_offerings.py` | Merges `soc.json` into `courses.json`: offerings, campus flags, units. |
+| `apply_mapping_overlays.py` | Applies `mapping_overlays.json` to `courses.json`. |
 | `validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. |
 | `scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand. |
-| `scripts/inspect_mappings.py` | Debug print of mappings for a list of language courses. |
-| `tests/` | Pytest tests for the pipeline (30 tests). |
+| `tests/` | Pytest tests for the pipeline (29 tests). |
 
 ---
 
@@ -432,8 +428,8 @@ Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither R
 | `MIN_COURSES_FOR_SUMMER_SCRAPE` | `scrape_soc.py` | `10` | Lower threshold for summer terms. |
 | `SOC_OUTPUT_PATH` | `scrape_soc.py` | `data/soc.json` | Output file. |
 | `SEMESTERS_TO_TRY` | `soc_departments.py` | from the SOC form | Comma list override of semesters. |
-| `SOC_JSON_PATH`, `COURSES_JSON_PATH`, `ALL_COURSES_PATH` | reconcile and validate | `data/soc.json`, `data/courses.json`, `data_all_courses.json` | File locations. |
-| `CATALOG_PATHS` | `apply_mapping_overlays.py` | `data/courses.json;data_all_courses.json` | Semicolon list of catalogs to patch. |
+| `SOC_JSON_PATH`, `COURSES_JSON_PATH` | reconcile and validate | `data/soc.json`, `data/courses.json` | File locations. |
+| `CATALOG_PATHS` | `apply_mapping_overlays.py` | `data/courses.json` | Semicolon list of catalogs to patch. |
 
 ### 6.3 Frontend configuration (no env vars, all in HTML)
 
@@ -836,7 +832,7 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | `user_activity_days` | `UserActivityDay` | `user_id`, `day`, `visits`, `sign_ins`, `first_seen`, `last_seen` | One row per user per Qatar day (section 13) |
 | `course_overrides` | `CourseOverride` | `course_code` (unique), `is_new`, `archived`, `fields` (JSON text), `requirements` (JSON text), `updated_by_*` | |
 
-`backend/db_schema.py` `REQUIRED_TABLES` lists all 14. `backend/schema.sql` only covers `users`, `flags`, `wishlist_items`, `admin_audit_events`, `course_overrides`, `sign_in_events`, `user_activity_days` and is not executed by anything; treat `models.py` as the source of truth.
+`backend/db_schema.py` `REQUIRED_TABLES` lists all 14. `backend/models.py` is the source of truth for the schema.
 
 ### 11.2 How schema changes reach production (exactly)
 
@@ -914,7 +910,7 @@ Days are **Qatar local dates** (UTC+3, no daylight saving). The constant is `LOC
 | `sign_in_events` | successful sign-in | `user_id`, `method` (`google`, `password`, `email_link`, `register`, `before_tracking`), `created_at` |
 | `user_activity_days` | user per Qatar day | `user_id`, `day` (`YYYY-MM-DD` string), `visits`, `sign_ins`, `first_seen`, `last_seen`; unique on (`user_id`, `day`) |
 
-Both are SQLAlchemy models in `backend/models.py` and are documented in `backend/schema.sql`. They are new tables, so `db.create_all()` creates them on deploy (Render's `preDeployCommand: python -m backend.bootstrap_db` runs `init_database`). Both are in `REQUIRED_TABLES` in `backend/db_schema.py`, so `/health` on Postgres reports `degraded` if either is missing. Rows are deleted with the user (`ON DELETE CASCADE`).
+Both are SQLAlchemy models in `backend/models.py`. They are new tables, so `db.create_all()` creates them on deploy (Render's `preDeployCommand: python -m backend.bootstrap_db` runs `init_database`). Both are in `REQUIRED_TABLES` in `backend/db_schema.py`, so `/health` on Postgres reports `degraded` if either is missing. Rows are deleted with the user (`ON DELETE CASCADE`).
 
 **One-time backfill.** Tracking started after people were already using the site. `_backfill_sign_in_history()` in `backend/migrate.py` runs inside `run_migrations()`: if `sign_in_events` is empty, it copies each user's `users.last_login` into one `before_tracking` event plus one activity-day row. Once any event exists it never runs again. The page footer shows when real tracking began (earliest non-backfill event).
 
@@ -948,11 +944,11 @@ Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. On
 
 1. `python -m pytest data/tests/test_scrape_soc.py data/tests/test_soc_parse.py -q`
 2. `python data/scrape_soc.py`: scrapes every semester on the SOC form for Pittsburgh and Qatar, all departments, writes `data/soc.json` only if the scrape is non-empty and above `MIN_COURSES_FOR_VALID_SCRAPE`.
-3. `python data/reconcile_offerings.py`: merges SOC sections into `data/courses.json` and `data_all_courses.json` (offerings, `offered`, campus flags, units). It does **not** create requirement mappings.
+3. `python data/reconcile_offerings.py`: merges SOC sections into `data/courses.json` (offerings, `offered`, campus flags, units). It does **not** create requirement mappings.
 4. `python data/apply_mapping_overlays.py`: adds the manual requirement mappings from `data/mapping_overlays.json` (additive only).
 5. `python data/validate_soc_coverage.py`: fails if a SOC course is missing from the catalog.
 6. `python scripts/bump_cf_build.py`: sets the `cf-build` meta and every `?v=` in `app.html` to `soc-YYYY-MM-DD`, so browsers fetch the new `courses.json`.
-7. Commits `data/soc.json data/courses.json data_all_courses.json app.html` as `soc-bot` with message `Update SOC data (YYYY-MM-DD)` and pushes.
+7. Commits `data/soc.json data/courses.json app.html` as `soc-bot` with message `Update SOC data (YYYY-MM-DD)` and pushes.
 8. If it pushed, triggers `pages.yml` with `gh workflow run pages.yml --ref main` (bot pushes do not trigger workflows by themselves).
 
 ### 14.2 Current state (verified November 3, 2026): the scrape on the main repo is broken
@@ -965,7 +961,7 @@ Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. On
 ```bash
 git fetch hind
 git checkout -b data-sync origin/main
-git checkout hind/main -- data/soc.json data/courses.json data_all_courses.json
+git checkout hind/main -- data/soc.json data/courses.json
 python scripts/bump_cf_build.py
 git commit -am "Sync SOC data from the hind fork"
 ```
@@ -1239,7 +1235,7 @@ if _add_column_if_missing("users", "my_column", "my_column VARCHAR(64)"):
 ```
 
    Give a separate Postgres DDL as the fourth argument when types differ (for example `TIMESTAMP` vs `TIMESTAMPTZ`, `DEFAULT 0` vs `DEFAULT FALSE`).
-3. Update `to_dict()` or `to_public_dict()` if the API should expose it, and `backend/schema.sql` if you keep that doc.
+3. Update `to_dict()` or `to_public_dict()` if the API should expose it.
 4. Test the upgrade path, not only fresh tables: copy an old local DB, run `python -m backend.bootstrap_db` against it with `DATABASE_URL=sqlite:////absolute/path/old.db`, and check the log line appears once and not on the second run.
 5. Deploy; check the Render pre-deploy log for your log line.
 
@@ -1369,14 +1365,13 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 - The no-dash rule (section 18) was fully applied to user-facing text on November 3, 2026. Check new strings before committing: `grep -n "[—–]" js/*.js *.html` should only find code comments.
 - Done in November 2026: `js/landing.js` no longer keeps its own copies of the backend URL, token storage, fetch wrapper, auth calls, `esc`, `showToast` or the CMU email check. It loads `js/api.js` and `js/utils.js` like the app. The frontend has one CMU email check (`normalizeCmuEmail` in `js/utils.js`) and the backend has one (`backend/cmu.py`).
 - Dead code: unused `users.reset_token_hash` and `reset_token_expires` columns (kept on purpose: dropping them is a schema change). The rest of the dead code found in the November 2026 audit was removed: the old in-app sign-in screens and their CSS, unused `App` methods, `isStudentRole`, `ROLE_GROUPS`, `FACULTY_GROUPS`, `getOnboardingUiGroup`, `apiUpdateDirectoryEntry`, `apiGetMyFlags`, the `API_BASE` and `GITHUB_RAW` course data fallbacks, `role_group_for`, `_can_manage_users`, `_ensure_staff_directory_table`, the `StaffDirectoryEntry` alias, the legacy `/api/directory/staff` routes, and about 170 CSS classes that nothing rendered.
-- `data_all_courses.json`: nothing in the app reads it, but `data/reconcile_offerings.py`, `data/apply_mapping_overlays.py`, a data test and `scrape.yml` still write or check it. Remove those references together, and sync the partner fork, if you want it gone.
-- `backend/schema.sql` covers 7 of 14 tables.
+- Also removed in November 2026: `data_all_courses.json` (a 24 MB copy of `data/courses.json` that nothing read; the pipeline now writes only `data/courses.json`), the empty `data/requirements_ai.json` and `data/requirements_gs.json` placeholders, the stale `backend/schema.sql`, `data/scripts/inspect_mappings.py`, and the inline cached-CSS `<style>` block in `app.html` (its rules already live in `css/styles.css`). The partner fork may still carry `data_all_courses.json`.
 - In-memory `_cache` in `api.js` and the 24 MB catalog download make first load slow (UX review items 4 to 12).
 - `cf_flags` local queue has no cap.
 
 ### 21.4 Product roadmap (from docs and code comments)
 
-- AI and GS majors: waiting on authoritative requirement specs (`data/requirements_ai.json`, `js/data.js` line 16).
+- AI and GS majors: waiting on authoritative requirement specs (`js/data.js` line 16).
 - Minor course lists are empty for most minors (`data/minor_courses.json`).
 - Server-side storage of a user's own schedule plans (today they are browser-only).
 - UX review (`docs/archive/UX_REVIEW_2026-07-17.md`): deploy hygiene, dark theme parity, copy consistency, accessibility (keyboard navigation of the tree, ARIA for typeahead), slimmer boot payload.

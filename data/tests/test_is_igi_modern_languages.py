@@ -39,11 +39,6 @@ def test_modern_languages_mapped_in_courses_json():
     assert result["igi_total"] >= 60
 
 
-def test_modern_languages_mapped_in_data_all_courses():
-    result = verify_modern_languages(ROOT / "data_all_courses.json")
-    assert result["ok"], result
-
-
 def test_overlay_is_additive_only():
     courses = [
         {

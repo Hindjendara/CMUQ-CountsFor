@@ -1,7 +1,6 @@
-"""ORM models. Mirrors `schema.sql` so the doc and code stay in sync.
+"""ORM models. This file is the source of truth for the database schema.
 
-Field meanings live in `schema.sql`. Keep this file thin — business logic
-belongs in route modules or permissions.py.
+Keep this file thin — business logic belongs in route modules or permissions.py.
 """
 from __future__ import annotations
 

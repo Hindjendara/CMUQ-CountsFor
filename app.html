@@ -10,24 +10,7 @@
   <link rel="apple-touch-icon" href="assets/img/scotty-standing.png" />
   <meta name="cf-build" content="cleanup-2026-11-07" />
   <link rel="stylesheet" href="css/styles.css?v=cleanup-2026-11-07" />
-  <style>
-    /* Keep Directory FAB above the home footer even if styles.css is cached */
-    body.view-home .directory-fab { bottom: 96px !important; }
-    body.view-home .home-foot-note { padding-right: 170px; }
-    @media (max-width: 768px) {
-      body.view-home .directory-fab { bottom: 116px !important; }
-    }
-  </style>
-  <!--
-    Google OAuth web client ID. Create one at
-    https://console.cloud.google.com/apis/credentials and paste the value
-    below. Authorized JavaScript origins must include both the local dev
-    URL (http://localhost:8765) and https://hindjendara.github.io
-  -->
-  <!--
-    After Render deploy, paste your service URL (no trailing slash).
-    Likely: https://countsfor-backend.onrender.com
-  -->
+  <!-- Backend API base URL (no trailing slash). -->
   <meta name="cf-backend-url" content="https://countsfor-summer-26.onrender.com" />
   <link rel="preconnect" href="https://countsfor-summer-26.onrender.com" crossorigin />
   <script>
@@ -40,6 +23,8 @@
       if (url) fetch(url.replace(/\/$/, '') + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
     })();
   </script>
+  <!-- Google OAuth web client ID. Its Authorized JavaScript origins must list
+       every origin that serves this page. -->
   <meta name="cf-google-client-id" content="378923997481-bgnvhg3gsgka5ptijjjsb80q4k7kc2vg.apps.googleusercontent.com" />
   <!-- Google Identity Services. REQUIRED for "Continue with Google" — without
        it window.google never loads and the sign-in button silently does nothing. -->
