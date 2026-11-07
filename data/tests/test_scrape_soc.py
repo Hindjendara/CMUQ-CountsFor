@@ -295,3 +295,10 @@ def test_decode_body_without_charset_prefers_utf8():
     assert decode_body(b"Pok\xe9mon") == "Pokémon"  # not UTF-8: windows-1252
     assert decode_body(b"Bj\xf6rk", "iso-8859-1") == "Björk"
     assert decode_body("Björk".encode("utf-8"), "utf-8") == "Björk"
+
+
+def test_decode_body_maps_only_undefined_cp1252_bytes_to_latin1():
+    # 0x81 is undefined in cp1252. It alone becomes U+0081; the curly quotes
+    # (0x93, 0x94) and e-acute on the same page keep their cp1252 meaning.
+    assert decode_body(b"\x93Pok\xe9mon\x94 \x81", "iso-8859-1") == "\u201cPok\u00e9mon\u201d \x81"
+    assert decode_body(b"\x93a\x8d") == "\u201ca\x8d"

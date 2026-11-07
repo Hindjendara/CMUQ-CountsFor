@@ -48,6 +48,7 @@ Output structure:
   }
 }
 """
+import codecs
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -100,6 +101,18 @@ _LATIN1_LABELS = {'iso-8859-1', 'iso8859-1', 'latin-1', 'latin1', 'l1',
                   'us-ascii', 'ascii', 'windows-1252', 'cp1252'}
 
 
+def _cp1252_undefined_as_latin1(err):
+    """Codec error handler: a byte cp1252 leaves undefined becomes U+0080-U+009F."""
+    if not isinstance(err, UnicodeDecodeError):
+        raise err
+    bad = err.object[err.start:err.end]
+    return ''.join(chr(byte) for byte in bad), err.end
+
+
+_CP1252_FALLBACK = 'countsfor-cp1252-latin1'
+codecs.register_error(_CP1252_FALLBACK, _cp1252_undefined_as_latin1)
+
+
 def decode_body(raw, header_charset=None):
     """Decode an HTTP body with the charset the server declares.
 
@@ -120,11 +133,10 @@ def decode_body(raw, header_charset=None):
         except UnicodeDecodeError:
             charset = 'windows-1252'
     if charset in _LATIN1_LABELS:
-        try:
-            return raw.decode('cp1252')
-        except UnicodeDecodeError:
-            # 0x81, 0x8D, 0x8F, 0x90, 0x9D are unassigned in cp1252.
-            return raw.decode('latin-1')
+        # 0x81, 0x8D, 0x8F, 0x90, 0x9D are unassigned in cp1252: only those
+        # bytes become their latin-1 code points (as browsers do); every other
+        # byte keeps its cp1252 meaning (0x93 is still a curly quote).
+        return raw.decode('cp1252', errors=_CP1252_FALLBACK)
     try:
         return raw.decode(charset)
     except LookupError:
