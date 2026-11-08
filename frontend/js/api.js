@@ -209,7 +209,10 @@ async function apiLogin(body) {
   return apiFetch('/api/auth/login', { method: 'POST', body });
 }
 async function apiForgotPassword(email) {
-  return apiFetch('/api/auth/forgot-password', { method: 'POST', body: { email } });
+  // The server sends the reset email inside this request; a slow mail server
+  // can take well over 20 s (email_util.py allows 15 s per SMTP step), so wait
+  // longer rather than report "Could not reach the server" for a mail that goes out.
+  return apiFetch('/api/auth/forgot-password', { method: 'POST', body: { email }, timeoutMs: 60000 });
 }
 async function apiResetPassword(body) {
   return apiFetch('/api/auth/reset-password', { method: 'POST', body });

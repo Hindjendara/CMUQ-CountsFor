@@ -19,6 +19,10 @@ backend/.venv/
 
 # Precompressed copies of the served catalog (made on the server, never committed)
 frontend/data/*.gz
+# Previous copies the daily update keeps beside the files it replaces
+# (backend/scraper/update_data.py; also made by a run in a checkout)
+frontend/data/*.prev
+backend/data/*.prev
 
 # Local design source assets — not referenced by the app
 Branding Assets/

@@ -10,20 +10,24 @@ Run from the repo root, with the backend running in another terminal:
     python -m backend.app              # Flask API on http://127.0.0.1:5050
     python scripts/dev_server.py       # site on http://localhost:8765
 
-Options: --port (default 8765), --bind (default 127.0.0.1), --backend
-(default http://127.0.0.1:5050), --root (default <repo>/frontend).
+Options: --port (default 8765), --bind (default localhost: both 127.0.0.1 and
+::1, because some clients resolve localhost only to ::1), --backend (default
+http://127.0.0.1:5050), --root (default <repo>/frontend).
 
 Standard library only. Proxied requests keep their method, path, query string,
 headers (Authorization and Cookie included) and body; the response comes back
 with its status, headers (every Set-Cookie included) and body. If the backend is
 not running, /api answers 502 with a plain-text body, like Apache does when
-gunicorn is down.
+gunicorn is down. A chunked request body is decoded and forwarded with a
+Content-Length (browsers send Content-Length anyway for the API's JSON bodies).
 """
 from __future__ import annotations
 
 import argparse
 import http.client
+import socket
 import sys
+import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -61,8 +65,17 @@ class DevHandler(SimpleHTTPRequestHandler):
     # ── Proxy ─────────────────────────────────────────────────
     def _proxy(self):
         self._proxying = True
-        length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length) if length else None
+        if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
+            # Transfer-Encoding is hop-by-hop and not forwarded, so decode the
+            # body here; otherwise Flask would get an empty request.
+            try:
+                body = self._read_chunked()
+            except ValueError:
+                self.send_error(400, "Malformed chunked request body")
+                return
+        else:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length else None
 
         headers = {}
         for name, value in self.headers.items():
@@ -111,6 +124,21 @@ class DevHandler(SimpleHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(data)
 
+    def _read_chunked(self) -> bytes:
+        """The body of a Transfer-Encoding: chunked request (RFC 9112 section 7.1)."""
+        parts = []
+        while True:
+            line = self.rfile.readline(65537)
+            size = int(line.split(b";", 1)[0].strip() or b"x", 16)  # ValueError if malformed
+            if size == 0:
+                while self.rfile.readline(65537) not in (b"\r\n", b"\n", b""):
+                    pass  # trailer fields, dropped
+                return b"".join(parts)
+            data = self.rfile.read(size)
+            if len(data) != size or self.rfile.readline(65537) not in (b"\r\n", b"\n"):
+                raise ValueError("truncated chunk")
+            parts.append(data)
+
     def _dispatch(self, static_method=None):
         self._proxying = False
         if is_proxied(self.path):
@@ -149,10 +177,29 @@ def parse_backend(url: str) -> tuple[str, int]:
     return parts.hostname, parts.port or 80
 
 
+class IPv6Server(ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+
+def make_servers(bind: str, port: int, handler) -> list[ThreadingHTTPServer]:
+    """One server per listening address. "localhost" means both loopback
+    addresses on the same port: browsers try both, but some tools (Node's fetch,
+    for one) resolve localhost only to ::1 on some machines."""
+    if bind != "localhost":
+        cls = IPv6Server if ":" in bind else ThreadingHTTPServer
+        return [cls((bind, port), handler)]
+    servers = [ThreadingHTTPServer(("127.0.0.1", port), handler)]
+    try:
+        servers.append(IPv6Server(("::1", servers[0].server_address[1]), handler))
+    except OSError:
+        pass  # no IPv6 loopback: 127.0.0.1 alone
+    return servers
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--bind", default="127.0.0.1")
+    ap.add_argument("--bind", default="localhost")
     ap.add_argument("--backend", default="http://127.0.0.1:5050")
     ap.add_argument("--root", default=str(DEFAULT_ROOT))
     args = ap.parse_args(argv)
@@ -163,15 +210,25 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     DevHandler.backend = parse_backend(args.backend)
     handler = partial(DevHandler, directory=str(root))
-    server = ThreadingHTTPServer((args.bind, args.port), handler)
+    servers = make_servers(args.bind, args.port, handler)
     host, port = DevHandler.backend
-    print(f"Serving {root} on http://localhost:{args.port}/ ; /api and /health -> http://{host}:{port}")
+    listening = ", ".join(
+        f"[{s.server_address[0]}]" if ":" in s.server_address[0] else s.server_address[0]
+        for s in servers)
+    shown = "localhost" if args.bind == "localhost" else listening
+    print(f"Serving {root} on http://{shown}:{servers[0].server_address[1]}/ "
+          f"(listening on {listening}) ; /api and /health -> http://{host}:{port}")
+    for extra in servers[1:]:
+        threading.Thread(target=extra.serve_forever, daemon=True).start()
     try:
-        server.serve_forever()
+        servers[0].serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        server.server_close()
+        for s in servers:
+            if s is not servers[0]:
+                s.shutdown()
+            s.server_close()
     return 0
 
 
