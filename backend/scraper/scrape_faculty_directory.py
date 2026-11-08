@@ -8,10 +8,10 @@ embedded in the site's ajax-filter.js to fetch Faculty directory entries and
 write CountsFor seed rows (email, name, role, primary_program, department).
 
 Usage:
-  python data/scrape_faculty_directory.py
-  python data/scrape_faculty_directory.py --dry-run
-  python data/scrape_faculty_directory.py -o backend/seed_users.json
-  python data/scrape_faculty_directory.py --also-write data/faculty_directory.json
+  python backend/scraper/scrape_faculty_directory.py
+  python backend/scraper/scrape_faculty_directory.py --dry-run
+  python backend/scraper/scrape_faculty_directory.py -o backend/seed_users.json
+  python backend/scraper/scrape_faculty_directory.py --also-write backend/data/faculty_directory.json
 """
 from __future__ import annotations
 
@@ -23,6 +23,10 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from pipeline_paths import FACULTY_DIRECTORY_JSON, SEED_USERS_JSON  # noqa: E402
 
 USER_AGENT = "CountsFor-faculty-seed/1.0 (+https://github.com/Adicmu/Countsfor-Summer-26)"
 
@@ -189,16 +193,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "-o", "--output",
-        default=str(Path(__file__).resolve().parent.parent / "backend" / "seed_users.json"),
+        default=str(SEED_USERS_JSON),
         help="Seed file path (default: backend/seed_users.json)",
     )
     parser.add_argument(
         "--also-write",
-        default=str(Path(__file__).resolve().parent / "faculty_directory.json"),
-        help="Also save a snapshot with scrape metadata (default: data/faculty_directory.json)",
+        default=str(FACULTY_DIRECTORY_JSON),
+        help="Also save a snapshot with scrape metadata (default: backend/data/faculty_directory.json)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print seed JSON to stdout")
-    parser.add_argument("--no-snapshot", action="store_true", help="Skip data/faculty_directory.json")
+    parser.add_argument("--no-snapshot", action="store_true", help="Skip backend/data/faculty_directory.json")
     args = parser.parse_args()
 
     print("Fetching CMU-Q People directory (Faculty) via Algolia…", file=sys.stderr)

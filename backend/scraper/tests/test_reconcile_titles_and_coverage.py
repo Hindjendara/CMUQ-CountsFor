@@ -3,8 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
 import validate_soc_coverage as vsc  # noqa: E402
 from reconcile_offerings import offerings_from_soc, reconcile_file  # noqa: E402

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CMU Schedule of Classes (SOC) Scraper
-Runs daily via GitHub Actions. Tries upcoming semesters; writes data/soc.json
+Runs daily via GitHub Actions. Tries upcoming semesters; writes backend/data/soc.json
 only when a real, non-empty scrape succeeds.
 
 Scrapes each (semester, department) once per configured campus, then merges
@@ -76,6 +76,7 @@ from soc_departments import (  # noqa: E402
     get_semester_list,
     load_soc_form,
 )
+from pipeline_paths import SOC_JSON  # noqa: E402
 
 # ---------- Configuration ----------
 BASE = os.environ.get("SOC_BASE_URL", "https://enr-apps.as.cmu.edu/open/SOC/SOCServlet")
@@ -89,7 +90,8 @@ def scrape_threshold(semester_code: str) -> int:
     if semester_code and semester_code[0].upper() == "M":
         return MIN_COURSES_FOR_SUMMER_SCRAPE
     return MIN_COURSES_FOR_VALID_SCRAPE
-OUTPUT_PATH = os.environ.get("SOC_OUTPUT_PATH", "data/soc.json")
+# Default is next to the backend (backend/data/soc.json), whatever the working directory.
+OUTPUT_PATH = os.environ.get("SOC_OUTPUT_PATH", str(SOC_JSON))
 LOCATIONS_TO_SCRAPE = SOC_LOCATION_CODES
 
 

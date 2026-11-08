@@ -34,12 +34,12 @@ def recovery_deploy_enabled() -> bool:
     return os.environ.get("ALLOW_BOOTSTRAP_SKIP", "").strip().lower() in ("1", "true", "yes")
 
 
-# Repo root, i.e. the parent of the backend/ package.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Local SQLite databases live in backend/instance/ (gitignored).
+_INSTANCE_DIR = Path(__file__).resolve().parent / "instance"
 
 
 def _absolutize_sqlite(uri: str) -> str:
-    """Anchor a relative SQLite path to the repo root.
+    """Anchor a relative SQLite path to backend/instance/.
 
     A relative URI like `sqlite:///countsfor.db` is resolved by Flask-SQLAlchemy
     against `app.instance_path`, and that differs by entry point: running
@@ -48,7 +48,7 @@ def _absolutize_sqlite(uri: str) -> str:
     a package so instance_path becomes `<repo>/instance/`. The dev server and
     gunicorn therefore read *different database files* from identical config, which
     silently produced three stray countsfor.db files and an account that existed in
-    one of them but not the others. Anchoring to the repo root removes the ambiguity.
+    one of them but not the others. Anchoring to one fixed folder removes the ambiguity.
 
     Postgres and absolute SQLite URIs are returned untouched.
     """
@@ -58,7 +58,9 @@ def _absolutize_sqlite(uri: str) -> str:
     path = uri[len(prefix):]
     if not path or path.startswith("/"):  # ':memory:' or already absolute
         return uri
-    return prefix + str(_PROJECT_ROOT / "instance" / Path(path).name)
+    # SQLite does not create missing folders, so make sure backend/instance/ exists.
+    _INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
+    return prefix + str(_INSTANCE_DIR / Path(path).name)
 
 
 def _resolve_database_url() -> str:
@@ -129,7 +131,7 @@ class Config:
         "SEED_USERS_PATH",
         str(Path(__file__).resolve().parent / "seed_users.json"),
     )
-    # Hand-kept admins layered over the faculty seed (default data/directory_admins.json).
+    # Hand-kept admins layered over the faculty seed (default backend/data/directory_admins.json).
     # Unset means the default file; an empty string disables it.
     ADMIN_SEED_PATH = os.environ.get("ADMIN_SEED_PATH")
 

@@ -178,7 +178,7 @@ test('filterOfferings: composable semester campus modality', () => {
 });
 
 test('parse campus: 82-289 forced Qatar via fixture helper', () => {
-  // Frontend uses offering campus from bundled data; Python fixture lives in data/soc_parse.py.
+  // Frontend uses offering campus from bundled data; Python fixture lives in backend/scraper/soc_parse.py.
   const c = { course_code: '82-289', course_name: 'Tutoring for Community Outreach - CMUQ', offered_qatar: true, offered_pitts: false };
   assertEqual(c.offered_qatar, true);
   assertEqual(c.offered_pitts, false);
@@ -480,7 +480,7 @@ test('normalizeCmuEmail: rejects non CMU and malformed addresses', () => {
 });
 
 // ── Qatar overlay flags: superseded_by, previous_codes, qatar_only ──
-// Written by data/apply_mapping_overlays.py from data/mapping_overlays.json.
+// Written by backend/scraper/apply_mapping_overlays.py from backend/data/mapping_overlays.json.
 
 function renumberedCatalog() {
   const req = (major, path) => ({ requirement: path, type: true, major });

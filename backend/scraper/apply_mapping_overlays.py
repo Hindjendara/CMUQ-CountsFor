@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply data/mapping_overlays.json to the bundled course catalog.
+"""Apply backend/data/mapping_overlays.json to the served course catalog.
 
 Mappings live in course records inside JSON catalogs, not in Postgres.
 Run after reconcile_offerings.py so overlays survive daily SOC scrapes.
@@ -29,21 +29,21 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from json_io import load_json, save_json  # noqa: E402
+from pipeline_paths import COURSES_JSON, MAPPING_OVERLAYS_JSON  # noqa: E402
 from soc_parse import normalize_course_code  # noqa: E402
 
 OVERLAYS_PATH = Path(
     os.environ.get("MAPPING_OVERLAYS_PATH")
-    or Path(__file__).resolve().parent / "mapping_overlays.json"
+    or MAPPING_OVERLAYS_JSON
 )
 PROGRAMS = ("CS", "IS", "BA", "BS")
 # qatar_visibility rule -> course flag the frontend reads
 VISIBILITY_RULES = {"show_only_if_offered_qatar": "qatar_only"}
 DEFAULT_CATALOGS = [
-    ROOT / "data" / "courses.json",
+    COURSES_JSON,
 ]
 
 IS_IGI_PATH = "GenEd---GenEd---Foundations---Intercultural and Global Inquiry"

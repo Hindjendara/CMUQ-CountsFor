@@ -3,7 +3,7 @@
 
 Also warns (without failing) about possible renumberings: two rows of the same
 department with the same cleaned title, one in the SOC and one not, that
-data/mapping_overlays.json "renumbered" does not link. Nothing is linked
+backend/data/mapping_overlays.json "renumbered" does not link. Nothing is linked
 automatically; a person decides and adds the pair to the overlay file.
 """
 from __future__ import annotations
@@ -13,9 +13,9 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from pipeline_paths import COURSES_JSON, MAPPING_OVERLAYS_JSON, SOC_JSON  # noqa: E402
 from soc_parse import (  # noqa: E402
     clean_soc_title,
     course_number_to_code,
@@ -26,11 +26,9 @@ from soc_parse import (  # noqa: E402
     normalize_title,
 )
 
-SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
-COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(ROOT / "data" / "courses.json"))
-OVERLAYS_PATH = os.environ.get(
-    "MAPPING_OVERLAYS_PATH", str(ROOT / "data" / "mapping_overlays.json")
-)
+SOC_PATH = os.environ.get("SOC_JSON_PATH", str(SOC_JSON))
+COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(COURSES_JSON))
+OVERLAYS_PATH = os.environ.get("MAPPING_OVERLAYS_PATH", str(MAPPING_OVERLAYS_JSON))
 
 
 def soc_course_codes(soc: dict) -> dict[str, set[str]]:

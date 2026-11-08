@@ -16,5 +16,5 @@ Quick start from the repo root:
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m backend.app          # http://localhost:5050
-.venv/bin/python -m pytest backend/tests -q
+.venv/bin/python -m pytest backend/tests backend/scraper/tests -q
 ```

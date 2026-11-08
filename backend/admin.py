@@ -19,7 +19,8 @@ from .permissions import require_role_group, ROLE_GROUP_ADMIN
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
-SOC_PATH = Path(__file__).resolve().parent.parent / "data" / "soc.json"
+# Written by backend/scraper/scrape_soc.py (private: never served to the browser).
+SOC_PATH = Path(__file__).resolve().parent / "data" / "soc.json"
 _LAST_SCRAPE_RE = re.compile(r'"last_scrape"\s*:\s*"([^"]+)"')
 
 

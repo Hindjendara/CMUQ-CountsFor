@@ -32,10 +32,10 @@ jobs:
       - name: Collect public site files
         run: |
           mkdir -p _site/data
-          cp index.html app.html reset.html .nojekyll _site/
-          cp -R js css assets landing _site/
+          cp frontend/index.html frontend/app.html frontend/reset.html .nojekyll _site/
+          cp -R frontend/js frontend/css frontend/assets frontend/landing _site/
           rm -f _site/landing/*.md
-          cp data/courses.json data/minor_courses.json _site/data/
+          cp frontend/data/courses.json frontend/data/minor_courses.json _site/data/
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3

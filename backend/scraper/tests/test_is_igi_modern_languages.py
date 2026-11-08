@@ -3,8 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
 from apply_mapping_overlays import (  # noqa: E402
     EXPECTED_GENED_MAPPINGS,
@@ -16,11 +15,11 @@ from apply_mapping_overlays import (  # noqa: E402
     verify_expected_geneds,
     verify_modern_languages,
 )
+from pipeline_paths import COURSES_JSON, MAPPING_OVERLAYS_JSON  # noqa: E402
 from soc_parse import normalize_course_code  # noqa: E402
 
 
-def _load_courses(name: str):
-    path = ROOT / name
+def _load_courses(path: Path):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     return data["courses"] if isinstance(data, dict) else data
@@ -34,7 +33,7 @@ def test_normalize_course_code_variants():
 
 
 def test_modern_languages_mapped_in_courses_json():
-    result = verify_modern_languages(ROOT / "data" / "courses.json")
+    result = verify_modern_languages(COURSES_JSON)
     assert result["ok"], result
     assert result["igi_total"] >= 60
 
@@ -67,24 +66,24 @@ def test_overlay_is_additive_only():
 
 
 def test_query_includes_all_six_without_dropping_existing():
-    courses = _load_courses("data/courses.json")
+    courses = _load_courses(COURSES_JSON)
     before = set(query_is_igi_courses(courses))
     assert before.issuperset(set(MODERN_LANGUAGE_CODES))
     # Re-apply overlays on copy — count should not drop
     copy = json.loads(json.dumps(courses))
-    overlays = json.loads((ROOT / "data" / "mapping_overlays.json").read_text(encoding="utf-8"))["overlays"]
+    overlays = json.loads(MAPPING_OVERLAYS_JSON.read_text(encoding="utf-8"))["overlays"]
     apply_overlays_to_courses(copy, overlays)
     after = set(query_is_igi_courses(copy))
     assert after.issuperset(before)
 
 
 def test_spreadsheet_gened_audit_passes():
-    result = verify_expected_geneds(ROOT / "data" / "courses.json")
+    result = verify_expected_geneds(COURSES_JSON)
     assert result["ok"], result["missing"]
 
 
 def test_79_286_has_contextual_thinking():
-    courses = _load_courses("data/courses.json")
+    courses = _load_courses(COURSES_JSON)
     course = next(c for c in courses if c["course_code"] == "79-286")
     is_paths = {
         r["requirement"]
@@ -95,7 +94,7 @@ def test_79_286_has_contextual_thinking():
 
 
 def test_79_232_has_contextual_thinking():
-    courses = _load_courses("data/courses.json")
+    courses = _load_courses(COURSES_JSON)
     course = next(c for c in courses if c["course_code"] == "79-232")
     is_paths = {
         r["requirement"]
@@ -122,7 +121,7 @@ HSS_IGI_CODES = [
 
 
 def _overlay(overlay_id):
-    doc = json.loads((ROOT / "data" / "mapping_overlays.json").read_text(encoding="utf-8"))
+    doc = json.loads(MAPPING_OVERLAYS_JSON.read_text(encoding="utf-8"))
     hits = [o for o in doc["overlays"] if o["id"] == overlay_id]
     assert len(hits) == 1, overlay_id
     return doc, hits[0]
@@ -140,7 +139,7 @@ def test_is_igi_hss_sheet_entry_lists_the_17_courses():
 
 
 def test_is_igi_hss_sheet_already_mapped_and_keeps_other_courses():
-    courses = _load_courses("data/courses.json")
+    courses = _load_courses(COURSES_JSON)
     before = set(query_is_igi_courses(courses))
     assert before.issuperset(HSS_IGI_CODES), "all 17 are mapped in the catalog already"
     copy = json.loads(json.dumps(courses))

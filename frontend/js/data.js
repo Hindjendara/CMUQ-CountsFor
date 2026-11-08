@@ -220,7 +220,7 @@ setRule('BS', 'Non-Technical Breadth Electives', { type: 'min_units', units: 63,
 setRule('BS', 'STEM Course', { type: 'pick', n: 1, label: 'elective' });
 
 // ── Rows the app keeps but never lists ───────────────────────
-// Set by data/apply_mapping_overlays.py from data/mapping_overlays.json:
+// Set by backend/scraper/apply_mapping_overlays.py from backend/data/mapping_overlays.json:
 // - superseded_by: a retired number ("renumbered"); the current row carries
 //   its mappings and lists it in previous_codes.
 // - qatar_only: shown only while its SOC offerings include the Qatar campus.

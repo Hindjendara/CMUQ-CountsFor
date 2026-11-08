@@ -14,7 +14,7 @@ Serve the frontend on port 8765, not 8080: FRONTEND_ORIGIN only allows 8765, and
 any other port is rejected by CORS, which the UI reports as "could not reach the
 server".
 
-    python3 -m http.server 8765
+    python3 -m http.server 8765 --directory frontend
 
 Run in production (Render):
     gunicorn --workers=2 --bind 0.0.0.0:$PORT 'backend.app:create_app()'

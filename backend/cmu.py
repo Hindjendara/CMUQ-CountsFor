@@ -1,7 +1,7 @@
 """CMU email checks shared by auth and directory.
 
 normalize_cmu_email is the one backend check of "is this a CMU address";
-js/utils.js normalizeCmuEmail is its frontend twin and follows the same rules.
+frontend/js/utils.js normalizeCmuEmail is its frontend twin and follows the same rules.
 """
 import json
 import re

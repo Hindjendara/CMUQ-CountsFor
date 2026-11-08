@@ -1,6 +1,6 @@
 """Malformed summer rows (old fixed-column parser) are kept in soc.json but ignored.
 
-The fixture holds two real courses copied from data/soc.json: 79-234 from M25
+The fixture holds two real courses copied from backend/data/soc.json: 79-234 from M25
 (units "qatar summer", one Qatar row) and 85-150 from the old M26 scrape
 (units "summer", 8 rows, most shifted by one or more columns).
 """
@@ -9,8 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
 from reconcile_offerings import offerings_from_soc, reconcile_file  # noqa: E402
 from soc_parse import (  # noqa: E402

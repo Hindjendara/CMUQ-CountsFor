@@ -70,7 +70,7 @@ def test_students_cannot_list_directory(client, student):
 
 
 def test_admin_seed_file_grants_admin_over_faculty_seed(app, tmp_path):
-    """data/directory_admins.json style file is layered over the faculty seed."""
+    """backend/data/directory_admins.json style file is layered over the faculty seed."""
     import json
     from backend.db import db
     from backend.directory import resolve_directory_entry

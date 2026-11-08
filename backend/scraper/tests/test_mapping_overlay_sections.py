@@ -1,8 +1,8 @@
-"""Sections of data/mapping_overlays.json: renumbered, remove_mappings, qatar_visibility.
+"""Sections of backend/data/mapping_overlays.json: renumbered, remove_mappings, qatar_visibility.
 
 Small synthetic catalogs check each section, the order they run in and that a
 second run changes nothing. The last tests check the real overlay file against
-data/courses.json.
+frontend/data/courses.json.
 """
 import copy
 import json
@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
 import apply_mapping_overlays as amo  # noqa: E402
+from pipeline_paths import COURSES_JSON, MAPPING_OVERLAYS_JSON  # noqa: E402
 from apply_mapping_overlays import (  # noqa: E402
     OverlayError,
     apply_file,
@@ -301,12 +301,12 @@ def test_apply_file_twice_gives_identical_file(tmp_path):
 
 # ── the real overlay file ────────────────────────────────────
 
-OVERLAY_DOC = json.loads((ROOT / "data" / "mapping_overlays.json").read_text(encoding="utf-8"))
+OVERLAY_DOC = json.loads(MAPPING_OVERLAYS_JSON.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def real_courses():
-    data = json.loads((ROOT / "data" / "courses.json").read_text(encoding="utf-8"))
+    data = json.loads(COURSES_JSON.read_text(encoding="utf-8"))
     return data["courses"] if isinstance(data, dict) else data
 
 

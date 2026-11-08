@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Merge SOC scrape output into data/courses.json offerings and campus flags."""
+"""Merge SOC scrape output into frontend/data/courses.json offerings and campus flags."""
 from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from json_io import load_json, save_json  # noqa: E402
+from pipeline_paths import COURSES_JSON, SOC_JSON  # noqa: E402
 from soc_parse import (  # noqa: E402
     apply_campus_fix,
     build_offering,
@@ -26,8 +26,8 @@ from soc_parse import (  # noqa: E402
     usable_sections,
 )
 
-SOC_PATH = os.environ.get("SOC_JSON_PATH", str(ROOT / "data" / "soc.json"))
-COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(ROOT / "data" / "courses.json"))
+SOC_PATH = os.environ.get("SOC_JSON_PATH", str(SOC_JSON))
+COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(COURSES_JSON))
 
 
 

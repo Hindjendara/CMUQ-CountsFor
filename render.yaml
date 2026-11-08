@@ -35,7 +35,7 @@ services:
       - key: FRONTEND_ORIGIN
         value: https://adicmu.github.io,https://hindjendara.github.io,http://localhost:8765
       - key: SEED_USERS_PATH
-        value: data/faculty_directory.json
+        value: backend/data/faculty_directory.json
       # ── Password-reset email. Configure ONE provider in the dashboard (see
       #    README.md section 6, "Email behaviour summary"). Until then the forgot view
       #    steers users to Google recovery — nothing looks broken.

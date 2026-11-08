@@ -3,8 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "data"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
 from reconcile_offerings import reconcile_file, resolve_catalog_soc_offerings  # noqa: E402
 

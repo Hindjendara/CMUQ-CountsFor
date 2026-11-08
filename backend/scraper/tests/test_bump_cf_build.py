@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "bump_cf_build.py"
+_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "bump_cf_build.py"
 _spec = importlib.util.spec_from_file_location("bump_cf_build", _SCRIPT)
 bump_cf_build = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bump_cf_build)
@@ -53,8 +53,7 @@ def test_bump_keeps_crlf_line_endings(tmp_path):
 
 
 def test_bump_real_app_html_on_a_copy(tmp_path):
-    root = _SCRIPT.parent.parent
     app = tmp_path / "app.html"
-    app.write_bytes((root / "app.html").read_bytes())
+    app.write_bytes(bump_cf_build.APP_HTML.read_bytes())
     bump_cf_build.bump("soc-copy", app_html=app, index_html=tmp_path / "none.html")
     assert '<meta name="cf-build" content="soc-copy"' in app.read_text(encoding="utf-8")

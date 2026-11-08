@@ -1,11 +1,12 @@
-// Runs the browser JS tests (tests/test.html) under Node.
+// Runs the browser JS tests (frontend/tests/test.html) under Node.
 // Loads the same files in the same order as test.html, with an in-memory
 // localStorage/sessionStorage so the profile save/load tests work.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const ROOT = path.join(__dirname, '..');
+// The site root: js/, tests/ and the HTML pages live under frontend/.
+const ROOT = path.join(__dirname, '..', 'frontend');
 
 class MemoryStorage {
   constructor() { this._data = new Map(); }

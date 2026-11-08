@@ -35,19 +35,19 @@ jobs:
         run: python -m pip install --quiet pytest
 
       - name: Run SOC parser tests
-        run: python -m pytest data/tests/test_scrape_soc.py data/tests/test_soc_parse.py -q
+        run: python -m pytest backend/scraper/tests/test_scrape_soc.py backend/scraper/tests/test_soc_parse.py -q
 
       - name: Run SOC scraper
-        run: python data/scrape_soc.py
+        run: python backend/scraper/scrape_soc.py
 
       - name: Reconcile offerings into bundled course data
-        run: python data/reconcile_offerings.py
+        run: python backend/scraper/reconcile_offerings.py
 
       - name: Apply manual requirement mapping overlays
-        run: python data/apply_mapping_overlays.py
+        run: python backend/scraper/apply_mapping_overlays.py
 
       - name: Validate SOC coverage in CountsFor catalog
-        run: python data/validate_soc_coverage.py
+        run: python backend/scraper/validate_soc_coverage.py
 
       - name: Bump frontend cache tag for fresh courses.json
         run: python scripts/bump_cf_build.py
@@ -57,7 +57,7 @@ jobs:
         run: |
           git config user.name  "soc-bot"
           git config user.email "soc-bot@users.noreply.github.com"
-          git add data/soc.json data/courses.json app.html
+          git add backend/data/soc.json frontend/data/courses.json frontend/app.html
           if git diff --staged --quiet; then
             echo "No changes — nothing to commit."
             echo "pushed=false" >> "$GITHUB_OUTPUT"

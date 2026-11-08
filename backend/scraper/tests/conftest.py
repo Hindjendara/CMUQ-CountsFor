@@ -1,4 +1,4 @@
-"""Ensure data/ is on sys.path for soc_parse imports."""
+"""Put backend/scraper/ on sys.path so tests import the pipeline scripts as top-level modules."""
 import sys
 from pathlib import Path
 

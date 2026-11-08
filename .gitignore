@@ -7,13 +7,18 @@ node_modules/
 CONTEXT.md
 
 # Backend artifacts — Flask instance dir, local SQLite, env files, caches
+backend/instance/
 instance/
+backend/var/
 *.db
 .env
 __pycache__/
 .pytest_cache/
 backend/.venv/
 .venv/
+
+# Precompressed copies of the served catalog (made on the server, never committed)
+frontend/data/*.gz
 
 # Local design source assets — not referenced by the app
 Branding Assets/

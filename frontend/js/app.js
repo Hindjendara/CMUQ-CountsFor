@@ -2216,7 +2216,7 @@ const App = {
     if (course.offered_qatar) whereParts.push('Qatar');
     if (course.offered_pitts) whereParts.push('Pittsburgh');
     const whereStr = whereParts.length ? whereParts.join(' &amp; ') : 'Not listed';
-    // Retired numbers this course replaced (data/mapping_overlays.json "renumbered").
+    // Retired numbers this course replaced (backend/data/mapping_overlays.json "renumbered").
     const previousCodes = Array.isArray(course.previous_codes) ? course.previous_codes.filter(Boolean) : [];
 
     // Slim DC banner (spec § 4.4) — student lens only; faculty get the full

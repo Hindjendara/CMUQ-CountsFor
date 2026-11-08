@@ -2,7 +2,7 @@
 
 Reads are public so every visitor sees the corrected catalog; writes are admin only.
 Edits are stored as overrides because the daily SOC scrape regenerates
-data/courses.json and would otherwise erase them.
+frontend/data/courses.json and would otherwise erase them.
 """
 from __future__ import annotations
 

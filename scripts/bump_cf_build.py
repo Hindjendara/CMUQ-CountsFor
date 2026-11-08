@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump cf-build / ?v= cache-bust tags in app.html and index.html.
+"""Bump cf-build / ?v= cache-bust tags in frontend/app.html and frontend/index.html.
 
 app.html carries the cf-build meta (also the cache tag for data/courses.json);
 index.html loads utils.js and api.js too, so its ?v= tags move with it.
@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_HTML = ROOT / "app.html"
-INDEX_HTML = ROOT / "index.html"
+APP_HTML = ROOT / "frontend" / "app.html"
+INDEX_HTML = ROOT / "frontend" / "index.html"
 _V_RE = re.compile(r"\?v=[^\"']+")
 _META_RE = re.compile(r'(<meta name="cf-build" content=")[^"]+(")')
 

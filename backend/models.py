@@ -440,7 +440,7 @@ class AdminAuditEvent(db.Model):
 
 
 class CourseOverride(db.Model):
-    """Admin edits layered over the scraped catalog (data/courses.json).
+    """Admin edits layered over the scraped catalog (frontend/data/courses.json).
 
     The daily scrape rewrites the catalog file, so manual changes live here and
     the frontend applies them after loading it. One row per course, keyed by the

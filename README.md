@@ -4,7 +4,7 @@ A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Studen
 
 **Live site:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) · **API:** `https://countsfor-summer-26.onrender.com` · **Repo:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26)
 
-**Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short: create a virtualenv and `pip install -r requirements.txt`, run the API with `python -m backend.app` (port 5050), serve the site with `python3 -m http.server 8765`, and open `http://localhost:8765/`.
+**Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short: create a virtualenv and `pip install -r requirements.txt`, run the API with `python -m backend.app` (port 5050), serve the site with `python3 -m http.server 8765 --directory frontend`, and open `http://localhost:8765/`.
 
 ## About this README
 
@@ -59,7 +59,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 
 - **Aditya Vivek** (GitHub `Adicmu`): original author and owner of the main repo `Adicmu/Countsfor-Summer-26`. CMU-Q student.
 - **Hind Jendara** (GitHub `Hindjendara`): co-developer. Owns the fork `Hindjendara/Countsfor-Summer-26` (git remote `hind`). AI and GS requirement data was expected to come from her (see `js/data.js` line 16).
-- CMU-Q faculty, area heads and advisors: the faculty directory in `data/faculty_directory.json` (65 people scraped from the public CMU-Q People page) decides who gets faculty access.
+- CMU-Q faculty, area heads and advisors: the faculty directory in `backend/data/faculty_directory.json` (65 people scraped from the public CMU-Q People page) decides who gets faculty access.
 - CMU-Q IT: owns the `countsfor.qatar.cmu.edu` hostname (see [15.4](#154-countsforqatarcmuedu)).
 - Upstream data source: the course-to-requirement mappings originally came from the older open-source project [open-cmuq/CountsFor](https://github.com/open-cmuq/CountsFor) (credited in `README.md`).
 
@@ -82,15 +82,15 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **GenEd** | General Education. University core requirements every student in a major must satisfy (humanities, cultural analysis and so on). `splitTreeSections()` treats top-level nodes named `GenEd` or containing `University Core`, `EY2022`, `EY2024` as GenEd. |
 | **Majors** | `CS` Computer Science, `IS` Information Systems, `BA` Business Administration, `BS` Biological Sciences. Live in `MAJOR_ORDER`. Scaffolded but not live: `AI`, `GS`. |
 | **`AS`** | "Arts & Sciences". Not a major. A grouping used as the `primary_program` of cross-program faculty and as the default program for directory entries (`DEFAULT_DIRECTORY_PROGRAM = "AS"`). Students can never pick it. |
-| **Minors** | Codes in `VALID_MINORS_FOR_PATCH` (`backend/auth.py`) and `MINOR_LIST` (`js/profile.js`): arabic, biology, business, cs, economics, finance, history, math, neuroscience, product, writing, psychology, sociology, self_defined, tech_entre. Course lists per minor are in `data/minor_courses.json` (only `business` and `cs` are populated). A student cannot take a minor in their own major field (`MAJOR_MINOR_COLLISION`). |
+| **Minors** | Codes in `VALID_MINORS_FOR_PATCH` (`backend/auth.py`) and `MINOR_LIST` (`js/profile.js`): arabic, biology, business, cs, economics, finance, history, math, neuroscience, product, writing, psychology, sociology, self_defined, tech_entre. Course lists per minor are in `frontend/data/minor_courses.json` (only `business` and `cs` are populated). A student cannot take a minor in their own major field (`MAJOR_MINOR_COLLISION`). |
 | **Role** | Exact title stored on the user: `student`, `professor`, `area_head`, `associate_area_head`, `advisor`, `admin`. |
 | **Role group** | Permission bucket computed by `User.role_group()`: `student`, `faculty` (the four faculty titles), `admin`. **All permission checks use role groups**, except a few student-only routes that use the exact role. |
 | **Directory** | The list of people who get faculty or admin access. Two layers: a JSON seed file (static) plus the `directory_entries` table (editable, wins on conflict). Your role is recomputed from the directory **on every sign-in**. |
 | **Flag** | A data-problem report a faculty member files against a course (reason codes in `backend/flags.py`). Statuses: `pending`, `reviewed`, `resolved`, `dismissed`. |
 | **Wishlist / Saved** | A student's saved courses with optional notes (`wishlist_items`). The UI calls it "Saved". |
 | **Plan / schedule plan** | A weekly schedule built from course sections. Stored in browser localStorage; the server only stores shared copies. |
-| **Override** | An admin edit to the course catalog stored in the database (`course_overrides`) and applied in the browser on top of the scraped `data/courses.json`. |
-| **Mapping overlay** | A manual complement to the SOC scrape in `data/mapping_overlays.json` (additive mappings, renumbered courses, mapping removals, Qatar visibility), applied to the catalog file by the scrape pipeline. |
+| **Override** | An admin edit to the course catalog stored in the database (`course_overrides`) and applied in the browser on top of the scraped `frontend/data/courses.json`. |
+| **Mapping overlay** | A manual complement to the SOC scrape in `backend/data/mapping_overlays.json` (additive mappings, renumbered courses, mapping removals, Qatar visibility), applied to the catalog file by the scrape pipeline. |
 | **Demo mode / guest mode** | Running the frontend without a signed-in user. Everything is local to the browser. |
 | **Render** | The hosting company that runs the Flask backend and its Postgres database. |
 | **GitHub Pages** | Static hosting for the frontend. |
@@ -116,8 +116,8 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
                           +-----------+-------------------+-----------+
                                       |                   |
              static files (same origin)                   | JSON over HTTPS, cross origin
-             data/courses.json  (~24 MB)                  | credentials: include
-             data/minor_courses.json                      | Authorization: Bearer <token>
+             frontend/data/courses.json  (~24 MB)         | credentials: include
+             frontend/data/minor_courses.json             | Authorization: Bearer <token>
                                       |                   v
           +---------------------------+---+   +-----------------------------------+
           | GitHub Pages                  |   | Render web service (Flask)        |
@@ -142,9 +142,9 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 ### 3.2 Key ideas
 
 1. **Zero-build frontend.** Plain HTML, CSS and JavaScript. No npm, no bundler, no framework. Files are loaded with `<script>` tags in a fixed order and share globals. What is in the repo is exactly what is served.
-2. **The course catalog is a static file.** `data/courses.json` (6,385 courses, about 24 MB) is downloaded by the browser on every app load. The backend does not serve course data. The daily scrape workflow rewrites this file and commits it.
+2. **The course catalog is a static file.** `frontend/data/courses.json` (6,385 courses, about 24 MB) is downloaded by the browser on every app load. The backend does not serve course data. The daily scrape workflow rewrites this file and commits it.
 3. **The backend stores people and their activity**: users, roles, directory, flags, saved courses, shared plans, search counts, admin catalog edits and the audit log.
-4. **Admin catalog edits are layered on top of the static file in the browser** (`applyCourseOverrides()` in `js/data.js`), because the scrape would overwrite any edit made directly in `data/courses.json`. See [section 12](#12-course-overrides-admin-catalog-edits).
+4. **Admin catalog edits are layered on top of the static file in the browser** (`applyCourseOverrides()` in `js/data.js`), because the scrape would overwrite any edit made directly in `frontend/data/courses.json`. See [section 12](#12-course-overrides-admin-catalog-edits).
 5. **Security lives on the backend.** The UI hides buttons based on role, but every protected route checks the role group server side.
 
 ### 3.3 Where the frontend finds things
@@ -153,10 +153,10 @@ There are two different "base URLs" in `js/api.js`. Do not confuse them.
 
 | Constant / function | Used for | Value / logic |
 |---|---|---|
-| `LOCAL_DATA` | The course catalog | `data/courses.json` with `?v=<cf-build meta>` appended by `_bundledDataUrl()` |
+| `LOCAL_DATA` | The course catalog | `frontend/data/courses.json` with `?v=<cf-build meta>` appended by `_bundledDataUrl()` |
 | `getBackendUrl()` / `CF_BACKEND_URL` | **The Flask backend** (all `/api/...` calls) | See resolution order below |
 
-`fetchAllCourses()` loads only the bundled `data/courses.json`. There is no remote fallback: if the file cannot be loaded or has no courses, it throws and `App.loadData()` shows "Failed to load data".
+`fetchAllCourses()` loads only the bundled `frontend/data/courses.json`. There is no remote fallback: if the file cannot be loaded or has no courses, it throws and `App.loadData()` shows "Failed to load data".
 
 `getBackendUrl()` resolution order (in `js/api.js`, used by both pages):
 
@@ -180,7 +180,7 @@ There are two different "base URLs" in `js/api.js`. Do not confuse them.
 | Environment | Database | How it is chosen |
 |---|---|---|
 | Production (Render) | Postgres, Render database `CountsFor_Summer_2026` (region Ohio) | `DATABASE_URL` linked from the database in `render.yaml`. `config.py` refuses to start without it when `RENDER=true` or `FLASK_ENV=production`. |
-| Local | SQLite file | Any relative `sqlite:///name.db` URL is rewritten to `<repo>/instance/name.db`. With no `DATABASE_URL` at all, local dev also falls back to `<repo>/instance/countsfor.db`. |
+| Local | SQLite file | Any relative `sqlite:///name.db` URL is rewritten to `backend/instance/name.db`. With no `DATABASE_URL` at all, local dev also falls back to `backend/instance/countsfor.db`. |
 | Tests | In-memory SQLite | `TestConfig.SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"` |
 
 Supabase was once considered as an alternative Postgres host. Nothing in the code is Supabase specific; it would work with any Postgres URL. There is no evidence that Supabase is used in production today.
@@ -193,31 +193,34 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 
 | Path | Tracked in git? | What it is | Status |
 |---|---|---|---|
-| `index.html` | yes | Landing page: sign in, create account, forgot and reset password, "Continue as guest". Loads `js/utils.js`, `js/api.js` and `js/landing.js`. | Live |
-| `app.html` | yes | Main app shell. Loads `utils.js`, `data.js`, `profile.js`, `api.js`, `app.js` in that order. Holds the `cf-build` cache tag, backend URL meta and Google client ID meta. | Live |
-| `reset.html` | yes | Redirect stub to `index.html` keeping the query string (old reset links). | Keep |
-| `landing/index.html` | yes | Redirect stub to `../index.html`. | Keep (old links) |
-| `landing/DESIGN_NOTES.md` | yes | Landing design notes. | Reference only |
+| `frontend/index.html` | yes | Landing page: sign in, create account, forgot and reset password, "Continue as guest". Loads `js/utils.js`, `js/api.js` and `js/landing.js`. | Live |
+| `frontend/app.html` | yes | Main app shell. Loads `utils.js`, `data.js`, `profile.js`, `api.js`, `app.js` in that order. Holds the `cf-build` cache tag, backend URL meta and Google client ID meta. | Live |
+| `frontend/reset.html` | yes | Redirect stub to `index.html` keeping the query string (old reset links). | Keep |
+| `frontend/landing/index.html` | yes | Redirect stub to `../index.html`. | Keep (old links) |
+| `docs/landing-DESIGN_NOTES.md` | yes | Landing design notes. | Reference only |
 | `.nojekyll` | yes | Tells GitHub Pages to serve files as-is. | Keep |
-| `js/` | yes | All frontend logic. See [section 8](#8-frontend-walkthrough). | Live |
-| `css/styles.css` | yes | App styles, about 5,500 lines, light and dark tokens at the top. | Live |
-| `css/landing.css` | yes | Landing page styles. | Live |
-| `assets/img/` | yes | Scotty and CMU artwork used by the landing and navbar, plus the two favicons (`scotty-portrait.png` for the landing, `scotty-standing.png` for the app). | Live |
+| `frontend/js/` | yes | All frontend logic. See [section 8](#8-frontend-walkthrough). | Live |
+| `frontend/css/styles.css` | yes | App styles, about 5,500 lines, light and dark tokens at the top. | Live |
+| `frontend/css/landing.css` | yes | Landing page styles. | Live |
+| `frontend/assets/img/` | yes | Scotty and CMU artwork used by the landing and navbar, plus the two favicons (`scotty-portrait.png` for the landing, `scotty-standing.png` for the app). | Live |
 | `backend/` | yes | Flask API. See [section 9](#9-backend-walkthrough). | Live |
-| `data/` | yes | Catalog JSON files and the scrape pipeline scripts. See [section 14](#14-data-pipeline-soc-scrape). | Live |
-| `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `app.html`, and every `?v=` tag in `index.html`. Run by the scrape workflow. | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `tests/profile.test.js`, `tests/data.test.js` and `tests/utils.test.js`, with an in-memory `localStorage`, plus the Node-only `tests/dash-guard.test.js` and `tests/app-views.test.js`. | Live |
-| `tests/` | yes | Browser test page (`tests/test.html`) and JS unit tests. | Live |
+| `frontend/data/` | yes | Served catalog: `courses.json`, `minor_courses.json`. See [4.3](#43-frontenddata-backenddata-and-backendscraper). | Live |
+| `backend/data/` | yes | Private data, never served: `soc.json`, `mapping_overlays.json`, `faculty_directory.json`, `directory_admins.json`, `minors/`. | Live |
+| `backend/scraper/` | yes | The scrape pipeline scripts and their pytest tests. See [section 14](#14-data-pipeline-soc-scrape). | Live |
+| `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `frontend/app.html`, and every `?v=` tag in `frontend/index.html`. Run by the scrape workflow. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `frontend/tests/data.test.js` and `frontend/tests/utils.test.js`, with an in-memory `localStorage`, plus the Node-only `frontend/tests/dash-guard.test.js` and `frontend/tests/app-views.test.js`. | Live |
+| `frontend/tests/` | yes | Browser test page (`frontend/tests/test.html`) and JS unit tests. Not deployed. | Live |
+| `pytest.ini` | yes | Runs `backend/tests` and `backend/scraper/tests` with `python -m pytest` from the repo root. | Live |
 | `.github/workflows/` | yes | `scrape.yml`, `pages.yml`, `keepalive.yml`. | Live |
 | `render.yaml` | yes | Render Blueprint for the backend and database. | Live |
 | `requirements.txt` | yes | One line: `-r backend/requirements.txt`. Render installs from the repo root. | Live |
 | `runtime.txt` | yes | `python-3.11.9`. | Live |
 | `README.md` | yes | This manual. | Keep current |
 | `docs/` | yes | `docs/analytics-plan/` (the team analytics plan, HTML source and PDF) and `docs/archive/` (sprint plans, proposals, progress report, wireframes, UX review and design specs from 2026; history only, not current truth). | Reference |
-| `Testing/` | yes | A tiny mock SOC Flask server for testing the scraper offline (`Testing/app.py`, `Testing/readMe`). Its readme references `scraper/scrape_soc.py`, which is now `data/scrape_soc.py`. | Legacy but usable |
+| `Testing/` | yes | A tiny mock SOC Flask server for testing the scraper offline (`Testing/app.py`, `Testing/readMe`). Its readme references `scraper/scrape_soc.py`, which is now `backend/scraper/scrape_soc.py`. | Legacy but usable |
 | `CONTEXT.md` | **no** (gitignored) | A long "complete project context" doc that exists only on the original author's laptop. A successor cloning the repo will not have it. | Local only |
 | `server.log` | no (gitignored) | Local log file. | Local only |
-| `instance/` | no (gitignored) | Local SQLite databases. | Local only |
+| `backend/instance/` | no (gitignored) | Local SQLite databases (before November 2026 they were in `instance/` at the repo root; move an old `countsfor.db` there). | Local only |
 | `Branding Assets/` | no (gitignored) | Design source files. | Local only |
 | `.venv/`, `backend/.venv/` | no | Local Python virtual environments. | Local only |
 | `.claude/`, `.superpowers/` | no | AI assistant working folders, including a git worktree `.claude/worktrees/role-aware-onboarding`. | Local only |
@@ -235,7 +238,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `bootstrap_db.py` | `python -m backend.bootstrap_db`: create tables, run migrations, verify required tables. Render pre-deploy command. |
 | `permissions.py` | `require_login`, `require_role_group`, `require_role`, `current_user`, user loading from cookie or bearer token. |
 | `tokens.py` | Bearer token sign and verify. |
-| `cmu.py` | The one backend CMU email check: `normalize_cmu_email()` (accepts `andrew.cmu.edu`, `cmu.edu`, `qatar.cmu.edu`, always returns `@andrew.cmu.edu`, rejects an empty local part, whitespace or a second `@`; same rules as `normalizeCmuEmail()` in `js/utils.js`) and `email_in_domain()` (the `ALLOWED_EMAIL_DOMAIN` check). Also seed file helpers. Used by `auth.py`, `directory.py`, `directory_routes.py` and `plans.py`. |
+| `cmu.py` | The one backend CMU email check: `normalize_cmu_email()` (accepts `andrew.cmu.edu`, `cmu.edu`, `qatar.cmu.edu`, always returns `@andrew.cmu.edu`, rejects an empty local part, whitespace or a second `@`; same rules as `normalizeCmuEmail()` in `frontend/js/utils.js`) and `email_in_domain()` (the `ALLOWED_EMAIL_DOMAIN` check). Also seed file helpers. Used by `auth.py`, `directory.py`, `directory_routes.py` and `plans.py`. |
 | `auth.py` | Register, login, forgot and reset password, set password, Google sign-in, logout, `GET/PATCH /api/me`, role and profile validation. |
 | `directory.py` | Directory lookup logic (DB first, then JSON seed). |
 | `directory_routes.py` | `/api/directory/...` routes. |
@@ -258,7 +261,9 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `README.md` | Points to this manual. |
 | `tests/` | Pytest suite. |
 
-### 4.3 `data/`
+### 4.3 `frontend/data/`, `backend/data/` and `backend/scraper/`
+
+The served catalog (`courses.json`, `minor_courses.json`) is in `frontend/data/`. The private data files (`soc.json`, `mapping_overlays.json`, `faculty_directory.json`, `directory_admins.json`, the official minor files in `minors/`) are in `backend/data/`. The scripts and their `tests/` are in `backend/scraper/`; `pipeline_paths.py` there holds the default file locations, derived from the script folder, so the scripts work from any working directory.
 
 | File | Purpose |
 |---|---|
@@ -266,7 +271,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 23 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
 | `mapping_overlays.json` | The one place for manual complements to the SOC scrape (14.4): `renumbered` (6 retired Psychology numbers), `overlays` (additive mappings, 21 entries as of Nov 2026, including the H&SS Course Offerings sheet), `remove_mappings` (85-414, 85-426) and `qatar_visibility` (85-100). |
 | `minor_courses.json` | Course lists per minor (only `business` and `cs` populated). Loaded by `fetchMinorCourses()`. |
-| `faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. Used as the directory seed in production (`SEED_USERS_PATH=data/faculty_directory.json` in `render.yaml`). |
+| `faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. Used as the directory seed in production (`SEED_USERS_PATH=backend/data/faculty_directory.json` in `render.yaml`). |
 | `scrape_soc.py` | Scraper. Splits each results table into rows on `</tr>` (only the first row of each course opens with `<tr>`), maps table cells by the `<th>` header (summer pages have an extra Session column), strips the "This Section Cancelled" note from titles and marks those sections cancelled. |
 | `soc_parse.py`, `soc_departments.py` | Shared parsing helpers. `soc_parse.clean_soc_title()` cleans titles already stored in `soc.json` (cancelled note, " : subtitle", trailing ": TBA") and returns `None` when nothing usable is left. |
 | `json_io.py` | Shared `load_json` and `save_json` helpers for the pipeline scripts. |
@@ -324,7 +329,7 @@ cp backend/.env.example backend/.env
 Then edit `backend/.env`:
 
 - `SECRET_KEY`: any long random string locally. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-- `DATABASE_URL=sqlite:///countsfor.db` (becomes `<repo>/instance/countsfor.db`).
+- `DATABASE_URL=sqlite:///countsfor.db` (becomes `backend/instance/countsfor.db`).
 - `FRONTEND_ORIGIN=http://localhost:8765` (must match the port you serve the frontend on).
 - `EXPOSE_RESET_TOKEN=1` (lets you test password reset without email).
 - Leave `FLASK_ENV` unset. Setting it to `production` makes `config.py` refuse SQLite and crash at import.
@@ -355,7 +360,7 @@ flask --app 'backend.app:create_app()' run --port 5050
 In a second terminal, from the repo root:
 
 ```bash
-python3 -m http.server 8765
+python3 -m http.server 8765 --directory frontend
 ```
 
 Open `http://localhost:8765/`. Use port **8765** unless you also change `FRONTEND_ORIGIN`. Any other port is rejected by CORS and the UI says it "could not reach the server".
@@ -388,7 +393,7 @@ location.reload();
 | Name | Required? | Default | Purpose |
 |---|---|---|---|
 | `SECRET_KEY` | **Yes in production** | `dev-only-change-me` | Signs the session cookie and the bearer `auth_token`. Changing it signs everyone out. Render generates it (`generateValue: true`). |
-| `DATABASE_URL` | **Yes on Render or when `FLASK_ENV=production`** | none (local falls back to `sqlite:///<repo>/instance/countsfor.db`) | SQLAlchemy URL. `postgres://` is rewritten to `postgresql://`. Relative SQLite paths are anchored to `<repo>/instance/`. |
+| `DATABASE_URL` | **Yes on Render or when `FLASK_ENV=production`** | none (local falls back to `sqlite:///backend/instance/countsfor.db`) | SQLAlchemy URL. `postgres://` is rewritten to `postgresql://`. Relative SQLite paths are anchored to `backend/instance/`. |
 | `RENDER` | Set by Render | unset | When `true`: production cookie settings, and the app refuses to start without `DATABASE_URL`. |
 | `FLASK_ENV` | Yes on Render (`production` in `render.yaml`) | `development` | `production` turns on Secure, `SameSite=None` cookies and forbids SQLite. Never set it locally. |
 | `ALLOW_SQLITE` | No | unset | Mentioned in `.env.example` and docs, but **has no effect**: outside production SQLite is always allowed, and in production it is always refused. |
@@ -397,7 +402,7 @@ location.reload();
 | `GOOGLE_CLIENT_ID` | Yes for Google sign-in | empty | OAuth web client ID used to verify Google ID tokens. Not a secret. Must match the `cf-google-client-id` meta tag. |
 | `ALLOWED_EMAIL_DOMAIN` | No | empty (any CMU domain) | If set (production uses `andrew.cmu.edu`), only that domain may sign in. Note that `normalize_cmu_email()` already rewrites `cmu.edu` and `qatar.cmu.edu` to `andrew.cmu.edu` and rejects all non-CMU addresses. |
 | `ADMIN_EMAILS` | No | empty | **Ignored by sign-in.** Kept only so old deploy configs do not break. Admin comes only from the directory. |
-| `SEED_USERS_PATH` | No | `backend/seed_users.json` | JSON directory seed. Production uses `data/faculty_directory.json`. Relative paths are resolved against the current directory, `backend/`, then the repo root. |
+| `SEED_USERS_PATH` | No | `backend/seed_users.json` | JSON directory seed. Production uses `backend/data/faculty_directory.json`. Relative paths are resolved against the current directory, `backend/`, then the repo root. |
 | `RESET_TOKEN_MINUTES` | No | `30` | Password reset link lifetime. |
 | `FRONTEND_RESET_BASE` | No | empty | Base URL for reset links in emails. Production: `https://adicmu.github.io/Countsfor-Summer-26/index.html`. If empty, falls back to `PUBLIC_APP_URL`, then to the first `FRONTEND_ORIGIN` plus `/index.html`. |
 | `PUBLIC_APP_URL` | No | empty | Fallback for `FRONTEND_RESET_BASE`. |
@@ -426,11 +431,11 @@ Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither R
 | `SOC_BASE_URL` | `scrape_soc.py` | `https://enr-apps.as.cmu.edu/open/SOC/SOCServlet` | Point at `Testing/app.py` mock for offline tests. |
 | `MIN_COURSES_FOR_VALID_SCRAPE` | same | `100` | Below this a semester scrape is treated as failed. |
 | `MIN_COURSES_FOR_SUMMER_SCRAPE` | `scrape_soc.py` | `10` | Lower threshold for summer terms. |
-| `SOC_OUTPUT_PATH` | `scrape_soc.py` | `data/soc.json` | Output file. |
+| `SOC_OUTPUT_PATH` | `scrape_soc.py` | `backend/data/soc.json` (found from the script, not the working directory) | Output file. |
 | `SEMESTERS_TO_TRY` | `soc_departments.py` | from the SOC form | Comma list override of semesters. |
-| `SOC_JSON_PATH`, `COURSES_JSON_PATH` | reconcile and validate | `data/soc.json`, `data/courses.json` | File locations. |
-| `CATALOG_PATHS` | `apply_mapping_overlays.py` | `data/courses.json` | Semicolon list of catalogs to patch. |
-| `MAPPING_OVERLAYS_PATH` | `apply_mapping_overlays.py`, `validate_soc_coverage.py` | `data/mapping_overlays.json` | Overlay file location. |
+| `SOC_JSON_PATH`, `COURSES_JSON_PATH` | reconcile and validate | `backend/data/soc.json`, `frontend/data/courses.json` | File locations. |
+| `CATALOG_PATHS` | `apply_mapping_overlays.py` | `frontend/data/courses.json` | Semicolon list of catalogs to patch. |
+| `MAPPING_OVERLAYS_PATH` | `apply_mapping_overlays.py`, `validate_soc_coverage.py` | `backend/data/mapping_overlays.json` | Overlay file location. |
 
 ### 6.3 Frontend configuration (no env vars, all in HTML)
 
@@ -438,7 +443,7 @@ Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither R
 |---|---|
 | `<meta name="cf-backend-url">` in `index.html` and `app.html` | Production backend URL. |
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
-| `<meta name="cf-build">` in `app.html` | Cache tag appended to `data/courses.json`. Bumped by `scripts/bump_cf_build.py`. |
+| `<meta name="cf-build">` in `app.html` | Cache tag appended to `frontend/data/courses.json`. Bumped by `scripts/bump_cf_build.py`. |
 | `?v=...` on script and CSS tags | Manual cache busting. `app.html` tags are bumped by the script; `index.html` tags (`?v=home-copy-2026-08-22`) are not and must be bumped by hand. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override. |
 
@@ -451,7 +456,7 @@ Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither R
 On **every** sign-in (`register`, `login`, `google`, `email`), the backend calls `_sync_directory_profile(user, email)`:
 
 1. Look up the email in the `directory_entries` table. If found, use that row.
-2. Otherwise look in the JSON seed. `_load_json_directory()` tries, in order, `SEED_USERS_PATH`, `backend/seed_users.json`, `backend/faculty_seed.json`, `data/faculty_directory.json`, and **uses the first file that exists and has rows** (files are not merged). Then `data/directory_admins.json` (path set by `ADMIN_SEED_PATH`; empty string disables it) is layered on top, so the admins listed there win over the faculty seed. It is a separate file because `data/scrape_faculty_directory.py` rewrites `faculty_directory.json` from scratch.
+2. Otherwise look in the JSON seed. `_load_json_directory()` tries, in order, `SEED_USERS_PATH`, `backend/seed_users.json`, `backend/faculty_seed.json`, `backend/data/faculty_directory.json`, and **uses the first file that exists and has rows** (files are not merged). Then `backend/data/directory_admins.json` (path set by `ADMIN_SEED_PATH`; empty string disables it) is layered on top, so the admins listed there win over the faculty seed. It is a separate file because `backend/scraper/scrape_faculty_directory.py` rewrites `faculty_directory.json` from scratch.
 3. If a row is found: `role` comes from it (`admin` sets `is_admin`), and `name`, `primary_program`, `department`, `department_scope`, `picture_url` are copied when present. Minors are cleared.
 4. If no row is found: the user becomes `student`, `is_admin = False`.
 
@@ -494,7 +499,7 @@ Pick one:
 ]
 ```
 
-Then sign out and sign in again (or create the account now). Because the first non-empty seed file wins, while `backend/seed_users.json` exists `data/faculty_directory.json` is ignored locally.
+Then sign out and sign in again (or create the account now). Because the first non-empty seed file wins, while `backend/seed_users.json` exists `backend/data/faculty_directory.json` is ignored locally.
 
 **Option B, point at a throwaway seed:** set `SEED_USERS_PATH=/absolute/path/to/my_seed.json` in `backend/.env`.
 
@@ -752,7 +757,7 @@ When a signed-in **student** opens a course, the frontend posts `/api/search-ana
 
 - `record_event(actor, action, target, **details)` adds an `admin_audit_events` row to the current session; the caller's commit saves it together with the change.
 - Actions written today: `user.update`, `directory.add`, `directory.update`, `directory.remove`, `directory.revoke`, `flag.status`, `flag.note`, `course.add`, `course.update`, `course.revert`, `course.archive`, `course.restore`.
-- `GET /api/admin/overview`: user counts by role and group, new users in 7 and 30 days, active in 7 days (by `last_login`), incomplete profiles, flag counts by status, wishlist totals, plan count, total course lookups, directory row count, `course_data.last_scrape` (read from the top of `data/soc.json` **on the server**, so it reflects the copy of the repo Render deployed, not GitHub Pages), six most recent signups.
+- `GET /api/admin/overview`: user counts by role and group, new users in 7 and 30 days, active in 7 days (by `last_login`), incomplete profiles, flag counts by status, wishlist totals, plan count, total course lookups, directory row count, `course_data.last_scrape` (read from the top of `backend/data/soc.json` **on the server**, so it reflects the copy of the repo Render deployed, not GitHub Pages), six most recent signups.
 - `GET /api/admin/insights?semester=F26`: top lookups, top lookups per program, most saved, most flagged, students per program, signups per week for 12 weeks, list of semesters with data.
 - `GET /api/admin/sign-ins?days=7|30|90`: sign-in activity (active people, sign-ins, app opens, daily series, breakdowns, per-person table). See section 13.
 - `GET /api/admin/activity?action=course.&page=1&limit=50`: paginated audit log; `action` is a prefix match (a trailing `*` is ignored).
@@ -863,7 +868,7 @@ Since November 3, 2026 production `/health` reports `"tables": 14` (the admin pa
 
 ### 12.1 Why they exist
 
-`data/courses.json` is regenerated from the SOC by a bot and committed to git. Any manual edit to that file would be overwritten by the next scrape. So admin edits are stored in the `course_overrides` table and applied by the browser after it loads the file.
+`frontend/data/courses.json` is regenerated from the SOC by a bot and committed to git. Any manual edit to that file would be overwritten by the next scrape. So admin edits are stored in the `course_overrides` table and applied by the browser after it loads the file.
 
 ### 12.2 Data model
 
@@ -946,26 +951,28 @@ Store counts, not behaviour: no IP addresses, user agents, locations or per-pers
 
 Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. Only runs when `github.repository == 'Adicmu/Countsfor-Summer-26'`.
 
-1. `python -m pytest data/tests/test_scrape_soc.py data/tests/test_soc_parse.py -q`
-2. `python data/scrape_soc.py`: scrapes every semester on the SOC form for Pittsburgh and Qatar, all departments, writes `data/soc.json` only if the scrape is non-empty and above `MIN_COURSES_FOR_VALID_SCRAPE`. Rows are split on `</tr>`, because only the first row of each course has an opening `<tr>`. Columns are read from each table's header, so the summer Session column does not shift cells. Cancelled sections are kept with `cancelled: true`; a table without a header is skipped rather than guessed. Pages are decoded with the charset the server declares (the SOC sends ISO-8859-1, read as windows-1252), so accented titles such as "Production Prep: L'étoile" are kept; before November 8, 2026 they were decoded as UTF-8 and the letter became U+FFFD.
-3. `python data/reconcile_offerings.py`: merges SOC sections into `data/courses.json` (offerings, campus flags, units). Cancelled sections do not count as offerings and do not set `offered_qatar` or `offered_pitts`. For each field the newest semester wins (within a year: spring, then summer, then fall). `course_name` becomes the newest SOC title after `clean_soc_title()` (the catalog name stays only when cleaning leaves nothing). A title with a "TBA" placeholder, such as "Production Prep: TBA 5", is used only when no semester has another title. When the old name and the SOC title share no words, the number was probably reused: the old name, cleaned with `clean_soc_title()`, goes into `previous_course_name` (an existing `previous_course_name` is kept) and the code is printed under `REVIEW`; a SOC title that matches the stored `previous_course_name` is not a reuse. Mappings are never removed here. `offered` on rows the SOC created (`soc_ingested`) is rebuilt from their SOC offerings for every semester in `soc.json`, so a semester that does not list the row, or lists it with only cancelled sections, drops out, and `offered` can become empty; semesters `soc.json` does not hold are kept, and a row that is no longer in `soc.json` at all keeps its `offered` unchanged. Catalog rows keep their history. Malformed SOC data is ignored, not deleted: a course whose units cell is not units (a number, a range or list of numbers, or VAR; the old fixed-column parser put the summer Session text such as "qatar summer" there) and a section whose section cell is not a section id (`soc_parse.usable_sections`) give no offerings, campus flags, titles or new rows; a course whose sections are all cancelled or malformed, with at least one malformed, is ignored whole (`soc_parse.is_ignored_course`, also used by step 5), and a semester where a `soc_ingested` row appears only as malformed data stays in its `offered`. Reconcile prints the ignored counts per semester (`IGNORED malformed SOC data in M25: ...`). It does **not** create requirement mappings.
-4. `python data/apply_mapping_overlays.py`: applies `data/mapping_overlays.json` (14.4): renumbered courses, additive mappings, mapping removals, Qatar visibility. It fails, without saving, if a renumbered current code is missing from the catalog.
-5. `python data/validate_soc_coverage.py`: fails if a SOC course is missing from the catalog (courses with only cancelled sections and courses reconcile ignores as malformed are not required; superseded rows count). It also fails if any semester the newest scrape wrote (`scraped_at` equal to `metadata.last_scrape`) has malformed data, because the current parser should produce none and the pipeline would silently drop those courses; semesters carried forward from older scrapes, such as M25, are allowed. It also prints a `WARNING` (not a failure) listing same-department, same-title pairs where one row is outside the SOC and the pair is not linked in `renumbered`, so new renumberings show up in the log. Nothing is linked automatically.
+1. `python -m pytest backend/scraper/tests/test_scrape_soc.py backend/scraper/tests/test_soc_parse.py -q`
+2. `python backend/scraper/scrape_soc.py`: scrapes every semester on the SOC form for Pittsburgh and Qatar, all departments, writes `backend/data/soc.json` only if the scrape is non-empty and above `MIN_COURSES_FOR_VALID_SCRAPE`. Rows are split on `</tr>`, because only the first row of each course has an opening `<tr>`. Columns are read from each table's header, so the summer Session column does not shift cells. Cancelled sections are kept with `cancelled: true`; a table without a header is skipped rather than guessed. Pages are decoded with the charset the server declares (the SOC sends ISO-8859-1, read as windows-1252), so accented titles such as "Production Prep: L'étoile" are kept; before November 8, 2026 they were decoded as UTF-8 and the letter became U+FFFD.
+3. `python backend/scraper/reconcile_offerings.py`: merges SOC sections into `frontend/data/courses.json` (offerings, campus flags, units). Cancelled sections do not count as offerings and do not set `offered_qatar` or `offered_pitts`. For each field the newest semester wins (within a year: spring, then summer, then fall). `course_name` becomes the newest SOC title after `clean_soc_title()` (the catalog name stays only when cleaning leaves nothing). A title with a "TBA" placeholder, such as "Production Prep: TBA 5", is used only when no semester has another title. When the old name and the SOC title share no words, the number was probably reused: the old name, cleaned with `clean_soc_title()`, goes into `previous_course_name` (an existing `previous_course_name` is kept) and the code is printed under `REVIEW`; a SOC title that matches the stored `previous_course_name` is not a reuse. Mappings are never removed here. `offered` on rows the SOC created (`soc_ingested`) is rebuilt from their SOC offerings for every semester in `soc.json`, so a semester that does not list the row, or lists it with only cancelled sections, drops out, and `offered` can become empty; semesters `soc.json` does not hold are kept, and a row that is no longer in `soc.json` at all keeps its `offered` unchanged. Catalog rows keep their history. Malformed SOC data is ignored, not deleted: a course whose units cell is not units (a number, a range or list of numbers, or VAR; the old fixed-column parser put the summer Session text such as "qatar summer" there) and a section whose section cell is not a section id (`soc_parse.usable_sections`) give no offerings, campus flags, titles or new rows; a course whose sections are all cancelled or malformed, with at least one malformed, is ignored whole (`soc_parse.is_ignored_course`, also used by step 5), and a semester where a `soc_ingested` row appears only as malformed data stays in its `offered`. Reconcile prints the ignored counts per semester (`IGNORED malformed SOC data in M25: ...`). It does **not** create requirement mappings.
+4. `python backend/scraper/apply_mapping_overlays.py`: applies `backend/data/mapping_overlays.json` (14.4): renumbered courses, additive mappings, mapping removals, Qatar visibility. It fails, without saving, if a renumbered current code is missing from the catalog.
+5. `python backend/scraper/validate_soc_coverage.py`: fails if a SOC course is missing from the catalog (courses with only cancelled sections and courses reconcile ignores as malformed are not required; superseded rows count). It also fails if any semester the newest scrape wrote (`scraped_at` equal to `metadata.last_scrape`) has malformed data, because the current parser should produce none and the pipeline would silently drop those courses; semesters carried forward from older scrapes, such as M25, are allowed. It also prints a `WARNING` (not a failure) listing same-department, same-title pairs where one row is outside the SOC and the pair is not linked in `renumbered`, so new renumberings show up in the log. Nothing is linked automatically.
 6. `python scripts/bump_cf_build.py`: sets the `cf-build` meta and every `?v=` in `app.html` to `soc-YYYY-MM-DD`, so browsers fetch the new `courses.json`.
-7. Commits `data/soc.json data/courses.json app.html` as `soc-bot` with message `Update SOC data (YYYY-MM-DD)` and pushes.
+7. Commits `backend/data/soc.json frontend/data/courses.json frontend/app.html` as `soc-bot` with message `Update SOC data (YYYY-MM-DD)` and pushes.
 8. If it pushed, triggers `pages.yml` with `gh workflow run pages.yml --ref main` (bot pushes do not trigger workflows by themselves).
 
 ### 14.2 Current state (verified November 3, 2026): the scrape on the main repo is broken
 
 - Every scheduled run of "Scrape SOC" on `Adicmu/Countsfor-Summer-26` since July 9, 2026 has **failed** except a few, the last success being August 12, 2026. The failure is at step 1: `No module named pytest`. The workflow never installs pytest (there is no `pip install` step). Fix: add a step before the tests, for example `run: pip install pytest`.
-- As a result `origin/main` data stops at commit `642c4ab Update SOC data (2026-08-12)` and `data/soc.json` says `"last_scrape": "2026-08-13T07:51:25..."` (UTC timestamp of the scrape, committed on Aug 12 in Qatar time). The live site `adicmu.github.io/Countsfor-Summer-26` serves this August data.
+- As a result `origin/main` data stops at commit `642c4ab Update SOC data (2026-08-12)` and `data/soc.json` there says `"last_scrape": "2026-08-13T07:51:25..."` (UTC timestamp of the scrape, committed on Aug 12 in Qatar time). The live site `adicmu.github.io/Countsfor-Summer-26` serves this August data.
 - The partner fork `Hindjendara/Countsfor-Summer-26` (remote `hind`) has a version of `scrape.yml` without the repository guard and without the pytest step. It runs successfully every day; its latest commit is `eb394f1 Update SOC data (2026-11-02)`. `hind/main` is 144 commits ahead of `origin/main` (bot commits only, no code) and 20 behind. Its Pages site `hindjendara.github.io/Countsfor-Summer-26` has fresh data but an old frontend (cf-build `2026-08-10-faculty-home-v1`).
 - To bring fresh data into the main repo without running the scraper, you can take the data files from the fork:
 
 ```bash
 git fetch hind
 git checkout -b data-sync origin/main
-git checkout hind/main -- data/soc.json data/courses.json
+# hind/main still has the old layout (data/ at the root); write the files to the new paths
+git show hind/main:data/soc.json > backend/data/soc.json
+git show hind/main:data/courses.json > frontend/data/courses.json
 python scripts/bump_cf_build.py
 git commit -am "Sync SOC data from the hind fork"
 ```
@@ -979,11 +986,11 @@ Before adopting a new `soc.json`, compare its course and section counts per seme
 ```bash
 source .venv/bin/activate
 pip install pytest
-python -m pytest data/tests -q                 # 113 tests
-python data/scrape_soc.py                      # 30 to 90 minutes, polite delays
-python data/reconcile_offerings.py
-python data/apply_mapping_overlays.py
-python data/validate_soc_coverage.py
+python -m pytest backend/scraper/tests -q                 # 113 tests
+python backend/scraper/scrape_soc.py                      # 30 to 90 minutes, polite delays
+python backend/scraper/reconcile_offerings.py
+python backend/scraper/apply_mapping_overlays.py
+python backend/scraper/validate_soc_coverage.py
 python scripts/bump_cf_build.py
 git diff --stat
 ```
@@ -996,10 +1003,10 @@ Offline testing against the mock server in `Testing/app.py` (serves on port 5000
 pip install flask
 python Testing/app.py
 SOC_BASE_URL=http://localhost:5000/open/SOC/SOCServlet MIN_COURSES_FOR_VALID_SCRAPE=1 \
-  SOC_OUTPUT_PATH=/tmp/test_soc.json python data/scrape_soc.py
+  SOC_OUTPUT_PATH=/tmp/test_soc.json python backend/scraper/scrape_soc.py
 ```
 
-### 14.4 Mapping overlays (`data/mapping_overlays.json`)
+### 14.4 Mapping overlays (`backend/data/mapping_overlays.json`)
 
 The SOC scrape stays the rule. This file is the one place for manual complements on top of it (Qatar campus information that the SOC does not carry). Put only confirmed entries here; never infer a renumbering or a mapping.
 
@@ -1038,11 +1045,11 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 3. **`remove_mappings`**: removes the requirement rows of the listed programs (`["BA", "BS"]` or `"all"`). It runs last among the mapping steps, and steps 1 and 2 skip those programs, so nothing re-adds them.
 4. **`qatar_visibility`**: `show_only_if_offered_qatar` sets `qatar_only`; the app hides the course everywhere unless its SOC offerings include the Qatar campus.
 
-`superseded_by`, `previous_codes` and `qatar_only` belong to this step: a row the file no longer lists loses them. Copied requirement rows stay. Use the file for mapping fixes that should live in git and apply to every deploy; use the admin course editor for quick fixes by non-developers. Tests: `data/tests/test_mapping_overlay_sections.py` (also checks that every requirement path in the file exists in `data/courses.json`) and `data/tests/test_is_igi_modern_languages.py`.
+`superseded_by`, `previous_codes` and `qatar_only` belong to this step: a row the file no longer lists loses them. Copied requirement rows stay. Use the file for mapping fixes that should live in git and apply to every deploy; use the admin course editor for quick fixes by non-developers. Tests: `backend/scraper/tests/test_mapping_overlay_sections.py` (also checks that every requirement path in the file exists in `frontend/data/courses.json`) and `backend/scraper/tests/test_is_igi_modern_languages.py`.
 
 ### 14.5 Faculty directory refresh
 
-`python data/scrape_faculty_directory.py --dry-run` then `python data/scrape_faculty_directory.py -o data/faculty_directory.json`. It queries the CMU-Q People page's public Algolia index using the search-only key embedded in that site (copied into the script). Review the diff before committing: everyone in this file gets faculty access in production.
+`python backend/scraper/scrape_faculty_directory.py --dry-run` then `python backend/scraper/scrape_faculty_directory.py -o backend/data/faculty_directory.json`. It queries the CMU-Q People page's public Algolia index using the search-only key embedded in that site (copied into the script). Review the diff before committing: everyone in this file gets faculty access in production.
 
 ---
 
@@ -1054,14 +1061,14 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 - Workflow `.github/workflows/pages.yml`: on push to `main` (or manual run), collects the public files listed below and deploys them. Only `main` deploys; feature branches do not.
 - The `gh-pages` branch on origin (last commit August 9, 2026) is a leftover from an experiment on the fork branch `hind/cursor/adicmu-pages-deploy`. Pages does not serve from it. The `pages-build-deployment` workflow listed in the Actions tab is GitHub's built-in branch builder and is likewise unused.
 - Every push to `main` redeploys. The admin page, course editor and sign-in analytics went live on November 3, 2026.
-- The workflow copies only what the browser loads into `_site/` and publishes that: `index.html`, `app.html`, `reset.html`, `.nojekyll`, `js/`, `css/`, `assets/`, `landing/` (without its notes) and `data/courses.json` plus `data/minor_courses.json`. Backend code, docs, tests and raw scrape data are not public. **If you add a file the browser must load from a new folder, add it to the "Collect public site files" step in `.github/workflows/pages.yml`, or it will 404 on the live site.**
+- The workflow copies only what the browser loads into `_site/` and publishes that: `index.html`, `app.html`, `reset.html`, `.nojekyll`, `js/`, `css/`, `assets/`, `landing/` (without its notes) and `frontend/data/courses.json` plus `frontend/data/minor_courses.json`. Backend code, docs, tests and raw scrape data are not public. **If you add a file the browser must load from a new folder, add it to the "Collect public site files" step in `.github/workflows/pages.yml`, or it will 404 on the live site.**
 
 ### 15.2 Backend: Render
 
 - Blueprint: `render.yaml` at the repo root (the comment says `backend/render.yaml` was removed).
   - Web service `countsfor-backend` (Python, plan `starter`, region Ohio). Build `pip install -r requirements.txt`. Pre-deploy `python -m backend.bootstrap_db`. Start `SKIP_DB_BOOTSTRAP=1 gunicorn --workers=1 --bind 0.0.0.0:$PORT --timeout 120 --access-logfile - 'backend.app:create_app()'`. Health check `/health`.
   - Database `CountsFor_Summer_2026` (plan `starter`, Ohio).
-  - Env: `FLASK_ENV=production`, `DATABASE_URL` from the database, generated `SECRET_KEY`, `ALLOWED_EMAIL_DOMAIN=andrew.cmu.edu`, `FRONTEND_ORIGIN`, `SEED_USERS_PATH=data/faculty_directory.json`, `FRONTEND_RESET_BASE`, and dashboard-only (`sync: false`) values: `GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `MAIL_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `ALLOW_BOOTSTRAP_SKIP`.
+  - Env: `FLASK_ENV=production`, `DATABASE_URL` from the database, generated `SECRET_KEY`, `ALLOWED_EMAIL_DOMAIN=andrew.cmu.edu`, `FRONTEND_ORIGIN`, `SEED_USERS_PATH=backend/data/faculty_directory.json`, `FRONTEND_RESET_BASE`, and dashboard-only (`sync: false`) values: `GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `MAIL_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `ALLOW_BOOTSTRAP_SKIP`.
 - The URL actually used by the frontend and keepalive is **`https://countsfor-summer-26.onrender.com`** (the service is named `countsfor-summer-26` in the dashboard; the blueprint calls it `countsfor-backend`). **Render auto-deploys the backend from `main`:** confirmed on November 3, 2026, when a push to `main` moved production `/health` from 10 to 14 tables within minutes. Uncertain: whether the live service is managed by this blueprint or was created by hand.
 - The production database host is `dpg-d9osve67...`. An older host (`dpg-d8nqt2...`) was used earlier in 2026, so the database has been recreated at least once.
 - Older notes mentioned a second service `countsfor-backend.onrender.com` and an Oregon database `countsfor-db`. In November 2026 that hostname did not answer. Check the Render dashboard and delete anything unused.
@@ -1114,14 +1121,14 @@ source .venv/bin/activate
 python -m pytest backend/tests -q
 
 # Data pipeline
-python -m pytest data/tests -q
+python -m pytest backend/scraper/tests -q
 
 # Frontend (Node, runs tests/profile.test.js, tests/data.test.js and tests/utils.test.js
 # like tests/test.html, then the Node-only tests/dash-guard.test.js and tests/app-views.test.js)
 node scripts/run-data-tests.js
 
 # Frontend in the browser (runs tests/profile.test.js, tests/data.test.js and tests/utils.test.js)
-python3 -m http.server 8765
+python3 -m http.server 8765 --directory frontend
 # open http://localhost:8765/tests/test.html
 ```
 
@@ -1130,7 +1137,7 @@ python3 -m http.server 8765
 | Suite | Result |
 |---|---|
 | `backend/tests` | **116 passed, 6 failed** |
-| `data/tests` | 88 passed |
+| `backend/scraper/tests` | 88 passed |
 | `node scripts/run-data-tests.js` | 123 passed, 1 failed on November 8, 2026 (profile 46/46, data 63/64, utils 5/5, dash guard 3/3, app views 6/6) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
@@ -1154,7 +1161,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
 - `backend/tests/test_admin.py` and `test_course_overrides.py` cover the admin page.
-- `data/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list and `scripts/bump_cf_build.py`.
+- `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list and `scripts/bump_cf_build.py`.
 - `tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
 - `tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also as `&mdash;`, `&ndash;` or `—`) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason: today only the four `LABEL_OVERRIDES` keys that must match requirement paths in the data.
 - `tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen.
@@ -1193,8 +1200,8 @@ Both styles appear in history. Thirteen pull requests exist on `Adicmu/Countsfor
 
 1. Branch from `origin/main`: `git checkout -b feat/short-name origin/main`.
 2. Commit, push, open a PR on `Adicmu/Countsfor-Summer-26`.
-3. Before merging, `git fetch origin` and rebase or merge: the bot updates `data/*.json` and `app.html` on `main` often (once the scrape is fixed), so expect conflicts in `app.html` `?v=` tags. Resolve by keeping either tag and re-running `bump_cf_build.py`.
-4. Never resolve conflicts inside `data/courses.json` by hand; take one side (`git checkout --theirs data/courses.json`) and rerun `reconcile_offerings.py` and `apply_mapping_overlays.py` if needed.
+3. Before merging, `git fetch origin` and rebase or merge: the bot updates `backend/data/soc.json`, `frontend/data/courses.json` and `frontend/app.html` on `main` often (once the scrape is fixed), so expect conflicts in `app.html` `?v=` tags. Resolve by keeping either tag and re-running `bump_cf_build.py`.
+4. Never resolve conflicts inside `frontend/data/courses.json` by hand; take one side (`git checkout --theirs frontend/data/courses.json`) and rerun `reconcile_offerings.py` and `apply_mapping_overlays.py` if needed.
 
 ### 17.4 Commit style
 
@@ -1213,7 +1220,7 @@ From `git log`: one-line, imperative, sentence case, ending with a period, descr
 7. **Backend errors** use `{"error": "<snake_case_code>", "message": "<plain sentence>"}`.
 8. **Audit admin actions**: any route that changes roles, directory, flags or the catalog should call `record_event()` before its commit.
 9. **Script order** in `app.html` is `utils, data, profile, api, app`. Bump `?v=` tags when you change any of them.
-10. **Do not hand-edit `data/courses.json`** for content fixes; use overlays or the admin editor.
+10. **Do not hand-edit `frontend/data/courses.json`** for content fixes; use overlays or the admin editor.
 11. **Run backend commands from the repo root** (`python -m backend.<module>`).
 12. **Keep `DEPARTMENT_LIST` (`js/profile.js`) and `VALID_DEPARTMENTS` (`backend/models.py`) identical**, and keep `FLAG_REASONS` (`js/app.js`) in sync with `VALID_REASON_CODES` (`backend/flags.py`).
 
@@ -1226,7 +1233,7 @@ From `git log`: one-line, imperative, sentence case, ending with a period, descr
 Requirement data is the hard part. The scrape does not produce requirement mappings; they come from the upstream catalog plus overlays.
 
 1. Get the authoritative requirement list and decide requirement path names (`Top---Sub---Leaf`).
-2. Add mappings: either an overlay in `data/mapping_overlays.json` per course (`"requirements": {"AI": [...]}`) and run `python data/apply_mapping_overlays.py`, or use the admin course editor (backend already accepts `AI` and `GS` in `REQUIREMENT_PROGRAMS`).
+2. Add mappings: either an overlay in `backend/data/mapping_overlays.json` per course (`"requirements": {"AI": [...]}`) and run `python backend/scraper/apply_mapping_overlays.py`, or use the admin course editor (backend already accepts `AI` and `GS` in `REQUIREMENT_PROGRAMS`).
 3. Frontend:
    - `js/data.js`: add the code to `MAJOR_ORDER`; check `MAJOR_META` and `MAJOR_BRAND`; add `LABEL_OVERRIDES` and `setRule(...)` lines if needed; update `annotateMultiProgram()` which has its own hardcoded `['CS','IS','BA','BS']` list (about line 1042); check `splitTreeSections()` GenEd detection.
    - `js/profile.js`: set `dataPending: false` in `PROGRAM_GROUPS`.
@@ -1286,7 +1293,7 @@ Sign in as admin, open **Admin**, tab **Courses**, search the course, click it, 
 
 ### 19.7 Give someone admin (production)
 
-**Permanent admins** (the project owners): add them to `data/directory_admins.json` (email, name, `role: "admin"`, `primary_program`, `department`), push to `main`, wait for Render to redeploy, then have them sign out and in. As of November 2026 it lists `avivek@andrew.cmu.edu`. Remove people from this file when they leave.
+**Permanent admins** (the project owners): add them to `backend/data/directory_admins.json` (email, name, `role: "admin"`, `primary_program`, `department`), push to `main`, wait for Render to redeploy, then have them sign out and in. As of November 2026 it lists `avivek@andrew.cmu.edu`. Remove people from this file when they leave.
 
 **Anyone else:**
 
@@ -1305,7 +1312,7 @@ To remove admin: Directory panel, revoke or change the role; they become student
 
 ### 19.8 Debug "the site shows old data"
 
-1. Admin page, Overview: `course_data.last_scrape` shows the server's copy of `data/soc.json`. Compare with `https://adicmu.github.io/Countsfor-Summer-26/data/soc.json` (first lines).
+1. Admin page, Overview: `course_data.last_scrape` shows the server's copy of `backend/data/soc.json`. Compare with `https://adicmu.github.io/Countsfor-Summer-26/data/soc.json` (first lines).
 2. `git log origin/main --grep "Update SOC" -3`: when did the bot last commit to the main repo?
 3. `gh run list -R Adicmu/Countsfor-Summer-26 --workflow scrape.yml -L 5`: are scrapes failing? (As of Nov 2026 they fail on missing pytest, see 14.2.)
 4. `gh run list -R Adicmu/Countsfor-Summer-26 --workflow pages.yml -L 5`: did Pages deploy after the data commit?
@@ -1331,13 +1338,13 @@ You set `FLASK_ENV=production` locally. Unset it.
 macOS AirPlay Receiver. Use 5050.
 
 **Different databases depending on how I start the server.**
-Fixed in `config.py`: relative SQLite URLs are anchored to `<repo>/instance/`. Use an absolute URL (`sqlite:////full/path.db`) if you want a database elsewhere.
+Fixed in `config.py`: relative SQLite URLs are anchored to `backend/instance/`. Use an absolute URL (`sqlite:////full/path.db`) if you want a database elsewhere.
 
 **I changed someone's role in the Users tab and it reverted.**
 Expected; see 7.1. Use the directory.
 
 **A faculty member gets the student view.**
-Their email is not in the directory (DB or `data/faculty_directory.json`), or it is there with a different spelling (for example `hbouamor@` vs `houda@`). Add them in Faculty access and have them sign in again.
+Their email is not in the directory (DB or `backend/data/faculty_directory.json`), or it is there with a different spelling (for example `hbouamor@` vs `houda@`). Add them in Faculty access and have them sign in again.
 
 **Sign-in works but the user is asked to onboard every time.**
 `profile_completed` is false: students need `primary_program`; faculty and admin need `department` and `primary_program`. Check `/api/me`.
@@ -1388,8 +1395,8 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 3. Render service naming and ownership are unclear (15.2). Confirm in the dashboard; remove the stray `countsfor-backend` service and `countsfor-db` database if they still exist.
 4. 6 backend tests and 1 JS test fail (16.2). No CI runs the backend tests.
 5. Email reset provider status in production unknown.
-6. M25 in `data/soc.json` was written by the old scraper, which read every row as 10 cells, so the summer Session column shifted every field after the title (units hold "summer two" or "qatar summer", the section cell holds the units, and later courses sit inside earlier courses' `sections`). M25 is no longer on the SOC form, so a new scrape cannot repair it, and it is kept as it is (90 courses, 827 rows). Since November 8, 2026 the pipeline ignores such data instead of deleting it: reconcile and the coverage check skip a course whose units cell is not units and a section whose section cell is not a section id (`soc_parse.usable_sections`, 14.1 step 3). All 90 M25 courses and their 827 rows are ignored; no semester on the form has any. Effects: 79-234, 17-403 and 67-313 no longer get `offered_qatar` from their bad M25 rows, 14 rows lose `offered_pitts` that only bad summer rows gave, and 45-920 keeps its catalog name "Data Science for Finance This Section Cancelled" because its only SOC title is in M25. 85-372 and 85-822 also keep their catalog names (their only SOC title is "tba This Section Cancelled").
-7. Fixed November 8, 2026: `scrape_soc.py` kept only the first section of each course. SOC result pages open a `<tr>` only on the first row of each course; the other section rows end with `</tr>` but have no opening tag, and the parser read only complete `<tr>...</tr>` pairs. The parser now splits rows on `</tr>`, and `data/tests/test_scrape_soc.py` checks on untrimmed real pages that every data row becomes a section. The same day the scraper started decoding pages with the declared charset (ISO-8859-1) instead of UTF-8, which had turned accented letters into U+FFFD ("L'\ufffdtoile", "Pok\ufffdmon", "Bj\ufffdrk"). A live scrape on November 8 with both fixes was adopted: S27, F26, S26 and F25 have the same course and section counts per campus as before (S27 3,153 courses and 7,584 sections, F26 3,244 and 7,797, S26 3,208 and 7,604, F25 3,213 and 7,760), now with 18, 240, 203 and 224 sections marked `cancelled`. M26 went from 80 malformed courses to 517 courses with 692 sections (22 cancelled); every course number the old M26 data mentioned is in the new one. There is still no automatic check in the workflow that a new scrape has about as many sections as the previous `soc.json`, so compare counts per semester and campus before adopting one.
+6. M25 in `backend/data/soc.json` was written by the old scraper, which read every row as 10 cells, so the summer Session column shifted every field after the title (units hold "summer two" or "qatar summer", the section cell holds the units, and later courses sit inside earlier courses' `sections`). M25 is no longer on the SOC form, so a new scrape cannot repair it, and it is kept as it is (90 courses, 827 rows). Since November 8, 2026 the pipeline ignores such data instead of deleting it: reconcile and the coverage check skip a course whose units cell is not units and a section whose section cell is not a section id (`soc_parse.usable_sections`, 14.1 step 3). All 90 M25 courses and their 827 rows are ignored; no semester on the form has any. Effects: 79-234, 17-403 and 67-313 no longer get `offered_qatar` from their bad M25 rows, 14 rows lose `offered_pitts` that only bad summer rows gave, and 45-920 keeps its catalog name "Data Science for Finance This Section Cancelled" because its only SOC title is in M25. 85-372 and 85-822 also keep their catalog names (their only SOC title is "tba This Section Cancelled").
+7. Fixed November 8, 2026: `scrape_soc.py` kept only the first section of each course. SOC result pages open a `<tr>` only on the first row of each course; the other section rows end with `</tr>` but have no opening tag, and the parser read only complete `<tr>...</tr>` pairs. The parser now splits rows on `</tr>`, and `backend/scraper/tests/test_scrape_soc.py` checks on untrimmed real pages that every data row becomes a section. The same day the scraper started decoding pages with the declared charset (ISO-8859-1) instead of UTF-8, which had turned accented letters into U+FFFD ("L'\ufffdtoile", "Pok\ufffdmon", "Bj\ufffdrk"). A live scrape on November 8 with both fixes was adopted: S27, F26, S26 and F25 have the same course and section counts per campus as before (S27 3,153 courses and 7,584 sections, F26 3,244 and 7,797, S26 3,208 and 7,604, F25 3,213 and 7,760), now with 18, 240, 203 and 224 sections marked `cancelled`. M26 went from 80 malformed courses to 517 courses with 692 sections (22 cancelled); every course number the old M26 data mentioned is in the new one. There is still no automatic check in the workflow that a new scrape has about as many sections as the previous `soc.json`, so compare counts per semester and campus before adopting one.
 8. `courses.json` was regenerated on November 8, 2026 from the catalog at commit 97407ee and the new `soc.json` (reconcile, overlays, validate; a second run changes nothing). The 12 `previous_course_name` values that an earlier regeneration had overwritten (06-799, 16-701, 16-868, 46-901, 46-902, 46-991, 48-626, 48-655, 54-151, 54-229, 54-785, 94-701) are back, Production Prep rows carry their last real show title (54-425 "Production Prep: Fool For Love"), and 91 rows were added for courses that only the correctly parsed M26 lists (6,704 to 6,795 rows). The 8 SOC created rows that `soc.json` no longer lists (04-801, 54-382, 54-757, 54-882, 57-453, 57-579, 57-753, 62-318) keep `offered: ["F26"]` from the base catalog: reconcile now leaves `offered` unchanged on a row that is not in `soc.json` at all. Whether they should keep F26 is an open question, since the SOC is the rule and F26 is still on the form (04-801 is in none of the checked `soc.json` versions for F26). Other effects of the same run: 144 SOC created rows now have an empty `offered` (143 because their only semester is now cancelled-only, and 57-979 because F26 no longer lists it and F25 lists it cancelled-only); 12 SOC created rows lost an F26 that the current F26 does not list, keeping the semesters that do list them (45-706, 54-389, 54-653, 54-889, 57-391, 57-584, 57-787, 57-788, 57-884, 57-979, 57-982, 66-400). 23 codes got a `previous_course_name` for the first time because their SOC title shares no words with the old name; reconcile prints them under `REVIEW` and keeps their mappings: 12-711, 15-435, 15-635, 36-690, 36-712, 36-795, 42-663, 45-986, 47-900, 48-516, 48-616, 48-648, 51-907, 54-152, 54-195, 54-653, 76-802, 79-329, 82-196, 90-874, 94-784, 94-816, 95-877. Some look like renames of the same course rather than reused numbers (54-152 and 54-653 "Stagecraft" to "Stage and Shop Craft"); check them before relying on the mappings. The old name is stored cleaned (`clean_soc_title`), so 48-616 has "NOMAS Competition", not "NOMAS Competition This Section Cancelled".
 
 ### 21.3 Code hygiene
@@ -1397,7 +1404,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 - The no-dash rule (section 18) was applied to user-facing text on November 3, 2026, and on November 8, 2026 to text that comes from data: requirement labels shown in the typeahead, category search, home chips and the admin course editor now go through `LABEL_OVERRIDES`, and meeting times show "to" instead of a hyphen. `tests/dash-guard.test.js` now checks this on every run. Meeting strings that are not in the `DAYS hh:mmAM-hh:mmPM` form, including scraper junk such as "Pittsburgh, Pennsylvania" (21.2 item 6), are still shown as stored.
 - Done in November 2026: `js/landing.js` no longer keeps its own copies of the backend URL, token storage, fetch wrapper, auth calls, `esc`, `showToast` or the CMU email check. It loads `js/api.js` and `js/utils.js` like the app. The frontend has one CMU email check (`normalizeCmuEmail` in `js/utils.js`) and the backend has one (`backend/cmu.py`).
 - Dead code: unused `users.reset_token_hash` and `reset_token_expires` columns (kept on purpose: dropping them is a schema change). The rest of the dead code found in the November 2026 audit was removed: the old in-app sign-in screens and their CSS, unused `App` methods, `isStudentRole`, `ROLE_GROUPS`, `FACULTY_GROUPS`, `getOnboardingUiGroup`, `apiUpdateDirectoryEntry`, `apiGetMyFlags`, the `API_BASE` and `GITHUB_RAW` course data fallbacks, `role_group_for`, `_can_manage_users`, `_ensure_staff_directory_table`, the `StaffDirectoryEntry` alias, the legacy `/api/directory/staff` routes, and about 170 CSS classes that nothing rendered.
-- Also removed in November 2026: `data_all_courses.json` (a 24 MB copy of `data/courses.json` that nothing read; the pipeline now writes only `data/courses.json`), the empty `data/requirements_ai.json` and `data/requirements_gs.json` placeholders, the stale `backend/schema.sql`, `data/scripts/inspect_mappings.py`, and the inline cached-CSS `<style>` block in `app.html` (its rules already live in `css/styles.css`). The partner fork may still carry `data_all_courses.json`.
+- Also removed in November 2026: `data_all_courses.json` (a 24 MB copy of `frontend/data/courses.json` that nothing read; the pipeline now writes only `frontend/data/courses.json`), the empty `data/requirements_ai.json` and `data/requirements_gs.json` placeholders, the stale `backend/schema.sql`, `data/scripts/inspect_mappings.py`, and the inline cached-CSS `<style>` block in `app.html` (its rules already live in `css/styles.css`). The partner fork may still carry `data_all_courses.json`.
 - Fixed on November 8, 2026: going home with a course or schedule open (guest Student and Faculty switch, "Back to home", the navbar logo from a schedule) left the main panel blank, because `renderLeftEmpty()` captured `#leftBody` before `renderShell()` replaced it. Also fixed: a signed-in visitor opening `index.html` saw "You're already signed in." instead of going to the app, because the "Keep me signed in" checkbox counted as typed input.
 - In-memory `_cache` in `api.js` and the 24 MB catalog download make first load slow (UX review items 4 to 12).
 - `cf_flags` local queue has no cap.
@@ -1405,7 +1412,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 ### 21.4 Product roadmap (from docs and code comments)
 
 - AI and GS majors: waiting on authoritative requirement specs (`js/data.js` line 16).
-- Minor course lists are empty for most minors (`data/minor_courses.json`).
+- Minor course lists are empty for most minors (`frontend/data/minor_courses.json`).
 - Server-side storage of a user's own schedule plans (today they are browser-only).
 - UX review (`docs/archive/UX_REVIEW_2026-07-17.md`): deploy hygiene, dark theme parity, copy consistency, accessibility (keyboard navigation of the tree, ARIA for typeahead), slimmer boot payload.
 - Not done yet: CMU Andrew SSO (Shibboleth, needs IT), ML-based offering prediction (current `predictOffering()` is rule-based), deduplication of `courses.json`.
@@ -1444,7 +1451,7 @@ No secret values belong in this file or in git. Hand secrets over in person or t
 - [ ] **Email**: the Resend account or the Gmail account (with app password) used for reset emails, if configured. If not configured, decide whether to set one up.
 - [ ] **CMU-Q IT contact**: who controls `countsfor.qatar.cmu.edu` and could host CountsFor on campus or enable Andrew SSO.
 - [ ] **At least one production admin account** belonging to a staff member (not a student who will graduate), created through the directory (19.7).
-- [ ] **Faculty directory owner**: someone who decides who gets faculty access and refreshes `data/faculty_directory.json`.
+- [ ] **Faculty directory owner**: someone who decides who gets faculty access and refreshes `backend/data/faculty_directory.json`.
 
 ### 23.2 Knowledge transfer
 

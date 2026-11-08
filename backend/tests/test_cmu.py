@@ -1,6 +1,6 @@
 """The single backend CMU email check (backend/cmu.py).
 
-js/utils.js normalizeCmuEmail follows the same rules; tests/data.test.js
+frontend/js/utils.js normalizeCmuEmail follows the same rules; frontend/tests/data.test.js
 covers the frontend side with the same cases.
 """
 import pytest

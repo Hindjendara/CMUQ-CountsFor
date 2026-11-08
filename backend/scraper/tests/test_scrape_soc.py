@@ -12,8 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-DATA = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(DATA))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
 from scrape_soc import (  # noqa: E402
     attach_offerings,
