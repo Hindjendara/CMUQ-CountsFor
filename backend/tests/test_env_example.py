@@ -32,9 +32,13 @@ _LITERAL_READ = re.compile(
     r"""|\b_flag\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']"""
 )
 _ANY_ENV_ACCESS = re.compile(r"os\.environ\b|os\.getenv\b")
-# Env reads whose name is not a literal, allowed only inside these helpers
-# (their callers pass literals, which _LITERAL_READ picks up).
-_GENERIC_READS = {("config.py", 'os.environ.get(name, "")')}
+# Env accesses with no literal name, allowed only here: config.py's helper (its
+# callers pass literals, which _LITERAL_READ picks up) and update_data.py's copy
+# of the whole environment for the pipeline steps it runs (it reads nothing itself).
+_GENERIC_READS = {
+    ("config.py", 'os.environ.get(name, "")'),
+    ("update_data.py", "dict(os.environ)"),
+}
 
 _EXAMPLE_LINE = re.compile(r"^\s*#?\s*([A-Za-z_][A-Za-z0-9_]*)=")
 
@@ -79,7 +83,7 @@ def test_scanner_sees_the_known_reads():
     reads = app_reads()
     # one of each form: plain get, _flag(), and the dev-server reads in app.py
     assert {"DATABASE_URL", "TRUST_PROXY", "SESSION_COOKIE_SECURE", "PORT", "EXPOSE_RESET_TOKEN"} <= reads
-    assert {"SOC_OUTPUT_PATH", "CATALOG_PATHS", "SEMESTERS_TO_TRY"} <= scraper_reads()
+    assert {"SOC_OUTPUT_PATH", "CATALOG_PATHS", "SEMESTERS_TO_TRY", "CF_DEPLOY_ROOT"} <= scraper_reads()
 
 
 def test_backend_env_example_matches_app_reads():

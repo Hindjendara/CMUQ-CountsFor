@@ -951,6 +951,8 @@ Store counts, not behaviour: no IP addresses, user agents, locations or per-pers
 
 ## 14. Data pipeline (SOC scrape)
 
+> **Moving to the CMU-Q server (this section will be rewritten).** On the server a daily system cron job replaces `scrape.yml`. Cron runs `backend/scraper/run_scrape.sh`, which sources `/etc/countsfor/scraper.env` (template: `deploy/scraper.env.example`) and runs `backend/scraper/update_data.py`. That script takes a lock (`backend/var/update.lock`), runs the parser tests (step 1 below; `--skip-tests` skips them), copies the live `backend/data/soc.json` and `frontend/data/courses.json` into `backend/var/staging/` (`CF_STAGING_DIR`), and runs steps 2 to 5 on the copies (`--no-scrape` skips step 2, for a rebuild after a deploy). It publishes only if every step passes and its own checks pass: both files parse, `metadata.last_scrape` is set, no semester and campus present in both files drops below `CF_MIN_SECTION_RATIO` (0.98) of its live section count, the catalog keeps `CF_MIN_CATALOG_RATIO` (0.95) of its courses and loses no course code. Publishing is `os.replace` with `.prev` copies kept for rollback, plus `frontend/data/courses.json.gz` (gzip -9) for Apache. A catalog that is unchanged byte for byte is not rewritten, so its ETag stays; `soc.json` is still updated. Exit codes: 0 published, 1 failed (live files untouched), 75 another update is running. It does not commit or push, and it does not run `bump_cf_build.py` (step 6): Apache sends `no-cache` with an ETag, and the bump stays a release tool. Tests: `backend/scraper/tests/test_update_data.py`.
+
 ### 14.1 Steps (`.github/workflows/scrape.yml`)
 
 Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. Only runs when `github.repository == 'Adicmu/Countsfor-Summer-26'`.
@@ -990,7 +992,7 @@ Before adopting a new `soc.json`, compare its course and section counts per seme
 ```bash
 source .venv/bin/activate
 pip install pytest
-python -m pytest backend/scraper/tests -q                 # 113 tests
+python -m pytest backend/scraper/tests -q                 # 163 tests
 python backend/scraper/scrape_soc.py                      # 30 to 90 minutes, polite delays
 python backend/scraper/reconcile_offerings.py
 python backend/scraper/apply_mapping_overlays.py
