@@ -1,0 +1,4 @@
+# Files that run on the Linux server keep LF line endings in every checkout,
+# also on Windows with core.autocrlf=true: a CR breaks bash, cron and systemd.
+*.sh text eol=lf
+deploy/** text eol=lf

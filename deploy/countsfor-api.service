@@ -1,0 +1,101 @@
+# CountsFor API: Flask (backend/app.py) served by Gunicorn on 127.0.0.1:8000.
+# Apache (deploy/countsfor.conf) proxies https://countsfor.qatar.cmu.edu/api/ to it.
+#
+# Install:
+#   sudo install -m 644 deploy/countsfor-api.service /etc/systemd/system/countsfor-api.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now countsfor-api
+#   curl -s http://127.0.0.1:8000/health        # expect "status":"ok"
+# Logs:  journalctl -u countsfor-api -f
+# After a code deploy:  sudo systemctl restart countsfor-api
+#
+# Needs, before the first start:
+#   - the system user:        sudo adduser --system --group --home /var/www/html/countsfor countsfor
+#   - the virtual environment: python3 -m venv /var/www/html/countsfor/backend/.venv
+#                              /var/www/html/countsfor/backend/.venv/bin/pip install -r /var/www/html/countsfor/backend/requirements.txt
+#   - the environment file:   /etc/countsfor/countsfor.env (template: deploy/countsfor.env.example)
+#   - the database:           local PostgreSQL, role and database "countsfor".
+#     If you are moving an existing database, RESTORE IT BEFORE THE FIRST START:
+#     ExecStartPre below creates any missing tables, and pg_restore then fails
+#     with "relation already exists" on those empty tables.
+
+[Unit]
+Description=CountsFor API (Flask via Gunicorn)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+# Gunicorn 22 tells systemd when its workers are up (sd_notify READY=1).
+Type=notify
+NotifyAccess=main
+User=countsfor
+Group=www-data
+# The folder that holds the "backend" package, so "backend.app" imports.
+WorkingDirectory=/var/www/html/countsfor
+EnvironmentFile=/etc/countsfor/countsfor.env
+Environment=PYTHONUNBUFFERED=1
+
+# Create missing tables and run the additive migrations (backend/migrate.py) once,
+# before the workers start. The workers skip this because the env file sets
+# SKIP_DB_BOOTSTRAP=1. A failure here (exit 1) stops the start: see the journal.
+ExecStartPre=/var/www/html/countsfor/backend/.venv/bin/python -m backend.bootstrap_db
+
+# --forwarded-allow-ips: trust X-Forwarded-* only from Apache on this machine.
+# --timeout 120: Apache's ProxyTimeout (countsfor.conf) is set just above it.
+# Access and error logs go to stdout, which is the journal.
+ExecStart=/var/www/html/countsfor/backend/.venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    --timeout 120 \
+    --forwarded-allow-ips 127.0.0.1 \
+    --access-logfile - \
+    --error-logfile - \
+    'backend.app:create_app()'
+
+# HUP: gunicorn starts new workers with the new code and stops the old ones gracefully.
+ExecReload=/bin/kill -s HUP $MAINPID
+# TERM to the master (graceful, up to gunicorn's 30 s graceful timeout), then KILL leftovers.
+KillMode=mixed
+TimeoutStopSec=40
+Restart=on-failure
+RestartSec=5
+
+# ── Hardening ──────────────────────────────────────────────────────────────
+# The API writes no files: it logs to the journal and keeps its data in
+# PostgreSQL (reached over /run/postgresql or 127.0.0.1). It only reads
+# backend/ and the JSON files named in the env file (SOC_JSON_PATH,
+# SEED_USERS_PATH). So the whole file system can be read-only for it.
+# The daily scraper runs from cron (deploy/countsfor.cron), not from this
+# unit, so these limits do not affect its writes to backend/data/ and
+# frontend/data/. If the API ever needs to write a file, list its folder in
+# ReadWritePaths=.
+ProtectSystem=strict
+# Python's __pycache__ writes fail silently under ProtectSystem=strict; nothing else breaks.
+Environment=PYTHONDONTWRITEBYTECODE=1
+# Private, writable /tmp and /var/tmp (gunicorn's worker heartbeat files live there).
+PrivateTmp=true
+ProtectHome=true
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+# Binding 127.0.0.1:8000 needs no capability.
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Unix sockets (PostgreSQL, sd_notify), IPv4/IPv6 (bind, Google token checks,
+# mail), netlink (glibc address lookups).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

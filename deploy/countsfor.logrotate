@@ -1,0 +1,19 @@
+# Rotation for the CountsFor cron logs in /var/log/countsfor/ (scrape.log, and
+# backup.log if the backup line in deploy/countsfor.cron is on). The API logs to
+# the journal (journalctl -u countsfor-api), which rotates itself; Apache's
+# countsfor_*.log files are covered by /etc/logrotate.d/apache2.
+#
+# Install:  sudo install -m 644 -o root -g root deploy/countsfor.logrotate /etc/logrotate.d/countsfor
+# Test:     sudo logrotate --debug /etc/logrotate.d/countsfor
+/var/log/countsfor/*.log {
+    # The folder belongs to countsfor; rotate as that user.
+    su countsfor countsfor
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # Each cron run opens the log anew (>>), so a fresh file is enough.
+    create 0640 countsfor countsfor
+}
