@@ -296,14 +296,14 @@ Each file starts with comments that give its install commands. Section 15 walks 
 
 | File | Installed on the server as | What it does |
 |---|---|---|
-| `countsfor-api.service` | `/etc/systemd/system/countsfor-api.service` | Runs Gunicorn (3 workers, `127.0.0.1:8000`, timeout 120 s) on `'backend.app:create_app()'` from `/var/www/html/countsfor`, as user `countsfor`, group `www-data`, with `/etc/countsfor/countsfor.env`. Runs `python -m backend.bootstrap_db` before every start. Restarts on failure. Hardened: the whole file system is read-only for the API (it writes no files), private `/tmp`, no capabilities. |
+| `countsfor-api.service` | `/etc/systemd/system/countsfor-api.service` | Runs Gunicorn (3 workers, `127.0.0.1:8000`, timeout 120 s) on `'backend.app:create_app()'` from `/var/www/html/countsfor`, as user and group `countsfor`, with `/etc/countsfor/countsfor.env`. Runs `python -m backend.bootstrap_db` before every start. Restarts on failure. Hardened: the whole file system is read-only for the API (it writes no files), private `/tmp`, no capabilities. |
 | `countsfor.conf` | `/etc/apache2/sites-available/countsfor.conf` | Apache site for `countsfor.qatar.cmu.edu`: port 80 redirects to HTTPS; port 443 serves `frontend/`, proxies `/api/` to Gunicorn without stripping the prefix, keeps `/health` private, denies `backend/` and the rest of the deploy root server wide plus `tests/`, dotfiles and source or env files, serves `courses.json.gz` to browsers that accept gzip, sends `no-cache` (ETag revalidation) for html, js, css and json and 30 days for images, and sets HSTS and other security headers. The certificate and key names are `CHANGE_ME` placeholders. |
-| `countsfor.cron` | `/etc/cron.d/countsfor` (no dot: cron skips file names with a dot) | Daily 15:00 run of `backend/scraper/run_scrape.sh` as `countsfor`, under `flock` and `timeout`, appending to `/var/log/countsfor/scrape.log`. Commented out: a weekday 09:00 run and a nightly `pg_dump` with 14-day retention. |
+| `countsfor.cron` | `/etc/cron.d/countsfor` (no dot: cron skips file names with a dot) | Daily 15:00 run of `backend/scraper/run_scrape.sh` as `countsfor`, under `flock` and `timeout`, appending to `/var/log/countsfor/scrape.log`; on failure it prints one line, which cron mails only if `MAILTO` is set (empty by default, so failures are silent, 15.12). Commented out: a weekday 09:00 run and a nightly `pg_dump` with 14-day retention. |
 | `countsfor.logrotate` | `/etc/logrotate.d/countsfor` | Weekly rotation of `/var/log/countsfor/*.log`, 12 kept. |
 | `countsfor.env.example` | `/etc/countsfor/countsfor.env` (mode 640, `root:countsfor`) | The API's environment on the server. Replace every `CHANGE_ME`. |
 | `scraper.env.example` | `/etc/countsfor/scraper.env` (mode 640, `root:countsfor`) | The daily update's environment. Everything in it is optional. |
 
-`backend/tests/test_deploy_files.py` checks these files against the repo on every test run: every `/var/www/html/countsfor` path they name exists, the Apache sections are balanced, the proxy target matches the Gunicorn bind and Flask's `/api` routes, `ProxyTimeout` is above Gunicorn's timeout, the Gunicorn and `ExecStartPre` modules import, the cron line runs the executable `run_scrape.sh` with a lock and a timeout, and no file has CR line endings. `backend/tests/test_env_example.py` checks that the two env templates and the variables the code reads match.
+`backend/tests/test_deploy_files.py` checks these files against the repo on every test run: every `/var/www/html/countsfor` path they name exists, the Apache sections are balanced, the proxy target matches the Gunicorn bind and Flask's `/api` routes, `ProxyTimeout` is above Gunicorn's timeout, the Gunicorn and `ExecStartPre` modules import, the cron line runs the executable `run_scrape.sh` with a lock and a timeout (and `run_scrape.sh` quotes that exact line and refuses to run as another user), `/api/` answers get exactly one `Cache-Control: no-store`, the `.prev` backups are denied, and no file has CR line endings. `backend/tests/test_env_example.py` checks that the two env templates and the variables the code reads match.
 
 ### 4.4 `backend/data/` and `backend/scraper/`
 
@@ -319,7 +319,7 @@ The served catalog (`courses.json`, `minor_courses.json`) is in `frontend/data/`
 | `backend/data/directory_admins.json` | Hand-kept admins layered over the faculty seed (7.1, 19.7). |
 | `backend/data/minors/` | The official CMU-Q minor requirement files (15 `cmu_minor_*.json` audit exports, Markdown versions of two of them and the Scotty "Minors" general information page). The source of truth for minor requirements; the app does not read them yet. |
 | `backend/scraper/update_data.py` | **The daily update** run by cron (14.2): lock, parser tests, staged pipeline run, checks, publish in place with `.prev` copies and a `.gz`. |
-| `backend/scraper/run_scrape.sh` | The cron entry point: sources `/etc/countsfor/scraper.env` if it exists, changes to the deploy root and runs `backend/.venv/bin/python backend/scraper/update_data.py` with its arguments. Executable, LF line endings. |
+| `backend/scraper/run_scrape.sh` | The cron entry point: refuses to run as anyone but the owner of `backend/data/` (`countsfor` on the server; a run as root would leave root-owned files that break every later run), sources `/etc/countsfor/scraper.env` if it exists, changes to the deploy root and runs `backend/.venv/bin/python backend/scraper/update_data.py` with its arguments. Executable, LF line endings. |
 | `backend/scraper/scrape_soc.py` | Scraper. Splits each results table into rows on `</tr>` (only the first row of each course opens with `<tr>`), maps table cells by the `<th>` header (summer pages have an extra Session column), strips the "This Section Cancelled" note from titles and marks those sections cancelled. Keeps semesters that dropped off the SOC form by reading the file it overwrites. |
 | `backend/scraper/soc_parse.py`, `soc_departments.py` | Shared parsing helpers. `soc_parse.clean_soc_title()` cleans titles already stored in `soc.json` (cancelled note, " : subtitle", trailing ": TBA") and returns `None` when nothing usable is left. |
 | `backend/scraper/json_io.py`, `pipeline_paths.py` | Shared `load_json` and `save_json` helpers; default file locations. |
@@ -327,7 +327,7 @@ The served catalog (`courses.json`, `minor_courses.json`) is in `frontend/data/`
 | `backend/scraper/apply_mapping_overlays.py` | Applies every section of `mapping_overlays.json` to `courses.json`, in a fixed order (14.5). |
 | `backend/scraper/validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. Warns about same-title pairs that may be unlinked renumberings. |
 | `backend/scraper/scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand (14.8). |
-| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py` and `scripts/bump_cf_build.py` (163 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
+| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py` and `scripts/bump_cf_build.py` (167 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
 
 ---
 
@@ -342,11 +342,11 @@ These steps were run end to end in November 2026.
 xcode-select --install
 
 # Homebrew (skip if installed): see https://brew.sh
-# Python 3.11 or newer (the server, Ubuntu 24.04, ships 3.12).
-brew install python@3.11 node gh
+# Python 3.12, the version the server runs (Ubuntu 24.04).
+brew install python@3.12 node gh
 ```
 
-Python 3.12 and 3.13 also work for local development and tests (both were used successfully); the server runs 3.12 (Ubuntu 24.04), so use 3.12 if you want to match it exactly. Node is only needed to run the JS data tests from the command line. You do not need Apache, Gunicorn or PostgreSQL locally: `scripts/dev_server.py` stands in for Apache, the Flask dev server for Gunicorn and SQLite for PostgreSQL.
+Python 3.11 and 3.13 also work for local development and tests; if you use one of them, change `python3.12` in 5.3 to match. Node is only needed to run the JS data tests from the command line. You do not need Apache, Gunicorn or PostgreSQL locally: `scripts/dev_server.py` stands in for Apache, the Flask dev server for Gunicorn and SQLite for PostgreSQL.
 
 ### 5.2 Clone
 
@@ -379,12 +379,12 @@ The file lists every variable the API reads, with a local value or a commented d
 - `FLASK_ENV=development`. `production` makes `config.py` refuse SQLite and a missing `SECRET_KEY`, and crash at import.
 - `SECRET_KEY`: any long random string locally. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 - `DATABASE_URL=sqlite:///countsfor.db` (becomes `backend/instance/countsfor.db`).
-- `EXPOSE_RESET_TOKEN=1` (lets you test password reset without email).
+- `EXPOSE_RESET_TOKEN=1` (lets you test password reset without email; ignored when `FLASK_ENV=production`).
 - `GOOGLE_CLIENT_ID` is the public client ID from the HTML meta tag. Google sign-in works locally only if `http://localhost:8765` is an authorized JavaScript origin of that client.
 
 `backend/tests/test_env_example.py` fails if a variable read in `backend/` is missing from `.env.example` (or the reverse), so add new variables there.
 
-`config.py` loads `backend/.env` automatically (`python-dotenv`). Real environment variables win over `.env` values.
+`config.py` loads `backend/.env` automatically (`python-dotenv`). Real environment variables win over `.env` values. When the real environment already has `FLASK_ENV=production` (systemd on the server), `backend/.env` is not read at all.
 
 ### 5.5 Create the database and start the backend
 
@@ -414,7 +414,7 @@ python scripts/dev_server.py
 
 Open `http://localhost:8765/`. The script (standard library only) mirrors production: it serves `frontend/` and proxies `/api/*` and `/health` to `http://127.0.0.1:5050`, keeping the method, headers (including `Authorization` and cookies), body and status. The pages therefore call the API with relative paths on one origin, exactly as behind Apache, and no CORS is involved. If the API is not running, `/api` answers 502 and the landing page shows "Could not reach the server".
 
-Options: `--port` (default 8765), `--backend` (default `http://127.0.0.1:5050`; change it if the API runs on another port), `--root` (default `frontend/`), `--bind` (default `127.0.0.1`).
+Options: `--port` (default 8765), `--backend` (default `http://127.0.0.1:5050`; change it if the API runs on another port), `--root` (default `frontend/`), `--bind` (default `localhost`, which listens on both `127.0.0.1` and `::1`: on some machines tools such as Node's `fetch` resolve `localhost` only to `::1`). Keep using `http://localhost:8765` in the browser: it is the origin Google sign-in and `FRONTEND_ORIGIN` allow. A chunked request body is decoded and forwarded with a `Content-Length`.
 
 A plain `python -m http.server 8765 --directory frontend` still serves the pages (guest mode and `tests/test.html` work), but every `/api` call then returns 404, so nothing that needs the server works.
 
@@ -478,7 +478,7 @@ Every variable is also listed, with local values and production values in commen
 | `SMTP_PASS` | With `SMTP_USER` | empty | SMTP password (for Gmail an app password). Secret. |
 | `SMTP_USE_TLS` | No | `true` | STARTTLS on or off (`1`, `true`, `yes` or `on` mean on). A campus relay on port 25 usually needs `false`. |
 | `FRONTEND_ORIGIN` | No | `http://localhost:8765` | Comma-separated CORS allow list for `/api/*`. Origins only, no paths, no trailing slash. Same-origin requests (through Apache, or `scripts/dev_server.py`) never need it; it matters only for a page on another origin (the `cf_backend_override` hook). Server: `https://countsfor.qatar.cmu.edu`. |
-| `EXPOSE_RESET_TOKEN` | No (dev only) | unset | `1`, `true` or `yes` makes `/api/auth/forgot-password` return `reset_token` and `reset_url` in the response, and allows the flow even with no email provider. **Never set in production.** Read directly from `os.environ` in `auth.py`. |
+| `EXPOSE_RESET_TOKEN` | No (dev only) | unset | `1`, `true` or `yes` makes `/api/auth/forgot-password` return `reset_token` and `reset_url` in the response, and allows the flow even with no email provider. Ignored in production (`FLASK_ENV=production`): it would let anyone reset any account. Read directly from `os.environ` in `auth.py`. |
 | `HOST` | No | `127.0.0.1` | Dev server bind address (`python -m backend.app` only). |
 | `PORT` | No | `5050` | Dev server port (`python -m backend.app` only; gunicorn has its own `--bind`). |
 | `FLASK_DEBUG` | No | `1` | Dev server debug mode. |
@@ -831,7 +831,7 @@ When a signed-in **student** opens a course, the frontend posts `/api/search-ana
 
 ### 9.11 Email (`backend/email_util.py`)
 
-`send_password_reset_email(to, url)` tries Resend (HTTPS API), then SMTP (STARTTLS by default), and returns False if neither is configured or both fail. Never raises. `email_utils.py` (with an `s`) is unused.
+`send_password_reset_email(to, url)` tries Resend (HTTPS API), then SMTP (STARTTLS by default), and returns False if neither is configured or both fail. Never raises.
 
 ---
 
@@ -1026,9 +1026,9 @@ The catalog the app loads, `frontend/data/courses.json`, is built from three thi
 
 ### 14.2 The daily update on the server
 
-Cron (`/etc/cron.d/countsfor`, from `deploy/countsfor.cron`) runs `backend/scraper/run_scrape.sh` as the `countsfor` user every day at 15:00 server time. The script sources `/etc/countsfor/scraper.env` (template: `deploy/scraper.env.example`; every setting is optional), changes to the deploy root and runs `backend/scraper/update_data.py` with the virtual environment's Python. `update_data.py`:
+Cron (`/etc/cron.d/countsfor`, from `deploy/countsfor.cron`) runs `backend/scraper/run_scrape.sh` as the `countsfor` user every day at 15:00 server time. The script refuses to run as any other user (it compares `id -un` with the owner of `backend/data/`; `CF_ALLOW_ANY_USER=1` skips the check), because a run as root would leave root-owned files in `backend/var/` and the data folders that make every later cron run fail. It then sources `/etc/countsfor/scraper.env` (template: `deploy/scraper.env.example`; every setting is optional), changes to the deploy root and runs `backend/scraper/update_data.py` with the virtual environment's Python. `update_data.py`:
 
-1. Takes an exclusive lock on `backend/var/update.lock` (flock). If another update holds it, it exits 75. Cron also wraps the run in `flock -n /run/lock/countsfor-scrape.lock` and `timeout 3h`.
+1. Takes an exclusive lock on `backend/var/update.lock` (flock). If another update holds it, it exits 75. If the lock file cannot be opened at all (for example it belongs to root after a run as root), it logs why and how to fix the ownership, and exits 1. Cron also wraps the run in `flock -n /run/lock/countsfor-scrape.lock` and `timeout 3h`.
 2. Runs the SOC parser tests, as the old workflow did: `python -m pytest backend/scraper/tests/test_scrape_soc.py backend/scraper/tests/test_soc_parse.py` (43 tests). `--skip-tests` skips them.
 3. Copies the live `backend/data/soc.json` and `frontend/data/courses.json` into `backend/var/staging/` (`CF_STAGING_DIR`). `scrape_soc.py` carries old semesters forward from the file it overwrites, so it must start from a copy of the live file.
 4. Runs the four pipeline steps of 14.3 on the staged copies, stopping at the first failure: `scrape_soc.py`, `reconcile_offerings.py`, `apply_mapping_overlays.py`, `validate_soc_coverage.py`. `--no-scrape` skips the scrape and rebuilds the catalog from the live `soc.json` (after a deploy, or after you change `mapping_overlays.json`).
@@ -1055,13 +1055,13 @@ Locally, from the repo root:
 
 ```bash
 source .venv/bin/activate
-python -m pytest backend/scraper/tests -q            # 163 tests
+python -m pytest backend/scraper/tests -q            # 167 tests
 python backend/scraper/update_data.py --no-scrape    # rebuild frontend/data/courses.json from backend/data/soc.json
 python backend/scraper/update_data.py                # full run: scrape, rebuild, check, publish (30 to 90 minutes)
 git diff --stat
 ```
 
-`update_data.py` works in a checkout exactly as on the server (its deploy root defaults to the folder that holds `backend/`). It also writes `frontend/data/courses.json.gz` (gitignored) and, when a file changed, `courses.json.prev` and `soc.json.prev`, which are **not** gitignored: delete them before you commit. You can also run the steps one by one, which writes the files in place without the checks:
+`update_data.py` works in a checkout exactly as on the server (its deploy root defaults to the folder that holds `backend/`). It also writes `frontend/data/courses.json.gz` and, when a file changed, `courses.json.prev` and `soc.json.prev`; all three are gitignored. You can also run the steps one by one, which writes the files in place without the checks:
 
 ```bash
 python backend/scraper/scrape_soc.py
@@ -1175,7 +1175,7 @@ The first deploy goes through 15.2 to 15.14 in order. Later deploys only need 15
 | Piece | On the server | From the repo | Installed as |
 |---|---|---|---|
 | Static site | Apache 2.4, `https://countsfor.qatar.cmu.edu/`, DocumentRoot `/var/www/html/countsfor/frontend` | `deploy/countsfor.conf` | `/etc/apache2/sites-available/countsfor.conf` |
-| API | Gunicorn, 3 workers, `127.0.0.1:8000`, `'backend.app:create_app()'` from `/var/www/html/countsfor`, user `countsfor`, group `www-data`. Apache proxies `/api/` to it. | `deploy/countsfor-api.service` | `/etc/systemd/system/countsfor-api.service` |
+| API | Gunicorn, 3 workers, `127.0.0.1:8000`, `'backend.app:create_app()'` from `/var/www/html/countsfor`, user and group `countsfor`. Apache proxies `/api/` to it. | `deploy/countsfor-api.service` | `/etc/systemd/system/countsfor-api.service` |
 | API settings | read by systemd | `deploy/countsfor.env.example` | `/etc/countsfor/countsfor.env` (640, `root:countsfor`) |
 | Database | local PostgreSQL (Ubuntu 24.04 ships version 16), role and database `countsfor`, peer authentication over the Unix socket (`DATABASE_URL=postgresql:///countsfor`) | none | none |
 | Daily data update | cron at 15:00 server time runs `backend/scraper/run_scrape.sh` as `countsfor` | `deploy/countsfor.cron`, `deploy/scraper.env.example` | `/etc/cron.d/countsfor`, `/etc/countsfor/scraper.env` |
@@ -1236,15 +1236,26 @@ Keep a clean checkout on the server under your own account and copy from it with
 ```bash
 git clone https://github.com/Adicmu/Countsfor-Summer-26.git ~/countsfor-src
 cd ~/countsfor-src
-git checkout main          # before the merge (15.15), the branch you are deploying: cleanup
+git checkout main
 git status --short         # must print nothing
 ```
+
+**Before the merge (the rehearsal, 15.15 step 1)** `main` still has the old layout, and on November 8, 2026 the `cleanup` branch existed only in the checkout it was made in (17.2): it is on neither GitHub repo. Push it first to a repo the server can clone, then clone that repo and check out `cleanup` instead of `main`. For example, if it was pushed to Hind's working repo (17.1):
+
+```bash
+git clone https://github.com/Hindjendara/CMUQ-CountsFor.git ~/countsfor-src
+cd ~/countsfor-src
+git checkout cleanup
+git status --short         # must print nothing
+```
+
+After the merge, replace that checkout with a fresh clone of the main repo on `main`, as above (`rm -rf ~/countsfor-src` first). Which repo to push `cleanup` to for the rehearsal is the owner's choice; the server must be able to clone it (a private repo needs a deploy key or token).
 
 First deploy:
 
 ```bash
 cd ~/countsfor-src
-sudo rsync -a --delete --chown=countsfor:countsfor \
+sudo rsync -a --delete --chown=countsfor:countsfor --chmod=D755,F644 \
   --exclude /tests/ \
   --exclude /data/courses.json.gz --exclude /data/courses.json.prev \
   frontend/ /var/www/html/countsfor/frontend/
@@ -1264,7 +1275,7 @@ Why each exclude:
 - `soc.json`: the first deploy copies the repo's file, because the scraper carries old semesters forward from it and `--no-scrape` needs it. After that the server's copy is newer than git, so it must never be overwritten.
 - `courses.json` is overwritten on every deploy on purpose: the deploy then rebuilds it from the live `soc.json` and the current overlays (15.16).
 
-`--chown` makes `countsfor` the owner of everything, and `--chmod=o-rwx` closes `backend/` to every other user, including Apache.
+`--chown` makes `countsfor` the owner of everything. On `frontend/`, `--chmod=D755,F644` makes every folder and file readable by Apache (`www-data` reads them as "other"), whatever the umask of your checkout; without it, a checkout made with umask 027 or 077 would be copied as 640 or 600 and the site would answer 403. On `backend/`, `--chmod=o-rwx` closes it to every other user, including Apache.
 
 ### 15.5 Python virtual environment
 
@@ -1314,30 +1325,59 @@ Accounts, directory entries, flags, saved courses, shared plans, admin course ed
 
 Do it twice: a **rehearsal** while the old site still runs (into a scratch database, below), and the **final copy** during the cutover (15.15), after writes have stopped.
 
-1. **Get the External Database URL:** Render dashboard, database `CountsFor_Summer_2026`, **Connect**, **External Database URL**. It contains the password, so keep it out of your shell history:
+1. **Get the External Database URL:** Render dashboard, database `CountsFor_Summer_2026`, **Connect**, **External Database URL**. It has the form `postgresql://USER:PASSWORD@HOST/DBNAME` and contains the password. Keep the password out of your shell history and off every command line (other users on the server can read a running command's arguments with `ps`): put the parts in a connection service file that only you can read, and name the service in the commands below.
 
    ```bash
-   read -rs RENDER_URL && export RENDER_URL      # paste the URL, press Enter
+   umask 077
+   cat > ~/.pg_service.conf <<'EOF'
+   [render]
+   host=CHANGE_ME_HOST
+   port=5432
+   dbname=CHANGE_ME_DBNAME
+   user=CHANGE_ME_USER
+   password=CHANGE_ME_PASSWORD
+   sslmode=require
+   EOF
+   editor ~/.pg_service.conf                     # fill in the four values from the URL
+   ls -l ~/.pg_service.conf                      # -rw------- (600)
    ```
+
+   `psql`, `pg_dump` and `pg_restore` read `~/.pg_service.conf` for `service=render`. `sslmode=require`: Render's external connections need SSL.
 
 2. **Check the versions:**
 
    ```bash
-   psql "$RENDER_URL" -Atc 'show server_version'
+   psql service=render -Atc 'show server_version'
    pg_dump --version
    ```
 
-   `pg_dump` must be the same major version as the Render server or newer, and the same `pg_restore` version should restore it. Ubuntu 24.04 has 16. If Render reports 17 or newer, install that version (server and client) from the PostgreSQL apt repository (`https://www.postgresql.org/download/linux/ubuntu/`) **before** 15.7, create the database in that cluster, and use its `pg_dump` and `pg_restore` (`/usr/lib/postgresql/<version>/bin/`). Whether `pg_restore` 16 can read an archive made by `pg_dump` 17 was not checked; matching versions avoids the question.
+   `pg_dump` must be the same major version as the Render server or newer, and the same `pg_restore` version should restore it. Ubuntu 24.04 has 16. Whether `pg_restore` 16 can read an archive made by `pg_dump` 17 was not checked; matching versions avoids the question.
+
+   **If Render reports 17 or newer**, the server's database must run that version, and on the default port 5432: every command in this section, the service and `DATABASE_URL=postgresql:///countsfor` use the default port. Installing a second version next to Ubuntu's 16 gives the new cluster port 5433, and everything would still reach 16. Do this **before** 15.7 (if 15.7 already ran, the database it made is dropped with the 16 cluster, which is fine while it is empty). The commands were not run on the server; check each step's output. For example, for 17:
+
+   ```bash
+   # add the PostgreSQL apt repository: https://www.postgresql.org/download/linux/ubuntu/
+   sudo apt install -y postgresql-17
+   pg_lsclusters                                  # 16 main on 5432, 17 main on 5433
+   sudo -u postgres psql -p 5432 -l               # 16 must hold nothing you need (only postgres, template0/1, an empty countsfor)
+   sudo pg_dropcluster --stop 16 main             # deletes the 16 cluster and its data
+   sudo pg_dropcluster --stop 17 main
+   sudo pg_createcluster --start -p 5432 17 main
+   pg_lsclusters                                  # only: 17 main 5432 online
+   sudo apt remove postgresql-16 postgresql-client-16   # optional, so no tool picks 16 by mistake
+   ```
+
+   Then do 15.7, and use `/usr/lib/postgresql/17/bin/pg_dump` and `/usr/lib/postgresql/17/bin/pg_restore` (full paths) in steps 3 and 5. If the server already runs other databases on 16, do not drop it: ask IT, or keep 17 on 5433 and add `?port=5433` to `DATABASE_URL` and `-p 5433` to every `psql`, `createuser`, `createdb`, `dropdb` and `pg_restore` command in 15.7, 15.8 and 15.17.
 
 3. **Dump** (for the final copy, only after the Render service is suspended, 15.15):
 
    ```bash
    umask 077
-   pg_dump -Fc --no-owner --no-acl -d "$RENDER_URL" -f ~/countsfor-render-$(date +%F).dump
+   pg_dump -Fc --no-owner --no-acl -d service=render -f ~/countsfor-render-$(date +%F).dump
    pg_restore -l ~/countsfor-render-$(date +%F).dump | grep -c 'TABLE DATA'
    ```
 
-   The count is the number of tables with data: 14, or 15 if the Render database still has the legacy `staff_directory_entries` table (`backend/migrate.py` copied it into `directory_entries` long ago; it is harmless). The Render URL needs SSL, which `pg_dump` negotiates by itself.
+   The count is the number of tables with data: 14, or 15 if the Render database still has the legacy `staff_directory_entries` table (`backend/migrate.py` copied it into `directory_entries` long ago; it is harmless).
 
 4. **Hand the file to `countsfor`:**
 
@@ -1368,7 +1408,7 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    ```bash
    for t in users directory_entries flags wishlist_items schedule_plans course_overrides admin_audit_events sign_in_events; do
      printf '%-20s render %-7s local %s\n' "$t" \
-       "$(psql "$RENDER_URL" -Atc "select count(*) from $t")" \
+       "$(psql service=render -Atc "select count(*) from $t")" \
        "$(sudo -u countsfor psql -d countsfor -Atc "select count(*) from $t")"
    done
    ```
@@ -1420,9 +1460,11 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
 
    (`postgresql:/countsfor` is how the redaction helper prints a socket URL.) Lines such as `Added users.department` before them mean a migration ran because the Render database lacked a column; a second run prints none. A line starting with `FATAL` means it failed: read it, fix the cause, run it again.
 
-10. **Clean up:** `sudo rm /var/tmp/countsfor-render.dump`. Keep the final dump file off the server as the last backup of the Render database.
+10. **Clean up:** `sudo rm /var/tmp/countsfor-render.dump` and `rm ~/.pg_service.conf` (it holds the Render password). Keep the final dump file off the server as the last backup of the Render database.
 
-**Rehearsal:** the same steps into a scratch database, without stopping anything:
+**Rehearsal:** for the full rehearsal (15.15 step 1), run steps 1 to 9 as written, into `countsfor`, while Render keeps running (the dump is simply a little older than the final one). Then 15.9 starts the service on the imported accounts, and every check in 15.13 can pass. At the cutover the database is recreated and imported again (15.15 step 5).
+
+To try only the import, without touching `countsfor` (for example after the service already created empty tables in it), use a scratch database:
 
 ```bash
 sudo -u postgres createdb -O countsfor countsfor_rehearsal
@@ -1443,7 +1485,7 @@ systemctl status countsfor-api --no-pager
 curl -s http://127.0.0.1:8000/health
 ```
 
-Expected: `{"database":"connected","db_host":"","status":"ok","tables":14}` (`tables` counts every table in the database, so 15 with the legacy table; `db_host` is empty for a socket connection). On every start systemd first runs `python -m backend.bootstrap_db` (`ExecStartPre`); if it fails the API does not start, and `journalctl -u countsfor-api -n 50` shows why. The workers skip the bootstrap because the env file sets `SKIP_DB_BOOTSTRAP=1`. Gunicorn logs requests and errors to the journal (`journalctl -u countsfor-api -f`). systemd restarts the API if it crashes; `sudo systemctl restart countsfor-api` loads new code.
+`active (running)` only means the Gunicorn master is up (it reports ready to systemd before its workers import the app); the `curl` is the real check. Expected: `{"database":"connected","db_host":"","status":"ok","tables":14}` (`tables` counts every table in the database, so 15 with the legacy table; `db_host` is empty for a socket connection). On every start systemd first runs `python -m backend.bootstrap_db` (`ExecStartPre`); if it fails the API does not start, and `journalctl -u countsfor-api -n 50` shows why. The workers skip the bootstrap because the env file sets `SKIP_DB_BOOTSTRAP=1`. Gunicorn logs requests and errors to the journal (`journalctl -u countsfor-api -f`). systemd restarts the API if it crashes; `sudo systemctl restart countsfor-api` loads new code.
 
 The unit is hardened: the whole file system is read-only for the API (it writes no files; its data is in PostgreSQL), it gets a private `/tmp` and no capabilities. The daily update runs from cron, outside the unit, so these limits do not apply to it. If the API ever needs to write a file, list the folder in `ReadWritePaths=`.
 
@@ -1462,7 +1504,7 @@ sudo apachectl configtest && sudo systemctl restart apache2
 
 In the editor, replace the two placeholders with the real names: `SSLCertificateFile /etc/apache2/CHANGE_ME_countsfor_cert.pem` and `SSLCertificateKeyFile /etc/apache2/CHANGE_ME_countsfor_key.pem`. Uncomment `SSLCertificateChainFile` only if the certificate file does not already contain the intermediate chain. Apache does not start until both files exist. Later changes to the site file only need `sudo apachectl configtest && sudo systemctl reload apache2`.
 
-What the site does: port 80 answers with a permanent redirect to the same path on HTTPS (password reset links keep their `?token=`); port 443 serves `frontend/`, proxies `/api/` to `http://127.0.0.1:8000/api/` (the prefix stays, because every Flask route starts with `/api`), and sends `Cache-Control: no-store` on API answers. `/health` is not proxied, because it reveals the database host and errors; check it on the server, or uncomment the `<Location /health>` block and limit it to a monitoring address range. Server wide, `/var/www/html/countsfor` and its `backend/` are denied, so even a re-enabled `000-default` cannot serve them; on the site, `/tests/`, dotfiles and source, notes, env and backup files are denied. Browsers that accept gzip get `data/courses.json.gz` with `Content-Encoding: gzip` (about 1.2 MB). HTML, JS, CSS and JSON are sent with `no-cache`, so browsers revalidate them on every load and get a 304 when unchanged; images are cached for 30 days. Security headers: HSTS (one year, this host only), `nosniff`, `Referrer-Policy`, `X-Frame-Options`, `frame-ancestors 'self'` and `Permissions-Policy`. The file also suggests `ServerTokens Prod`, `ServerSignature Off` and `TraceEnable Off` in `/etc/apache2/conf-available/security.conf`.
+What the site does: port 80 answers with a permanent redirect to the same path on HTTPS (password reset links keep their `?token=`); port 443 serves `frontend/`, proxies `/api/` to `http://127.0.0.1:8000/api/` (the prefix stays, because every Flask route starts with `/api`), and sends `Cache-Control: no-store` on API answers (it removes the backend's own `Cache-Control` first, so there is only one). `/health` is not proxied, because it reveals the database host and errors; check it on the server, or uncomment the `<Location /health>` block and limit it to a monitoring address range. Server wide, `/var/www/html/countsfor` and its `backend/` are denied, so even a re-enabled `000-default` cannot serve them; on the site, `/tests/`, dotfiles and source, notes, env and backup files (the daily update's `.prev` copies included) are denied. Browsers that accept gzip get `data/courses.json.gz` with `Content-Encoding: gzip` (about 1.2 MB). HTML, JS, CSS and JSON are sent with `no-cache`, so browsers revalidate them on every load and get a 304 when unchanged; images are cached for 30 days. Security headers: HSTS (one year, this host only), `nosniff`, `Referrer-Policy`, `X-Frame-Options`, `frame-ancestors 'self'` and `Permissions-Policy`. The file also suggests `ServerTokens Prod`, `ServerSignature Off` and `TraceEnable Off` in `/etc/apache2/conf-available/security.conf`.
 
 ### 15.11 First data build
 
@@ -1502,10 +1544,12 @@ sudo logrotate --debug /etc/logrotate.d/countsfor
 The job in `/etc/cron.d/countsfor`:
 
 ```
-0 15 * * * countsfor /usr/bin/flock -n /run/lock/countsfor-scrape.lock /usr/bin/timeout -k 5m 3h /var/www/html/countsfor/backend/scraper/run_scrape.sh >> /var/log/countsfor/scrape.log 2>&1
+0 15 * * * countsfor /usr/bin/flock -n /run/lock/countsfor-scrape.lock /usr/bin/timeout -k 5m 3h /var/www/html/countsfor/backend/scraper/run_scrape.sh >> /var/log/countsfor/scrape.log 2>&1 || echo "CountsFor daily update failed (exit $?): see /var/log/countsfor/scrape.log"
 ```
 
-Every day at 15:00 server time, as `countsfor`: `flock -n` skips the run if the previous one still holds the lock, `timeout` stops a hung run after 3 hours, and the output is appended to `/var/log/countsfor/scrape.log`. If the server is not on Qatar time, edit the hour in `deploy/countsfor.cron` and install it again (cron reads the file by itself; no reload needed). The file name must have no dot, belong to root, have mode 644 and end with a newline, or cron ignores it. The file also has two commented lines: a weekday 09:00 run for registration periods and a nightly database backup (15.17).
+Every day at 15:00 server time, as `countsfor`: `flock -n` skips the run if the previous one still holds the lock, `timeout` stops a hung run after 3 hours (and kills it 5 minutes later if it ignores that), and the output is appended to `/var/log/countsfor/scrape.log`.
+
+**Failures are silent by default.** On a non-zero exit (1 failed, 75 another update running, 124 or 137 stopped by `timeout`, or 1 from `flock` when the previous run still holds its lock) the `|| echo` part prints one line, and cron mails a job's output to `MAILTO`. The file sets `MAILTO=""`, so that line is dropped and the log is the only record; the old GitHub workflow at least emailed on failure. To be told: have IT confirm the server can send mail (a mailer such as `postfix` or `msmtp-mta` through the campus relay), set `MAILTO=` to an admin address in `deploy/countsfor.cron`, commit, and install the file again. Until then, check that Admin, Overview shows a recent last scrape. If the server is not on Qatar time, edit the hour in `deploy/countsfor.cron` and install it again (cron reads the file by itself; no reload needed). The file name must have no dot, belong to root, have mode 644 and end with a newline, or cron ignores it. The file also has two commented lines: a weekday 09:00 run for registration periods and a nightly database backup (15.17).
 
 Logrotate rotates `/var/log/countsfor/*.log` weekly and keeps 12 compressed weeks. The API logs to the journal, which rotates itself, and Apache's logs are covered by `/etc/logrotate.d/apache2`.
 
@@ -1534,7 +1578,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://countsfor.qatar.cmu.edu/tests/t
 
 If the name does not point to this server yet, add `--resolve countsfor.qatar.cmu.edu:443:127.0.0.1` (and `:80:` for the HTTP check) to test it anyway.
 
-In a browser, in a private window, open `https://countsfor.qatar.cmu.edu/`:
+In a browser, in a private window, open `https://countsfor.qatar.cmu.edu/`. Items 2 and 4 need the imported Render database (15.8); on a server with a new, empty database they cannot pass.
 
 1. The landing page loads with no "Could not reach the server" banner.
 2. Sign in with an existing account (the password from the old site works, the accounts came with the database) and with Google (needs 15.14).
@@ -1550,11 +1594,22 @@ In the Google Cloud Console, **APIs & Services**, **Credentials**, the OAuth 2.0
 
 As of November 8, 2026 the live site is still the old one: GitHub Pages serves the frontend from `main`, Render runs the API and the database, and the GitHub Actions scrape still commits data to `main`. Nothing has been deployed to the CMU-Q server, and `cleanup` is not merged. The cutover, in order:
 
-1. **Rehearse** 15.2 to 15.14 on the server, importing into `countsfor_rehearsal` (15.8), while the old site keeps running. The server can be fully tested before anyone uses it.
+1. **Rehearse** 15.2 to 15.14 on the server, deploying the `cleanup` branch (push it first, 15.4) and importing a current dump into `countsfor` (15.8, "Rehearsal"), while the old site keeps running. The server can be fully tested, sign-in with existing accounts included, before anyone uses it.
 2. **Freeze `main`:** in the Render dashboard, turn off **Auto-Deploy** for the web service `countsfor-summer-26`; in the GitHub Actions tab, **disable** the "Scrape SOC" workflow. Render auto-deploys `main`, and its build command installed the root `requirements.txt`, which `cleanup` deletes, so a Render deploy of the merged `main` would most likely fail and keep the old version running (not tested). Turning it off removes the question.
-3. **Merge `cleanup` into `main`** and push. The bot's data commits on `main` conflict with the moved data files; keep the `cleanup` versions: `git checkout cleanup -- backend/data/soc.json frontend/data/courses.json`. After the merge, GitHub Pages keeps serving its last build (its workflow is gone) and Render keeps the old API.
+3. **Merge `cleanup` into `main`** and push. If `main` has not moved since `cleanup` was last updated (`git merge-base --is-ancestor main cleanup` succeeds), the merge is a fast-forward with no conflicts. Otherwise every bot commit on `main` changed `app.html` (the `?v=` tags), `data/courses.json`, `data/soc.json` and `data_all_courses.json`, which `cleanup` moved or deleted. A test merge of a simulated bot commit (November 8, 2026) gave modify/delete conflicts on `app.html` and `data_all_courses.json` and merged the bot's data changes into `backend/data/soc.json` and `frontend/data/courses.json`; real changes to the data can also conflict there. Take the `cleanup` side of every one of these files (its data comes from the fixed parser; the server rebuilds the data anyway):
+
+   ```bash
+   git checkout main && git merge cleanup
+   git checkout cleanup -- backend/data/soc.json frontend/data/courses.json frontend/app.html
+   git rm --ignore-unmatch app.html data_all_courses.json data/courses.json data/soc.json
+   git status --short          # no "UU", "AA", "DU" or "UD" lines left; take the cleanup side of any other
+   git diff --cached --stat cleanup   # should print nothing: the result equals cleanup
+   git commit --no-edit
+   ```
+
+   After the merge, GitHub Pages keeps serving its last build (its workflow is gone) and Render keeps the old API.
 4. **Stop writes:** announce a short downtime, then in the Render dashboard **Suspend** the web service. The old site now shows "Could not reach the server".
-5. **Final database copy:** `sudo systemctl stop countsfor-api`, then recreate the `countsfor` database if anything ran against it (15.8 step 5), and run 15.8 steps 3 to 10.
+5. **Final database copy:** `sudo systemctl stop countsfor-api`, then drop and recreate the `countsfor` database, which holds the rehearsal import (the two commands at the end of 15.8 step 5), and run 15.8 steps 3 to 10 (recreate `~/.pg_service.conf` first, step 1, if you already removed it).
 6. **Deploy the merged `main`** (15.16) and start the API: `sudo systemctl start countsfor-api`. Run the checks in 15.13.
 7. **DNS and Google:** make sure IT points `countsfor.qatar.cmu.edu` at the server, and that the Google origin is in place (15.14).
 8. **Tell users:** everyone signs in again (sign-in tokens are kept per site). Accounts, saved courses, flags and shared plans moved with the database. Schedule plans that were never shared live only in the browser's storage for the old address and do not move; a student can carry one over by creating a share link on the old site before step 4 and opening it on the new site with the host changed (the link token is in the database).
@@ -1568,7 +1623,7 @@ Then on the server (not between 15:00 and the end of the daily update: `pgrep -a
 
 ```bash
 cd ~/countsfor-src && git pull --ff-only && git status --short
-sudo rsync -a --delete --chown=countsfor:countsfor \
+sudo rsync -a --delete --chown=countsfor:countsfor --chmod=D755,F644 \
   --exclude /tests/ \
   --exclude /data/courses.json.gz --exclude /data/courses.json.prev \
   frontend/ /var/www/html/countsfor/frontend/
@@ -1585,7 +1640,7 @@ curl -s http://127.0.0.1:8000/health
 ```
 
 - The restart runs `bootstrap_db` first, so a new table or a `migrate.py` step reaches the database here; look for its log line with `journalctl -u countsfor-api -n 30`.
-- `--no-scrape` matters: rsync replaced the live `courses.json` with the repo copy, which lacks the daily updates. The rebuild brings it back from the live `soc.json` and the deployed `mapping_overlays.json` and refreshes the `.gz`. For the minute in between, visitors get the repo copy.
+- `--no-scrape` matters: rsync replaced the live `courses.json` with the repo copy, which lacks the daily updates. The rebuild brings it back from the live `soc.json` and the deployed `mapping_overlays.json` and rewrites both files. For the minute in between, browsers (which accept gzip) still get the previous catalog from the untouched `courses.json.gz`, and only clients without gzip get the repo copy.
 - If you changed a file in `deploy/`, install it again with the command from its section (15.6, 15.9, 15.10, 15.12), then `sudo systemctl daemon-reload` and restart for the unit, or `sudo apachectl configtest && sudo systemctl reload apache2` for the site. Do not overwrite `/etc/countsfor/countsfor.env` with the template: edit it.
 
 ### 15.17 Backups
@@ -1617,12 +1672,13 @@ To restore for real: `sudo systemctl stop countsfor-api`, drop and recreate `cou
 
   ```bash
   cd /var/www/html/countsfor
-  sudo -u countsfor cp frontend/data/courses.json.prev frontend/data/courses.json
-  sudo -u countsfor cp backend/data/soc.json.prev backend/data/soc.json          # only if soc.json.prev exists and is from the bad run
-  sudo -u countsfor sh -c 'gzip -9 -c frontend/data/courses.json > frontend/data/courses.json.gz'
+  sudo -u countsfor sh -c 'cp frontend/data/courses.json.prev frontend/data/.courses.json.tmp && mv frontend/data/.courses.json.tmp frontend/data/courses.json'
+  sudo -u countsfor sh -c 'gzip -9 -c frontend/data/courses.json > frontend/data/.courses.json.gz.tmp && mv frontend/data/.courses.json.gz.tmp frontend/data/courses.json.gz'
+  # only if soc.json.prev exists and is from before the bad run:
+  sudo -u countsfor sh -c 'cp backend/data/soc.json.prev backend/data/.soc.json.tmp && mv backend/data/.soc.json.tmp backend/data/soc.json'
   ```
 
-  The `.gz` must match `courses.json`, or browsers that accept gzip keep getting the bad catalog. Find the cause in `/var/log/countsfor/scrape.log`, fix it, and turn cron back on.
+  Each file is written under a temporary name and then renamed over the live one, as the daily update does, so Apache never serves a half-written file. The `.gz` must match `courses.json`, or browsers that accept gzip keep getting the bad catalog. Find the cause in `/var/log/countsfor/scrape.log`, fix it, and turn cron back on.
 - **Bad code.** Deploy the previous commit: in `~/countsfor-src`, `git checkout <good commit>`, then the commands of 15.16, then `git checkout main` again once `main` is fixed. Migrations only add tables and columns, so older code runs on the newer database.
 - **Bad database change.** Restore the last nightly dump (15.17).
 
@@ -1636,16 +1692,17 @@ To restore for real: `sudo systemctl stop countsfor-api`, drop and recreate `cou
 | Apache does not start or reload | `sudo apachectl configtest`. Usually the `CHANGE_ME` certificate names, or a module not enabled (`Invalid command 'ProxyPass'`, `RewriteEngine`, `Header`, `SSLEngine`). |
 | The Ubuntu default page appears | `000-default` is still enabled: `sudo a2dissite 000-default default-ssl && sudo systemctl reload apache2`. |
 | 403 on every page | Apache cannot read `frontend/`: `namei -l /var/www/html/countsfor/frontend/index.html` (every folder needs `x` for others, files need `r`). The deploy root must be 755. |
-| Signed in, but signed out again on the next page load | The session cookie is `Secure` and needs HTTPS through Apache with `X-Forwarded-Proto` set and `TRUST_PROXY=1`. Opening the site over plain HTTP or by IP address breaks it. |
+| Signed in, but signed out again on the next page load | Open the site as `https://countsfor.qatar.cmu.edu`, not over HTTP or by IP address: the session cookie is `Secure` because `FLASK_ENV=production` turns on `SESSION_COOKIE_SECURE` (it does not depend on `TRUST_PROXY`), and sign-in state is kept per origin. The pages sign in with the bearer token in browser storage (3.4), so a lost cookie alone does not sign anyone out: in the developer tools, check that `cf_auth_token` is in Local Storage or Session Storage for that origin, and that `/api/me` answers 200. |
 | Google: "origin is not allowed" | Add the origin in the Google Cloud Console (15.14). |
 | `pg_restore: error: relation "..." already exists` | The database was bootstrapped before the restore. Recreate it and restore again (15.8 step 5). |
 | `pg_restore: error: unsupported version (...) in file header` | `pg_restore` is older than the `pg_dump` that made the file. Install the matching PostgreSQL version (15.8 step 2). |
 | Inserts fail with "duplicate key value violates unique constraint ..._pkey" after the import | A sequence is behind its table. Run the check in 15.8 step 7 and `setval`. |
-| The scrape log ends in `GATE FAILED` | The new data looked wrong (sections or courses dropped) and nothing was published. Compare with the staged files in `backend/var/staging/`. A real drop, for example at the start of a semester, can be accepted once by running with a lower `CF_MIN_SECTION_RATIO`: `sudo -u countsfor env CF_MIN_SECTION_RATIO=0.9 /var/www/html/countsfor/backend/scraper/run_scrape.sh --skip-tests`. |
-| The scrape log ends in `FAILED: scrape_soc` or shows timeouts | No outbound access to `enr-apps.as.cmu.edu`, or the SOC changed its pages. Test with `curl`; set `https_proxy` in `/etc/countsfor/scraper.env` if IT requires a proxy. |
+| The last run in the scrape log shows `GATE FAILED: ...` lines (followed by `Not published; ...` and `Update FAILED ... (exit 1)`) | The new data looked wrong (sections or courses dropped) and nothing was published. Compare with the staged files in `backend/var/staging/`. A real drop, for example at the start of a semester, can be accepted once by running with a lower `CF_MIN_SECTION_RATIO`: `sudo -u countsfor env CF_MIN_SECTION_RATIO=0.9 /var/www/html/countsfor/backend/scraper/run_scrape.sh --skip-tests`. |
+| The last run shows `FAILED: scrape_soc; ...` (before `Update FAILED ... (exit 1)`) or timeouts | No outbound access to `enr-apps.as.cmu.edu`, or the SOC changed its pages. Test with `curl`; set `https_proxy` in `/etc/countsfor/scraper.env` if IT requires a proxy. |
 | `Another update holds .../update.lock; exiting` (exit 75) | A run is still going (`pgrep -af update_data.py`). Wait for it. |
 | No new lines in the scrape log | Cron ignored the file (a dot in its name, wrong owner or mode, no final newline) or the time zone is not what you think: `journalctl -u cron --since today`, `timedatectl`. |
-| `Permission denied` writing `backend/data/soc.json` or `frontend/data/` | A copy was made without `--chown=countsfor:countsfor`. `sudo chown -R countsfor:countsfor /var/www/html/countsfor/frontend /var/www/html/countsfor/backend`. |
+| `Permission denied` writing `backend/data/soc.json` or `frontend/data/`, or `ERROR: cannot open the lock file .../update.lock` | A copy was made without `--chown=countsfor:countsfor`, or an update was run as root (`run_scrape.sh` now refuses that, but an older run or a direct `update_data.py` call can leave root-owned files). `sudo chown -R countsfor:countsfor /var/www/html/countsfor/frontend /var/www/html/countsfor/backend`. |
+| `ERROR: run this as countsfor, the owner of .../backend/data` | `run_scrape.sh` was started as another user (often root, `sudo` without `-u countsfor`). Run it again with `sudo -u countsfor`. |
 | The site shows an old catalog | `ls -l /var/www/html/countsfor/frontend/data/`: `courses.json` and `courses.json.gz` should have about the same time. If only the `.gz` is old, run `run_scrape.sh --no-scrape`. Then 19.8. |
 
 ### 15.20 Old hosting: GitHub Pages and Render (historical)
@@ -1689,12 +1746,12 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 8, 2026 (`cleanup` branch, commit 30fe141)
+### 16.2 Results on November 8, 2026 (`cleanup` branch, after the review fixes)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **154 passed, 6 failed** (the known failures below) |
-| `python -m pytest backend/scraper/tests` | 163 passed |
+| `python -m pytest backend/tests` | **160 passed, 6 failed** (the known failures below) |
+| `python -m pytest backend/scraper/tests` | 167 passed |
 | `node scripts/run-data-tests.js` | **129 passed, 1 failed** (profile 46/46, data 65/66, utils 5/5, dash guard 3/3, app views 10/10) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
@@ -1716,7 +1773,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
 - `backend/tests/test_admin.py` and `test_course_overrides.py` cover the admin page.
-- `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, and the SMTP relay check end to end.
+- `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, the SMTP relay check end to end, and that production never returns a reset token or reads `backend/.env`.
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
 - `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list, the daily update (`test_update_data.py`), `scripts/dev_server.py` (`test_dev_server.py`) and `scripts/bump_cf_build.py`. `backend/scraper/tests/` has no `__init__.py`; its `conftest.py` puts `backend/scraper/` on `sys.path`, which is why the scripts are imported as top-level modules there.
@@ -1954,6 +2011,7 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 1. **Faculty can make themselves admin.** All `/api/directory/entries` write routes accept `role: "admin"` from any faculty user (verified locally: a professor upserted their own entry to admin and was admin after signing in again). Restrict admin grants (and probably all directory writes) to `ROLE_GROUP_ADMIN`.
 2. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
+3. **The daily scraper can rewrite the code it runs next to.** On the server `countsfor` owns every deployed file (15.3, 15.4): the API code, `backend/.venv` and the served JS, and the same user runs the scraper, from cron, with no sandbox, on HTML fetched from the SOC servlet. The API is sandboxed (`ProtectSystem=strict`); the scraper is not. A bug exploited in the scrape could change the API code (run on the next restart) or the served JS (every visitor, and the sign-in tokens in their browser storage). The scraper only needs to write `backend/data/`, `frontend/data/` and `backend/var/`. Two ways to close this, not done because each changes the deploy and must be tested on the server: deploy the code as `root:countsfor` (folders 750, files 640, `frontend/` world-readable, `pip` run as root) and give `countsfor` write access only to those three folders; or run the update from a systemd service and timer with `ProtectSystem=strict` and `ReadWritePaths=` limited to them, in place of the cron line.
 
 ### 21.2 Operational and data issues
 
@@ -1963,7 +2021,7 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 4. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
 5. Whether production has an email provider for password resets is not known (on Render the values were set only in the dashboard). Decide at the cutover (15.6).
 6. The deploy files (15) have not been run on the real server yet; the certificate names, the time zone and outbound network access are unknown until then.
-7. Running `update_data.py` in a checkout leaves `frontend/data/courses.json.prev` and `backend/data/soc.json.prev`, which `.gitignore` does not cover (14.4). Add `*.prev` to `.gitignore`.
+7. **A failed daily update is silent.** `MAILTO` in `deploy/countsfor.cron` is empty, so the failure line the job prints goes nowhere and the log is the only record. Decide who should be told, have IT confirm the server can send mail (a mailer such as `postfix` or `msmtp-mta` through the campus relay), then set `MAILTO` (15.12). Until then, check the last scrape date on Admin, Overview.
 8. Render naming and ownership are unclear until the old hosting is retired (15.20): who pays, and whether the stray `countsfor-backend` service and `countsfor-db` database still exist.
 9. M25 in `backend/data/soc.json` was written by the old scraper, which read every row as 10 cells, so the summer Session column shifted every field after the title (units hold "summer two" or "qatar summer", the section cell holds the units, and later courses sit inside earlier courses' `sections`). M25 is no longer on the SOC form, so a new scrape cannot repair it, and it is kept as it is (90 courses, 827 rows). The pipeline ignores such data instead of deleting it: reconcile and the coverage check skip a course whose units cell is not units and a section whose section cell is not a section id (`soc_parse.usable_sections`, 14.3 step 3). All 90 M25 courses and their 827 rows are ignored; no semester on the form has any. Effects: 79-234, 17-403 and 67-313 no longer get `offered_qatar` from their bad M25 rows, 14 rows lose `offered_pitts` that only bad summer rows gave, and 45-920 keeps its catalog name "Data Science for Finance This Section Cancelled" because its only SOC title is in M25. 85-372 and 85-822 also keep their catalog names (their only SOC title is "tba This Section Cancelled").
 10. **Open questions from the November 8, 2026 catalog regeneration** (6,704 to 6,795 rows; 91 rows added for courses that only the correctly parsed M26 lists):
