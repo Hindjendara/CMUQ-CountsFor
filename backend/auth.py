@@ -389,7 +389,8 @@ def login():
 
 @bp.route("/auth/forgot-password", methods=["POST"])
 def forgot_password():
-    """Start a password reset. Returns a token in dev when EXPOSE_RESET_TOKEN=1."""
+    """Start a password reset. Returns a token in dev when EXPOSE_RESET_TOKEN=1
+    (never in production: the token would let anyone reset any account)."""
     data = request.get_json(silent=True) or {}
     email = normalize_cmu_email(data.get("email") or "")
     if not email:
@@ -400,7 +401,8 @@ def forgot_password():
     # or not) so it never reveals whether an account exists. The frontend
     # steers the user to Google recovery instead.
     cfg = current_app.config
-    expose = os.environ.get("EXPOSE_RESET_TOKEN", "").lower() in ("1", "true", "yes")
+    expose = (not cfg.get("IS_PRODUCTION")
+              and os.environ.get("EXPOSE_RESET_TOKEN", "").lower() in ("1", "true", "yes"))
     if not _email_provider_configured(cfg) and not expose:
         return jsonify(
             error="email_unavailable",

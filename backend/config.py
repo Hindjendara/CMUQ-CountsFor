@@ -20,11 +20,15 @@ from pathlib import Path
 _BACKEND_DIR = Path(__file__).resolve().parent
 
 # Load backend/.env in development. Never overrides variables already set.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(_BACKEND_DIR / ".env")
-except ImportError:
-    pass
+# Skipped when the real environment already says production (systemd's env file
+# on the server), so a stray dev .env in the deployed backend/ cannot add
+# dev-only settings such as EXPOSE_RESET_TOKEN.
+if os.environ.get("FLASK_ENV", "").strip().lower() != "production":
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_BACKEND_DIR / ".env")
+    except ImportError:
+        pass
 
 
 def _csv(env_value: str) -> list[str]:

@@ -211,3 +211,60 @@ def test_forgot_password_through_unauthenticated_relay(monkeypatch):
         for part in parsed.walk() if not part.is_multipart()
     )
     assert "https://countsfor.qatar.cmu.edu/index.html?token=" in text
+
+
+@pytest.mark.parametrize("with_relay", [False, True])
+def test_production_never_returns_a_reset_token(monkeypatch, with_relay):
+    """EXPOSE_RESET_TOKEN is dev only: in production it is ignored, so a stray
+    setting (for example a dev backend/.env on the server) cannot hand anyone a
+    working reset link for any account."""
+    monkeypatch.setenv("EXPOSE_RESET_TOKEN", "1")
+
+    class ProdConfig(TestConfig):
+        IS_PRODUCTION = True
+        RESEND_API_KEY = ""
+        SMTP_HOST = "relay.qatar.example" if with_relay else ""
+        SMTP_PORT = 25
+        SMTP_USER = ""
+        SMTP_PASS = ""
+        SMTP_USE_TLS = False
+        MAIL_FROM = "CountsFor <noreply@qatar.cmu.edu>" if with_relay else ""
+
+    app = create_app(ProdConfig)
+    client = app.test_client()
+    client.post("/api/auth/register", json={
+        "email": "victim@andrew.cmu.edu", "password": "victimpass1", "confirm_password": "victimpass1",
+    })
+    client.post("/api/auth/logout")
+
+    with patch("backend.email_util.smtplib.SMTP"):
+        r = client.post("/api/auth/forgot-password", json={"email": "victim@andrew.cmu.edu"})
+    body = r.get_json()
+    assert "reset_token" not in body and "reset_url" not in body
+    if with_relay:
+        assert r.status_code == 200 and body["ok"] is True
+    else:
+        assert r.status_code == 503 and body["error"] == "email_unavailable"
+
+
+def test_backend_env_file_is_not_loaded_in_production(tmp_path):
+    """With FLASK_ENV=production in the real environment, config.py does not
+    read backend/.env at all."""
+    probe = (
+        "import dotenv\n"
+        "calls = []\n"
+        "dotenv.load_dotenv = lambda *a, **k: calls.append(a) or False\n"
+        "import backend.config\n"
+        "print(len(calls))\n"
+    )
+
+    def calls(**env):
+        clean = {k: v for k, v in os.environ.items() if k not in _CONFIG_VARS}
+        clean.update(env, PYTHONPATH=str(REPO_ROOT))
+        proc = subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, env=clean,
+                              capture_output=True, text=True, timeout=60)
+        assert proc.returncode == 0, proc.stderr
+        return int(proc.stdout.strip())
+
+    assert calls(**PROD) == 0
+    assert calls() == 1
