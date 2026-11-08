@@ -4,7 +4,7 @@ A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Studen
 
 **Live site:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) · **API:** `https://countsfor-summer-26.onrender.com` · **Repo:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26)
 
-**Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short: create a virtualenv and `pip install -r requirements.txt`, copy `backend/.env.example` to `backend/.env`, run the API with `python -m backend.app` (port 5050), serve the site with `python scripts/dev_server.py` (port 8765, proxies `/api` to the API), and open `http://localhost:8765/`.
+**Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short: create a virtualenv and `pip install -r backend/requirements.txt`, copy `backend/.env.example` to `backend/.env`, run the API with `python -m backend.app` (port 5050), serve the site with `python scripts/dev_server.py` (port 8765, proxies `/api` to the API), and open `http://localhost:8765/`.
 
 ## About this README
 
@@ -101,6 +101,8 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 
 ### 3.1 Big picture
 
+> **Retired hosting.** This diagram shows the old GitHub Pages and Render setup. Its workflow and Render files (`.github/workflows/`, `render.yaml`, `Procfile`, `runtime.txt`, `.nojekyll`) were removed from the repo; the CMU-Q server files are in `deploy/`. The diagram will be redrawn.
+
 ```
                           +-------------------------------------------+
                           |  Browser                                  |
@@ -179,7 +181,7 @@ The pages call the API on their own origin: `CF_BACKEND_URL` is normally `''`, s
 
 | Environment | Database | How it is chosen |
 |---|---|---|
-| Production (Render) | Postgres, Render database `CountsFor_Summer_2026` (region Ohio) | `DATABASE_URL` linked from the database in `render.yaml`. `config.py` refuses to start without it when `FLASK_ENV=production`. |
+| Production (Render) | Postgres, Render database `CountsFor_Summer_2026` (region Ohio) | `DATABASE_URL` linked from the database in the Render dashboard. `config.py` refuses to start without it when `FLASK_ENV=production`. |
 | Local | SQLite file | Any relative `sqlite:///name.db` URL is rewritten to `backend/instance/name.db`. With no `DATABASE_URL` at all, local dev also falls back to `backend/instance/countsfor.db`. |
 | Tests | In-memory SQLite | `TestConfig.SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"` |
 
@@ -198,7 +200,6 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `frontend/reset.html` | yes | Redirect stub to `index.html` keeping the query string (old reset links). | Keep |
 | `frontend/landing/index.html` | yes | Redirect stub to `../index.html`. | Keep (old links) |
 | `docs/landing-DESIGN_NOTES.md` | yes | Landing design notes. | Reference only |
-| `.nojekyll` | yes | Tells GitHub Pages to serve files as-is. | Keep |
 | `frontend/js/` | yes | All frontend logic. See [section 8](#8-frontend-walkthrough). | Live |
 | `frontend/css/styles.css` | yes | App styles, about 5,500 lines, light and dark tokens at the top. | Live |
 | `frontend/css/landing.css` | yes | Landing page styles. | Live |
@@ -207,17 +208,13 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `frontend/data/` | yes | Served catalog: `courses.json`, `minor_courses.json`. See [4.3](#43-frontenddata-backenddata-and-backendscraper). | Live |
 | `backend/data/` | yes | Private data, never served: `soc.json`, `mapping_overlays.json`, `faculty_directory.json`, `directory_admins.json`, `minors/`. | Live |
 | `backend/scraper/` | yes | The scrape pipeline scripts and their pytest tests. See [section 14](#14-data-pipeline-soc-scrape). | Live |
-| `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `frontend/app.html`, and every `?v=` tag in `frontend/index.html`. Run by the scrape workflow. | Live |
+| `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `frontend/app.html`, and every `?v=` tag in `frontend/index.html`. A release tool, run by hand (15.6). | Live |
 | `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `frontend/tests/data.test.js` and `frontend/tests/utils.test.js`, with an in-memory `localStorage`, plus the Node-only `frontend/tests/dash-guard.test.js` and `frontend/tests/app-views.test.js`. | Live |
 | `frontend/tests/` | yes | Browser test page (`frontend/tests/test.html`) and JS unit tests. Not deployed. | Live |
+| `deploy/` | yes | Server configuration for the CMU-Q host: systemd unit, Apache vhost, cron entry, logrotate and the environment templates. No secrets. | Live |
 | `pytest.ini` | yes | Runs `backend/tests` and `backend/scraper/tests` with `python -m pytest` from the repo root. | Live |
-| `.github/workflows/` | yes | `scrape.yml`, `pages.yml`, `keepalive.yml`. | Live |
-| `render.yaml` | yes | Render Blueprint for the backend and database. | Live |
-| `requirements.txt` | yes | One line: `-r backend/requirements.txt`. Render installs from the repo root. | Live |
-| `runtime.txt` | yes | `python-3.11.9`. | Live |
 | `README.md` | yes | This manual. | Keep current |
 | `docs/` | yes | `docs/analytics-plan/` (the team analytics plan, HTML source and PDF) and `docs/archive/` (sprint plans, proposals, progress report, wireframes, UX review and design specs from 2026; history only, not current truth). | Reference |
-| `Testing/` | yes | A tiny mock SOC Flask server for testing the scraper offline (`Testing/app.py`, `Testing/readMe`). Its readme references `scraper/scrape_soc.py`, which is now `backend/scraper/scrape_soc.py`. | Legacy but usable |
 | `CONTEXT.md` | **no** (gitignored) | A long "complete project context" doc that exists only on the original author's laptop. A successor cloning the repo will not have it. | Local only |
 | `server.log` | no (gitignored) | Local log file. | Local only |
 | `backend/instance/` | no (gitignored) | Local SQLite databases (before November 2026 they were in `instance/` at the repo root; move an old `countsfor.db` there). | Local only |
@@ -235,7 +232,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `models.py` | All ORM models (14 tables) and role constants (`VALID_ROLES`, `FACULTY_ROLES`, `VALID_DEPARTMENTS`, `FLAG_STATUSES`). |
 | `db_schema.py` | `REQUIRED_TABLES` (checked by `/health` and bootstrap) and URL redaction helpers. |
 | `migrate.py` | Hand-written, idempotent `ALTER TABLE` and `CREATE TABLE` steps for databases that predate a model change. |
-| `bootstrap_db.py` | `python -m backend.bootstrap_db`: create tables, run migrations, verify required tables. Render pre-deploy command. |
+| `bootstrap_db.py` | `python -m backend.bootstrap_db`: create tables, run migrations, verify required tables. Runs before the API starts (systemd `ExecStartPre` on the server). |
 | `permissions.py` | `require_login`, `require_role_group`, `require_role`, `current_user`, user loading from cookie or bearer token. |
 | `tokens.py` | Bearer token sign and verify. |
 | `cmu.py` | The one backend CMU email check: `normalize_cmu_email()` (accepts `andrew.cmu.edu`, `cmu.edu`, `qatar.cmu.edu`, always returns `@andrew.cmu.edu`, rejects an empty local part, whitespace or a second `@`; same rules as `normalizeCmuEmail()` in `frontend/js/utils.js`) and `email_in_domain()` (the `ALLOWED_EMAIL_DOMAIN` check). Also seed file helpers. Used by `auth.py`, `directory.py`, `directory_routes.py` and `plans.py`. |
@@ -251,9 +248,7 @@ Supabase was once considered as an alternative Postgres host. Nothing in the cod
 | `plans.py` | `/api/plans` routes (list, share by email, share link, accept link). |
 | `search_analytics.py` | `/api/search-analytics` (course lookup counts per program and semester). |
 | `email_util.py` | Password reset email via Resend API or SMTP. **This is the one in use.** |
-| `Procfile` | `web:` gunicorn command (same as `render.yaml` start command). |
 | `requirements.txt` | Pinned Python dependencies (Flask 3.0.3, Flask-SQLAlchemy 3.1.1, flask-cors, SQLAlchemy 2.0.51, psycopg2-binary, google-auth, requests, itsdangerous, gunicorn, python-dotenv, pytest). |
-| `runtime.txt` | `python-3.11.9`. |
 | `.env.example` | Template for `backend/.env`. |
 | `.env` | Your local settings. Gitignored. |
 | `seed_users.example.json` | Example directory seed rows. |
@@ -271,7 +266,7 @@ The served catalog (`courses.json`, `minor_courses.json`) is in `frontend/data/`
 | `soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 23 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
 | `mapping_overlays.json` | The one place for manual complements to the SOC scrape (14.4): `renumbered` (6 retired Psychology numbers), `overlays` (additive mappings, 21 entries as of Nov 2026, including the H&SS Course Offerings sheet), `remove_mappings` (85-414, 85-426) and `qatar_visibility` (85-100). |
 | `minor_courses.json` | Course lists per minor (only `business` and `cs` populated). Loaded by `fetchMinorCourses()`. |
-| `faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. Used as the directory seed in production (`SEED_USERS_PATH=backend/data/faculty_directory.json` in `render.yaml`). |
+| `faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. Used as the directory seed in production (`SEED_USERS_PATH` in `deploy/countsfor.env.example`). |
 | `scrape_soc.py` | Scraper. Splits each results table into rows on `</tr>` (only the first row of each course opens with `<tr>`), maps table cells by the `<th>` header (summer pages have an extra Session column), strips the "This Section Cancelled" note from titles and marks those sections cancelled. |
 | `soc_parse.py`, `soc_departments.py` | Shared parsing helpers. `soc_parse.clean_soc_title()` cleans titles already stored in `soc.json` (cancelled note, " : subtitle", trailing ": TBA") and returns `None` when nothing usable is left. |
 | `json_io.py` | Shared `load_json` and `save_json` helpers for the pipeline scripts. |
@@ -294,7 +289,7 @@ These steps were run end to end in November 2026.
 xcode-select --install
 
 # Homebrew (skip if installed): see https://brew.sh
-# Python 3.11 matches production (runtime.txt says python-3.11.9).
+# Python 3.11 or newer (the server, Ubuntu 24.04, ships 3.12).
 brew install python@3.11 node gh
 ```
 
@@ -317,7 +312,7 @@ Always run backend commands **from the repo root**, never from inside `backend/`
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt      # pulls backend/requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ### 5.4 Configure `backend/.env`
@@ -425,15 +420,14 @@ Every variable is also listed, with local values and production values in commen
 | `HOST` | No | `127.0.0.1` | Dev server bind address (`python -m backend.app` only). |
 | `PORT` | No | `5050` | Dev server port (`python -m backend.app` only; gunicorn has its own `--bind`). |
 | `FLASK_DEBUG` | No | `1` | Dev server debug mode. |
-| `PYTHON_VERSION` | Render only | `3.11.9` in `render.yaml` | Python version Render uses. |
 
-Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither Resend (`RESEND_API_KEY` + `MAIL_FROM`) nor SMTP (`SMTP_HOST` plus a sender, `MAIL_FROM` or `SMTP_USER`; it logs in only when `SMTP_USER` is set, so an unauthenticated campus relay works) is configured and `EXPOSE_RESET_TOKEN` is off, the endpoint returns **503 `email_unavailable`** with `google_recovery: true` for every email, and the landing page steers the user to "Continue with Google", which then lets them set a password via `/api/auth/set-password`. As of November 2026 it is not known whether production has an email provider configured (the values are `sync: false` in `render.yaml`, set only in the Render dashboard).
+Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither Resend (`RESEND_API_KEY` + `MAIL_FROM`) nor SMTP (`SMTP_HOST` plus a sender, `MAIL_FROM` or `SMTP_USER`; it logs in only when `SMTP_USER` is set, so an unauthenticated campus relay works) is configured and `EXPOSE_RESET_TOKEN` is off, the endpoint returns **503 `email_unavailable`** with `google_recovery: true` for every email, and the landing page steers the user to "Continue with Google", which then lets them set a password via `/api/auth/set-password`. As of November 2026 it is not known whether production has an email provider configured (on Render the values were set only in the dashboard).
 
 ### 6.2 Data pipeline scripts
 
 | Name | Script | Default | Purpose |
 |---|---|---|---|
-| `SOC_BASE_URL` | `scrape_soc.py` | `https://enr-apps.as.cmu.edu/open/SOC/SOCServlet` | Point at `Testing/app.py` mock for offline tests. |
+| `SOC_BASE_URL` | `scrape_soc.py` | `https://enr-apps.as.cmu.edu/open/SOC/SOCServlet` | Override the SOC endpoint, for example to point at a local mock server. |
 | `MIN_COURSES_FOR_VALID_SCRAPE` | same | `100` | Below this a semester scrape is treated as failed. |
 | `MIN_COURSES_FOR_SUMMER_SCRAPE` | `scrape_soc.py` | `10` | Lower threshold for summer terms. |
 | `SOC_OUTPUT_PATH` | `scrape_soc.py` | `backend/data/soc.json` (found from the script, not the working directory) | Output file. |
@@ -778,7 +772,7 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 
 | Method | Path | Who | File | Purpose |
 |---|---|---|---|---|
-| GET | `/health` | public | `app.py` | Health and DB check (used by Render and `keepalive.yml`) |
+| GET | `/health` | public | `app.py` | Health and DB check |
 | POST | `/api/auth/register` | public | `auth.py` | Create account with email and password |
 | POST | `/api/auth/login` | public | `auth.py` | Email and password sign-in |
 | POST | `/api/auth/forgot-password` | public | `auth.py` | Start password reset |
@@ -923,7 +917,7 @@ Days are **Qatar local dates** (UTC+3, no daylight saving). The constant is `LOC
 | `sign_in_events` | successful sign-in | `user_id`, `method` (`google`, `password`, `email_link`, `register`, `before_tracking`), `created_at` |
 | `user_activity_days` | user per Qatar day | `user_id`, `day` (`YYYY-MM-DD` string), `visits`, `sign_ins`, `first_seen`, `last_seen`; unique on (`user_id`, `day`) |
 
-Both are SQLAlchemy models in `backend/models.py`. They are new tables, so `db.create_all()` creates them on deploy (Render's `preDeployCommand: python -m backend.bootstrap_db` runs `init_database`). Both are in `REQUIRED_TABLES` in `backend/db_schema.py`, so `/health` on Postgres reports `degraded` if either is missing. Rows are deleted with the user (`ON DELETE CASCADE`).
+Both are SQLAlchemy models in `backend/models.py`. They are new tables, so `db.create_all()` creates them on deploy (`python -m backend.bootstrap_db`, run before the API starts, calls `init_database`). Both are in `REQUIRED_TABLES` in `backend/db_schema.py`, so `/health` on Postgres reports `degraded` if either is missing. Rows are deleted with the user (`ON DELETE CASCADE`).
 
 **One-time backfill.** Tracking started after people were already using the site. `_backfill_sign_in_history()` in `backend/migrate.py` runs inside `run_migrations()`: if `sign_in_events` is empty, it copies each user's `users.last_login` into one `before_tracking` event plus one activity-day row. Once any event exists it never runs again. The page footer shows when real tracking began (earliest non-backfill event).
 
@@ -953,7 +947,9 @@ Store counts, not behaviour: no IP addresses, user agents, locations or per-pers
 
 > **Moving to the CMU-Q server (this section will be rewritten).** On the server a daily system cron job replaces `scrape.yml`. Cron runs `backend/scraper/run_scrape.sh`, which sources `/etc/countsfor/scraper.env` (template: `deploy/scraper.env.example`) and runs `backend/scraper/update_data.py`. That script takes a lock (`backend/var/update.lock`), runs the parser tests (step 1 below; `--skip-tests` skips them), copies the live `backend/data/soc.json` and `frontend/data/courses.json` into `backend/var/staging/` (`CF_STAGING_DIR`), and runs steps 2 to 5 on the copies (`--no-scrape` skips step 2, for a rebuild after a deploy). It publishes only if every step passes and its own checks pass: both files parse, `metadata.last_scrape` is set, no semester and campus present in both files drops below `CF_MIN_SECTION_RATIO` (0.98) of its live section count, the catalog keeps `CF_MIN_CATALOG_RATIO` (0.95) of its courses and loses no course code. Publishing is `os.replace` with `.prev` copies kept for rollback, plus `frontend/data/courses.json.gz` (gzip -9) for Apache. A catalog that is unchanged byte for byte is not rewritten, so its ETag stays; `soc.json` is still updated. Exit codes: 0 published, 1 failed (live files untouched), 75 another update is running. It does not commit or push, and it does not run `bump_cf_build.py` (step 6): Apache sends `no-cache` with an ETag, and the bump stays a release tool. Tests: `backend/scraper/tests/test_update_data.py`.
 
-### 14.1 Steps (`.github/workflows/scrape.yml`)
+### 14.1 Steps (the retired `scrape.yml` workflow)
+
+The GitHub Actions workflow was removed from the repo; on the server `update_data.py` runs steps 1 to 5 (see the note above). The steps are kept here for reference until this section is rewritten.
 
 Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. Only runs when `github.repository == 'Adicmu/Countsfor-Summer-26'`.
 
@@ -967,6 +963,8 @@ Runs daily at 12:00 UTC and on weekdays at 06:00 UTC, and on manual dispatch. On
 8. If it pushed, triggers `pages.yml` with `gh workflow run pages.yml --ref main` (bot pushes do not trigger workflows by themselves).
 
 ### 14.2 Current state (verified November 3, 2026): the scrape on the main repo is broken
+
+History: the workflow below no longer exists in the repo; the server's cron job replaces it.
 
 - Every scheduled run of "Scrape SOC" on `Adicmu/Countsfor-Summer-26` since July 9, 2026 has **failed** except a few, the last success being August 12, 2026. The failure is at step 1: `No module named pytest`. The workflow never installs pytest (there is no `pip install` step). Fix: add a step before the tests, for example `run: pip install pytest`.
 - As a result `origin/main` data stops at commit `642c4ab Update SOC data (2026-08-12)` and `data/soc.json` there says `"last_scrape": "2026-08-13T07:51:25..."` (UTC timestamp of the scrape, committed on Aug 12 in Qatar time). The live site `adicmu.github.io/Countsfor-Summer-26` serves this August data.
@@ -999,17 +997,6 @@ python backend/scraper/apply_mapping_overlays.py
 python backend/scraper/validate_soc_coverage.py
 python scripts/bump_cf_build.py
 git diff --stat
-```
-
-Or trigger it on GitHub: `gh workflow run scrape.yml -R Adicmu/Countsfor-Summer-26` (only after fixing the pytest step).
-
-Offline testing against the mock server in `Testing/app.py` (serves on port 5000 by default, change it if AirPlay is on):
-
-```bash
-pip install flask
-python Testing/app.py
-SOC_BASE_URL=http://localhost:5000/open/SOC/SOCServlet MIN_COURSES_FOR_VALID_SCRAPE=1 \
-  SOC_OUTPUT_PATH=/tmp/test_soc.json python backend/scraper/scrape_soc.py
 ```
 
 ### 14.4 Mapping overlays (`backend/data/mapping_overlays.json`)
@@ -1061,17 +1048,19 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 
 ## 15. Deployment
 
+> **Being replaced.** The GitHub Pages and Render setup described here is being retired, and its files (`.github/workflows/`, `render.yaml`, `backend/Procfile`, `runtime.txt`, `.nojekyll`) were removed from the repo (they remain in git history). The CMU-Q server configuration is in `deploy/`. This section will be rewritten.
+
 ### 15.1 Frontend: GitHub Pages
 
 - Repo settings (checked with `gh api repos/Adicmu/Countsfor-Summer-26/pages`): build type **workflow** (GitHub Actions), public, URL `https://adicmu.github.io/Countsfor-Summer-26/`, HTTPS enforced, no custom domain.
-- Workflow `.github/workflows/pages.yml`: on push to `main` (or manual run), collects the public files listed below and deploys them. Only `main` deploys; feature branches do not.
+- Workflow `pages.yml` (removed): on push to `main` (or manual run), collects the public files listed below and deploys them. Only `main` deploys; feature branches do not.
 - The `gh-pages` branch on origin (last commit August 9, 2026) is a leftover from an experiment on the fork branch `hind/cursor/adicmu-pages-deploy`. Pages does not serve from it. The `pages-build-deployment` workflow listed in the Actions tab is GitHub's built-in branch builder and is likewise unused.
 - Every push to `main` redeploys. The admin page, course editor and sign-in analytics went live on November 3, 2026.
-- The workflow copies only what the browser loads into `_site/` and publishes that: `index.html`, `app.html`, `reset.html`, `.nojekyll`, `js/`, `css/`, `assets/`, `landing/` (without its notes) and `frontend/data/courses.json` plus `frontend/data/minor_courses.json`. Backend code, docs, tests and raw scrape data are not public. **If you add a file the browser must load from a new folder, add it to the "Collect public site files" step in `.github/workflows/pages.yml`, or it will 404 on the live site.**
+- The workflow copies only what the browser loads into `_site/` and publishes that: `index.html`, `app.html`, `reset.html`, `.nojekyll`, `js/`, `css/`, `assets/`, `landing/` (without its notes) and `frontend/data/courses.json` plus `frontend/data/minor_courses.json`. Backend code, docs, tests and raw scrape data are not public.
 
 ### 15.2 Backend: Render
 
-- Blueprint: `render.yaml` at the repo root (the comment says `backend/render.yaml` was removed).
+- Blueprint: `render.yaml` (removed from the repo; see git history).
   - Web service `countsfor-backend` (Python, plan `starter`, region Ohio). Build `pip install -r requirements.txt`. Pre-deploy `python -m backend.bootstrap_db`. Start `SKIP_DB_BOOTSTRAP=1 gunicorn --workers=1 --bind 0.0.0.0:$PORT --timeout 120 --access-logfile - 'backend.app:create_app()'`. Health check `/health`.
   - Database `CountsFor_Summer_2026` (plan `starter`, Ohio).
   - Env: `FLASK_ENV=production`, `DATABASE_URL` from the database, generated `SECRET_KEY`, `ALLOWED_EMAIL_DOMAIN=andrew.cmu.edu`, `FRONTEND_ORIGIN`, `SEED_USERS_PATH=backend/data/faculty_directory.json`, `FRONTEND_RESET_BASE`, and dashboard-only (`sync: false`) values: `GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `MAIL_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (and `ALLOW_BOOTSTRAP_SKIP`, which the code no longer reads).
@@ -1079,14 +1068,14 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 - The production database host is `dpg-d9osve67...`. An older host (`dpg-d8nqt2...`) was used earlier in 2026, so the database has been recreated at least once.
 - Older notes mentioned a second service `countsfor-backend.onrender.com` and an Oregon database `countsfor-db`. In November 2026 that hostname did not answer. Check the Render dashboard and delete anything unused.
 - Plans are paid (`starter`). Who pays and on which Render account is not recorded in the repo. Find out before the owner leaves.
-- `keepalive.yml` pings `/health` every 10 minutes from 04:00 to 20:59 UTC and fails loudly if three attempts fail. It was originally for the free tier (which sleeps); on a paid plan it is a cheap uptime monitor.
+- `keepalive.yml` (removed) pinged `/health` every 10 minutes from 04:00 to 20:59 UTC and failed loudly if three attempts failed. It was originally for the free tier (which sleeps). On the server, systemd restarts the API if it stops.
 
 Deploying the backend: push or merge to `main`; Render builds, runs the pre-deploy bootstrap (creates new tables, runs `migrate.py`), then starts. Watch the deploy log for `Database bootstrap OK` and then check `/health` (expect `"status":"ok"` and `"tables":14`).
 
 **Recovering a deleted database** (this happened once when a free trial expired; deploys then fail at pre-deploy or `/health` returns 503):
 
 1. Make sure billing is active on the Render account (Account Settings, Billing). Paid plans cannot be chosen without it.
-2. Render dashboard, **New +**, **PostgreSQL**. Name it `CountsFor_Summer_2026` (must match `render.yaml`), region **Ohio**, plan **Starter**. Wait until it is **Available**.
+2. Render dashboard, **New +**, **PostgreSQL**. Name it `CountsFor_Summer_2026`, region **Ohio**, plan **Starter**. Wait until it is **Available**.
 3. Open the web service `countsfor-summer-26`, **Environment**, and link `DATABASE_URL` to the new database's **Internal Database URL**. On the database's **Apps** tab, check that 1 service is connected.
 4. (The `ALLOW_BOOTSTRAP_SKIP=1` escape hatch that let one deploy pass with a broken database was removed in November 2026; fix the database link first.)
 5. **Manual Deploy**, **Clear build cache & deploy**. Pre-deploy creates every table. Confirm `/health` shows `"database":"connected"`.
@@ -1172,9 +1161,8 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also as `&mdash;`, `&ndash;` or `—`) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason: today only the four `LABEL_OVERRIDES` keys that must match requirement paths in the data.
 - `tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen.
 - `tests/utils.test.js` covers `hasTypedText()` (the landing page check for typed text).
-- `Testing/` (capital T) is not a test suite; it is the SOC mock server.
 
-There is no CI that runs the backend tests. Only the scrape workflow runs the two SOC parser test files.
+There is no CI that runs the tests. The server's daily update (`update_data.py`) runs the two SOC parser test files before it scrapes.
 
 ---
 
@@ -1320,8 +1308,8 @@ To remove admin: Directory panel, revoke or change the role; they become student
 
 1. Admin page, Overview: `course_data.last_scrape` shows the server's copy of `backend/data/soc.json`. Compare with `https://adicmu.github.io/Countsfor-Summer-26/data/soc.json` (first lines).
 2. `git log origin/main --grep "Update SOC" -3`: when did the bot last commit to the main repo?
-3. `gh run list -R Adicmu/Countsfor-Summer-26 --workflow scrape.yml -L 5`: are scrapes failing? (As of Nov 2026 they fail on missing pytest, see 14.2.)
-4. `gh run list -R Adicmu/Countsfor-Summer-26 --workflow pages.yml -L 5`: did Pages deploy after the data commit?
+3. On the server, `tail -50 /var/log/countsfor/scrape.log`: is the daily update failing?
+4. Was the update published? `ls -l /var/www/html/countsfor/frontend/data/courses.json` shows when the live catalog last changed.
 5. `curl -s https://adicmu.github.io/Countsfor-Summer-26/app.html | grep cf-build`: did the cache tag change? If the tag did not change, browsers may reuse the old `courses.json`.
 6. Hard refresh (Cmd+Shift+R) or a private window.
 7. If a single course is wrong but the scrape is fresh, check for an admin override (Admin, Courses, filter "edited") or a mapping overlay.
@@ -1396,7 +1384,7 @@ Only `main` deploys. Also bump `?v=` tags so browsers drop cached JS and CSS.
 
 ### 21.2 Operational issues
 
-1. The scrape workflow on this repo failed every day from July 9 to November 3, 2026 because it never installed `pytest`. Fixed on November 3 (an "Install test runner" step in `scrape.yml`). Check the Actions tab after the next 12:00 UTC run; until a run succeeds, live data stays at the August 13, 2026 scrape (14.2).
+1. The scrape workflow on this repo failed every day from July 9 to November 3, 2026 because it never installed `pytest`. Fixed on November 3 (an "Install test runner" step in `scrape.yml`). The workflow has since been removed; the server's daily cron job (14) replaces it.
 2. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
 3. Render service naming and ownership are unclear (15.2). Confirm in the dashboard; remove the stray `countsfor-backend` service and `countsfor-db` database if they still exist.
 4. 6 backend tests and 1 JS test fail (16.2). No CI runs the backend tests.
@@ -1449,7 +1437,7 @@ No secret values belong in this file or in git. Hand secrets over in person or t
 ### 23.1 Accounts and access the successor needs
 
 - [ ] **GitHub**: admin (or at least write) access to `Adicmu/Countsfor-Summer-26`, including Settings (Pages, Actions, secrets). Consider transferring the repo to a CMU-Q organization so it does not depend on a personal account.
-- [ ] **GitHub fork**: decide what happens to `Hindjendara/Countsfor-Summer-26`. Today it is the only place the scrape works. After fixing `scrape.yml` on origin, the fork can be retired.
+- [ ] **GitHub fork**: decide what happens to `Hindjendara/Countsfor-Summer-26`. It was the only place the scrape worked. Once the server's cron scrape runs, the fork can be retired.
 - [ ] **Render**: membership on the Render account or team that owns the `countsfor-summer-26` web service and the `CountsFor_Summer_2026` database, including billing (plans are paid `starter`). Record who pays.
 - [ ] **Database**: ability to open the Postgres database (Render dashboard; External Database URL for `psql` or DBeaver). Take a backup (`pg_dump`) before major changes.
 - [ ] **Google Cloud**: owner or editor on the project that holds the OAuth client `378923997481-...` (to edit authorized origins and the consent screen).
@@ -1468,7 +1456,7 @@ No secret values belong in this file or in git. Hand secrets over in person or t
 ### 23.3 Before the owner leaves
 
 - [ ] Fix the security issues in 21.1.
-- [ ] Fix the scrape workflow (add `pip install pytest`) and confirm a green run.
+- [ ] Confirm the server's daily scrape (`/var/log/countsfor/scrape.log`) publishes successfully.
 - [x] Merge and deploy `feat/admin-page` and the sign-in analytics (done November 3, 2026).
 - [ ] Rotate `SECRET_KEY`, the database password and any email credentials, then give the new values only to the successor.
 - [ ] Remove the original owner's personal admin directory entry if appropriate.

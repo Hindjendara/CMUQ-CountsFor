@@ -13,7 +13,7 @@ variables, every route, the database and migrations, deployment, tests) is docum
 Quick start from the repo root:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cp backend/.env.example backend/.env      # local settings, every variable explained
 .venv/bin/python -m backend.app          # API on http://127.0.0.1:5050
 .venv/bin/python scripts/dev_server.py   # site on http://localhost:8765, /api proxied to :5050

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Update the live course data in place: the server's daily cron job.
 
-Replaces .github/workflows/scrape.yml. Cron runs it through run_scrape.sh:
+Replaces the old GitHub Actions scrape workflow. Cron runs it through run_scrape.sh:
 
   1. Lock backend/var/update.lock (exit 75 if another update holds it).
-  2. Gate: the SOC parser tests, as scrape.yml ran them (--skip-tests skips).
+  2. Gate: the SOC parser tests, as the old workflow ran them (--skip-tests skips).
   3. Stage: copy the live soc.json and courses.json into CF_STAGING_DIR.
      scrape_soc.py carries old semesters forward from the file it overwrites,
      so it must start from a copy of the live soc.json.
@@ -171,7 +171,7 @@ class Lock:
 # ---------- Running the steps ----------
 
 def test_gate_command() -> list[str]:
-    """The parser tests scrape.yml ran before scraping."""
+    """The SOC parser tests, run as a gate before scraping."""
     tests = [str(SCRAPER_DIR / "tests" / name) for name in TEST_FILES]
     return [sys.executable, "-m", "pytest", *tests, "-q", "-p", "no:cacheprovider"]
 

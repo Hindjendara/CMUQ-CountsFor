@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CMU Schedule of Classes (SOC) Scraper
-Runs daily via GitHub Actions. Tries upcoming semesters; writes backend/data/soc.json
+Runs daily from the server's cron job. Tries upcoming semesters; writes backend/data/soc.json
 only when a real, non-empty scrape succeeds.
 
 Scrapes each (semester, department) once per configured campus, then merges
@@ -20,8 +20,8 @@ Cancelled sections stay in `sections` with `cancelled: true` (the SOC note is
 stripped from the title) but are not offerings and add no campus. A section
 subtitle ("Title <br />: subtitle") goes in the section's `section_title`.
 
-Scheduled daily via .github/workflows/scrape.yml on Adicmu/main:
-  scrape_soc.py → reconcile_offerings.py → mapping overlays → validate → commit → Pages
+Run daily by update_data.py (cron, through run_scrape.sh) on staged copies:
+  scrape_soc.py → reconcile_offerings.py → mapping overlays → validate → publish
 
 Output structure:
 {

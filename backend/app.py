@@ -5,7 +5,7 @@ imports, so `python app.py` inside backend/ fails with "attempted relative impor
 with no known parent package":
 
     python3 -m venv .venv && source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r backend/requirements.txt
     cp backend/.env.example backend/.env   # then fill in GOOGLE_CLIENT_ID etc.
     python -m backend.bootstrap_db         # create the tables once
     python -m backend.app                  # http://localhost:5050
