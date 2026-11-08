@@ -4,7 +4,7 @@ A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Studen
 
 **Live site:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) · **API:** `https://countsfor-summer-26.onrender.com` · **Repo:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26)
 
-**Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short: create a virtualenv and `pip install -r requirements.txt`, run the API with `python -m backend.app` (port 5050), serve the site with `python3 -m http.server 8765 --directory frontend`, and open `http://localhost:8765/`.
+**Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short: create a virtualenv and `pip install -r requirements.txt`, copy `backend/.env.example` to `backend/.env`, run the API with `python -m backend.app` (port 5050), serve the site with `python scripts/dev_server.py` (port 8765, proxies `/api` to the API), and open `http://localhost:8765/`.
 
 ## About this README
 
@@ -158,20 +158,20 @@ There are two different "base URLs" in `js/api.js`. Do not confuse them.
 
 `fetchAllCourses()` loads only the bundled `frontend/data/courses.json`. There is no remote fallback: if the file cannot be loaded or has no courses, it throws and `App.loadData()` shows "Failed to load data".
 
-`getBackendUrl()` resolution order (in `js/api.js`, used by both pages):
+The pages call the API on their own origin: `CF_BACKEND_URL` is normally `''`, so `apiFetch('/api/me')` requests the relative URL `/api/me`. In production Apache serves `frontend/` and proxies `/api` to gunicorn; locally `scripts/dev_server.py` serves `frontend/` and proxies `/api` and `/health` to the Flask dev server on `127.0.0.1:5050` (5.6). There is no backend URL in the HTML.
 
-1. `localStorage['cf_backend_override']` if set (manual escape hatch).
+`getBackendUrl()` (in `js/api.js`, used by both pages) returns, in order:
+
+1. `localStorage['cf_backend_override']` if set (debugging escape hatch, for example a local page against another backend; that backend's `FRONTEND_ORIGIN` must then list the page's origin for CORS).
 2. `window.CF_BACKEND_URL` if set before `api.js` loads.
-3. If the page hostname is `localhost`, `127.0.0.1` or empty: **`http://localhost:5050`** (hardcoded).
-4. `<meta name="cf-backend-url">` in the HTML (currently `https://countsfor-summer-26.onrender.com` in both `index.html` and `app.html`).
-5. Hardcoded fallback `https://countsfor-summer-26.onrender.com`.
+3. `''` (same origin), the normal case.
 
-`isBackendConfigured()` returns true when the `cf-backend-url` meta tag is present and non-empty. Because both HTML files ship that tag, it is effectively always true, which means the "demo mode when the backend is unreachable" branch in `App.init()` is now only reachable through guest mode.
+`App.init()` has no demo-mode fallback for an unreachable server any more: a 401 or an unreachable API redirects to `index.html`, which shows the sign-in form or the "Could not reach the server" banner with a guest link. Guest mode is the only localStorage-only mode.
 
 ### 3.4 Authentication model
 
 - Two ways to prove identity: **email + password** (`/api/auth/register`, `/api/auth/login`) and **Google Sign-In** (`/api/auth/google`, verifies a Google ID token against `GOOGLE_CLIENT_ID`). The old passwordless route `/api/auth/email` was removed in November 2026.
-- After sign-in the server sets a signed Flask session cookie `cf_session` **and** returns an `auth_token` in the JSON body. The token is an `itsdangerous` signed `{"uid": id}` valid for 30 days (`backend/tokens.py`). The frontend stores it and sends `Authorization: Bearer <token>` on every call, because browsers often block third-party cookies between `github.io` and `onrender.com`.
+- After sign-in the server sets a signed Flask session cookie `cf_session` **and** returns an `auth_token` in the JSON body. The token is an `itsdangerous` signed `{"uid": id}` valid for 30 days (`backend/tokens.py`). The frontend stores it and sends `Authorization: Bearer <token>` on every call. The token dates from when the site (github.io) and the API (onrender.com) were on different sites and browsers blocked the cookie; now that they share one origin the cookie is first-party (`SameSite=Lax`), but the frontend still relies on the token, so both stay.
 - Token storage: `sessionStorage['cf_auth_token']` by default, or `localStorage['cf_auth_token']` if the user ticked "Keep me signed in" on the landing page.
 - On every sign-in the backend recomputes the role from the directory (`_sync_directory_profile()` in `backend/auth.py`). This is the single most important rule to understand about roles. See [section 7](#7-signing-in-locally-and-making-yourself-admin).
 
@@ -179,7 +179,7 @@ There are two different "base URLs" in `js/api.js`. Do not confuse them.
 
 | Environment | Database | How it is chosen |
 |---|---|---|
-| Production (Render) | Postgres, Render database `CountsFor_Summer_2026` (region Ohio) | `DATABASE_URL` linked from the database in `render.yaml`. `config.py` refuses to start without it when `RENDER=true` or `FLASK_ENV=production`. |
+| Production (Render) | Postgres, Render database `CountsFor_Summer_2026` (region Ohio) | `DATABASE_URL` linked from the database in `render.yaml`. `config.py` refuses to start without it when `FLASK_ENV=production`. |
 | Local | SQLite file | Any relative `sqlite:///name.db` URL is rewritten to `backend/instance/name.db`. With no `DATABASE_URL` at all, local dev also falls back to `backend/instance/countsfor.db`. |
 | Tests | In-memory SQLite | `TestConfig.SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"` |
 
@@ -326,14 +326,15 @@ pip install -r requirements.txt      # pulls backend/requirements.txt
 cp backend/.env.example backend/.env
 ```
 
-Then edit `backend/.env`:
+The file lists every variable the API reads, with a local value or a commented default, and the production value in a comment (section 6.1 has the table). The defaults work as they are:
 
+- `FLASK_ENV=development`. `production` makes `config.py` refuse SQLite and a missing `SECRET_KEY`, and crash at import.
 - `SECRET_KEY`: any long random string locally. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 - `DATABASE_URL=sqlite:///countsfor.db` (becomes `backend/instance/countsfor.db`).
-- `FRONTEND_ORIGIN=http://localhost:8765` (must match the port you serve the frontend on).
 - `EXPOSE_RESET_TOKEN=1` (lets you test password reset without email).
-- Leave `FLASK_ENV` unset. Setting it to `production` makes `config.py` refuse SQLite and crash at import.
-- `GOOGLE_CLIENT_ID` can stay empty. The Google button will then fail with "GOOGLE_CLIENT_ID not set on the server", which is fine locally.
+- `GOOGLE_CLIENT_ID` is the public client ID from the HTML meta tag. Google sign-in works locally only if `http://localhost:8765` is an authorized JavaScript origin of that client.
+
+`backend/tests/test_env_example.py` fails if a variable read in `backend/` is missing from `.env.example` (or the reverse), so add new variables there.
 
 `config.py` loads `backend/.env` automatically (`python-dotenv`). Real environment variables win over `.env` values.
 
@@ -360,12 +361,16 @@ flask --app 'backend.app:create_app()' run --port 5050
 In a second terminal, from the repo root:
 
 ```bash
-python3 -m http.server 8765 --directory frontend
+python scripts/dev_server.py
 ```
 
-Open `http://localhost:8765/`. Use port **8765** unless you also change `FRONTEND_ORIGIN`. Any other port is rejected by CORS and the UI says it "could not reach the server".
+Open `http://localhost:8765/`. The script (standard library only) mirrors production: it serves `frontend/` and proxies `/api/*` and `/health` to `http://127.0.0.1:5050`, keeping the method, headers (including `Authorization` and cookies), body and status. The pages therefore call the API with relative paths on one origin, exactly as behind Apache, and no CORS is involved. If the API is not running, `/api` answers 502 and the landing page shows "Could not reach the server".
 
-If you must run the backend on a port other than 5050 (for example because 5050 is busy), the frontend still calls `http://localhost:5050` because that is hardcoded for localhost. Point it elsewhere in the browser console:
+Options: `--port` (default 8765), `--backend` (default `http://127.0.0.1:5050`; change it if the API runs on another port), `--root` (default `frontend/`), `--bind` (default `127.0.0.1`).
+
+A plain `python -m http.server 8765 --directory frontend` still serves the pages (guest mode and `tests/test.html` work), but every `/api` call then returns 404, so nothing that needs the server works.
+
+To point one browser at another backend without the proxy, set the override in the console (that backend's `FRONTEND_ORIGIN` must list `http://localhost:8765`):
 
 ```js
 localStorage.setItem('cf_backend_override', 'http://localhost:5099');
@@ -377,9 +382,9 @@ location.reload();
 
 1. `http://localhost:8765/` serves `index.html` (landing). `js/landing.js` renders the sign-in panel immediately, then probes `GET /api/me` in the background.
    - If you already have a valid session and have not typed anything, it redirects to `app.html`.
-   - If the backend is unreachable, it shows an "accounts unavailable" banner with a guest link.
+   - If the backend is unreachable, it shows a "Could not reach the server" banner with a guest link.
 2. "Continue as guest" sets `sessionStorage['cf_guest'] = '1'` and opens `app.html`. The app boots in demo mode with a default profile (student, CS) and never calls `/api/me`.
-3. Opening `app.html` directly without a session redirects back to `index.html` (because the backend meta tag is present).
+3. Opening `app.html` directly without a session (or with the API unreachable) redirects back to `index.html`.
 4. `app.html?token=...` or `?reset=...` redirects to `index.html` with the same parameter, which opens the reset password view.
 5. `?share_plan=<token>` survives the login redirect via `sessionStorage['cf_pending_share_plan']` and is imported after sign-in.
 6. A freshly bootstrapped database has no users. Use **Create account** first.
@@ -390,39 +395,39 @@ location.reload();
 
 ### 6.1 Backend (`backend/config.py`, `backend/app.py`, `backend/auth.py`)
 
+Every variable is also listed, with local values and production values in comments, in `backend/.env.example`; the server template is `deploy/countsfor.env.example` (loaded by systemd from `/etc/countsfor/countsfor.env`). `backend/tests/test_env_example.py` keeps both in step with the code.
+
 | Name | Required? | Default | Purpose |
 |---|---|---|---|
-| `SECRET_KEY` | **Yes in production** | `dev-only-change-me` | Signs the session cookie and the bearer `auth_token`. Changing it signs everyone out. Render generates it (`generateValue: true`). |
-| `DATABASE_URL` | **Yes on Render or when `FLASK_ENV=production`** | none (local falls back to `sqlite:///backend/instance/countsfor.db`) | SQLAlchemy URL. `postgres://` is rewritten to `postgresql://`. Relative SQLite paths are anchored to `backend/instance/`. |
-| `RENDER` | Set by Render | unset | When `true`: production cookie settings, and the app refuses to start without `DATABASE_URL`. |
-| `FLASK_ENV` | Yes on Render (`production` in `render.yaml`) | `development` | `production` turns on Secure, `SameSite=None` cookies and forbids SQLite. Never set it locally. |
-| `ALLOW_SQLITE` | No | unset | Mentioned in `.env.example` and docs, but **has no effect**: outside production SQLite is always allowed, and in production it is always refused. |
-| `SKIP_DB_BOOTSTRAP` | No | unset | `1` skips `create_all()` and migrations inside `create_app()`. Production start command sets it because Render runs `bootstrap_db` in pre-deploy instead. |
-| `ALLOW_BOOTSTRAP_SKIP` | No (recovery only) | unset | `1` lets a failed bootstrap continue and makes `/health` return 200 even when degraded. Only for recovering from an expired or deleted Render database (section 15.2). Remove afterwards. |
+| `FLASK_ENV` | Yes in production (`production`) | `development` | `production` refuses to start without `SECRET_KEY` and `DATABASE_URL` (no SQLite fallback) and makes the session cookie `Secure` by default. The only production switch: the old `RENDER` variable is no longer read. |
+| `SECRET_KEY` | **Yes in production** | `dev-only-change-me` outside production | Signs the session cookie and the bearer `auth_token`. Changing it signs everyone out. |
+| `DATABASE_URL` | **Yes in production** | none (local falls back to `sqlite:///backend/instance/countsfor.db`) | SQLAlchemy URL. `postgres://` is rewritten to `postgresql://`. Relative SQLite paths are anchored to `backend/instance/`. Server: `postgresql:///countsfor` (local PostgreSQL, peer auth). |
+| `SKIP_DB_BOOTSTRAP` | No | unset | `1` skips `create_all()` and migrations inside `create_app()`. Production sets it because `python -m backend.bootstrap_db` runs once before gunicorn starts. |
+| `SESSION_COOKIE_SECURE` | No | on in production, off otherwise | Session cookie sent over HTTPS only. Accepts `1`/`0`, `true`/`false`. |
+| `SESSION_COOKIE_SAMESITE` | No | `Lax` | `Lax`, `Strict` or `None` (`None` needs `Secure`). The site and API share one origin, so `Lax` is right. It was `None` in production for the github.io to onrender.com setup. |
+| `TRUST_PROXY` | No | off | `1` wraps the app in werkzeug `ProxyFix(x_for=1, x_proto=1)`, so `request.remote_addr` and `request.scheme` come from the proxy's `X-Forwarded-*` headers. Set it only when the app is reachable through that one proxy (server: Apache in front, gunicorn on `127.0.0.1:8000`). |
 | `GOOGLE_CLIENT_ID` | Yes for Google sign-in | empty | OAuth web client ID used to verify Google ID tokens. Not a secret. Must match the `cf-google-client-id` meta tag. |
 | `ALLOWED_EMAIL_DOMAIN` | No | empty (any CMU domain) | If set (production uses `andrew.cmu.edu`), only that domain may sign in. Note that `normalize_cmu_email()` already rewrites `cmu.edu` and `qatar.cmu.edu` to `andrew.cmu.edu` and rejects all non-CMU addresses. |
-| `ADMIN_EMAILS` | No | empty | **Ignored by sign-in.** Kept only so old deploy configs do not break. Admin comes only from the directory. |
 | `SEED_USERS_PATH` | No | `backend/seed_users.json` | JSON directory seed. Production uses `backend/data/faculty_directory.json`. Relative paths are resolved against the current directory, `backend/`, then the repo root. |
+| `ADMIN_SEED_PATH` | No | unset (`backend/data/directory_admins.json`) | Hand-kept admin list layered over the seed. An empty value disables it (tests do). |
+| `SOC_JSON_PATH` | No | `backend/data/soc.json` | The private SOC scrape; the admin overview reads its `last_scrape`. The pipeline scripts read the same variable (6.2). |
 | `RESET_TOKEN_MINUTES` | No | `30` | Password reset link lifetime. |
-| `FRONTEND_RESET_BASE` | No | empty | Base URL for reset links in emails. Production: `https://adicmu.github.io/Countsfor-Summer-26/index.html`. If empty, falls back to `PUBLIC_APP_URL`, then to the first `FRONTEND_ORIGIN` plus `/index.html`. |
-| `PUBLIC_APP_URL` | No | empty | Fallback for `FRONTEND_RESET_BASE`. |
+| `FRONTEND_RESET_BASE` | No | empty | The page reset emails link to; `?token=...` is appended. Server: `https://countsfor.qatar.cmu.edu/index.html`. If empty, the first `FRONTEND_ORIGIN` plus `/index.html`. |
 | `RESEND_API_KEY` | One email provider needed for email resets | empty | Resend API key. Tried first. Secret. |
-| `MAIL_FROM` | With Resend (or SMTP) | empty | From address. `SMTP_FROM` is accepted as an alias. |
-| `SMTP_FROM` | No | empty | Alias for `MAIL_FROM`. |
+| `MAIL_FROM` | With Resend; with SMTP unless `SMTP_USER` is the sender | empty | From address. Quote it in env files when it has spaces or `< >`. |
 | `SMTP_HOST` | For SMTP | empty | e.g. `smtp.gmail.com`. |
 | `SMTP_PORT` | No | `587` | SMTP port. |
-| `SMTP_USER` | For SMTP | empty | SMTP login. |
-| `SMTP_PASS` | For SMTP | empty | SMTP password (Gmail app password). Secret. `SMTP_PASSWORD` is accepted as an alias. |
-| `SMTP_PASSWORD` | No | empty | Alias for `SMTP_PASS`. |
+| `SMTP_USER` | No | empty | SMTP login, and the From address when `MAIL_FROM` is empty. Without it no login is attempted (an unauthenticated campus relay). |
+| `SMTP_PASS` | With `SMTP_USER` | empty | SMTP password (for Gmail an app password). Secret. |
 | `SMTP_USE_TLS` | No | `true` | STARTTLS on or off. |
-| `FRONTEND_ORIGIN` | Yes in production | `http://localhost:8765,https://adicmu.github.io` | Comma-separated CORS allow list for `/api/*`. Origins only, no paths, no trailing slash. Production: `https://adicmu.github.io,https://hindjendara.github.io,http://localhost:8765`. |
+| `FRONTEND_ORIGIN` | No | `http://localhost:8765` | Comma-separated CORS allow list for `/api/*`. Origins only, no paths, no trailing slash. Same-origin requests (through Apache, or `scripts/dev_server.py`) never need it; it matters only for a page on another origin (the `cf_backend_override` hook). Server: `https://countsfor.qatar.cmu.edu`. |
 | `EXPOSE_RESET_TOKEN` | No (dev only) | unset | `1` makes `/api/auth/forgot-password` return `reset_token` and `reset_url` in the response, and allows the flow even with no email provider. **Never set in production.** Read directly from `os.environ` in `auth.py`. |
 | `HOST` | No | `127.0.0.1` | Dev server bind address (`python -m backend.app` only). |
-| `PORT` | No | `5050` | Dev server port. On Render, gunicorn binds `$PORT` provided by Render. |
+| `PORT` | No | `5050` | Dev server port (`python -m backend.app` only; gunicorn has its own `--bind`). |
 | `FLASK_DEBUG` | No | `1` | Dev server debug mode. |
 | `PYTHON_VERSION` | Render only | `3.11.9` in `render.yaml` | Python version Render uses. |
 
-Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither Resend (`RESEND_API_KEY` + `MAIL_FROM`) nor SMTP (`SMTP_HOST` + `SMTP_USER` + `SMTP_PASS`) is configured and `EXPOSE_RESET_TOKEN` is off, the endpoint returns **503 `email_unavailable`** with `google_recovery: true` for every email, and the landing page steers the user to "Continue with Google", which then lets them set a password via `/api/auth/set-password`. As of November 2026 it is not known whether production has an email provider configured (the values are `sync: false` in `render.yaml`, set only in the Render dashboard).
+Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither Resend (`RESEND_API_KEY` + `MAIL_FROM`) nor SMTP (`SMTP_HOST` plus a sender, `MAIL_FROM` or `SMTP_USER`; it logs in only when `SMTP_USER` is set, so an unauthenticated campus relay works) is configured and `EXPOSE_RESET_TOKEN` is off, the endpoint returns **503 `email_unavailable`** with `google_recovery: true` for every email, and the landing page steers the user to "Continue with Google", which then lets them set a password via `/api/auth/set-password`. As of November 2026 it is not known whether production has an email provider configured (the values are `sync: false` in `render.yaml`, set only in the Render dashboard).
 
 ### 6.2 Data pipeline scripts
 
@@ -441,11 +446,10 @@ Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither R
 
 | Where | What |
 |---|---|
-| `<meta name="cf-backend-url">` in `index.html` and `app.html` | Production backend URL. |
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to `frontend/data/courses.json`. Bumped by `scripts/bump_cf_build.py`. |
 | `?v=...` on script and CSS tags | Manual cache busting. `app.html` tags are bumped by the script; `index.html` tags (`?v=home-copy-2026-08-22`) are not and must be bumped by hand. |
-| `localStorage['cf_backend_override']` | Per-browser backend URL override. |
+| `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
 
@@ -463,7 +467,7 @@ On **every** sign-in (`register`, `login`, `google`, `email`), the backend calls
 Consequences:
 
 - **Changing someone's role on the Admin page Users tab (`PATCH /api/users/<id>`) does not stick.** It is overwritten at that person's next sign-in unless they also have a matching directory entry. This was verified locally (patched a student to professor, signed in again, back to student). To change a role permanently, change the directory (Admin page, "Faculty access" tab, or the Directory panel).
-- `ADMIN_EMAILS` does nothing (it is still read into config for old deploy settings, but auth ignores it).
+- There is no admin env var: the old `ADMIN_EMAILS` is no longer read at all.
 - Students set their own major and minors through onboarding (`PATCH /api/me`). Users can only set their own role to `student` (`SELF_SETTABLE_ROLES`).
 
 ### 7.2 Sign in locally with a password
@@ -586,12 +590,12 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 ### 8.5 `js/api.js` (about 325 lines): all network calls
 
-`apiFetch(path, opts)` is the single wrapper. It always sends `credentials: 'include'` and the bearer token, times out after 75 s by default (`opts.timeoutMs`), never throws on HTTP errors, saves any `auth_token` it sees in a response, and returns `{ ok, status, data, error, message }`. `status: 0` means network failure or timeout.
+`apiFetch(path, opts)` is the single wrapper. It requests `CF_BACKEND_URL + path` (normally just the relative path), always sends `credentials: 'include'` and the bearer token, times out after 20 s by default (`opts.timeoutMs`), never throws on HTTP errors, saves any `auth_token` it sees in a response, and returns `{ ok, status, data, error, message }`. `status: 0` means the API could not be reached: network failure, timeout, or a 502/503/504 without a JSON body (the proxy, Apache or `scripts/dev_server.py`, reporting the API down). Flask's own JSON error responses pass through unchanged.
 
 | Group | Functions | Endpoint |
 |---|---|---|
 | Course data | `fetchAllCourses()`, `fetchMinorCourses()` | static files (see 3.3) |
-| Backend URL and token | `getBackendUrl()`, `isBackendConfigured()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
+| Backend URL and token | `getBackendUrl()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
 | Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword` (these six are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
 | Admin console | `apiAdminOverview`, `apiAdminInsights(semester)`, `apiAdminActivity(query)` | `/api/admin/*` |
@@ -606,7 +610,7 @@ Token storage: `saveAuthToken(token, true)` puts the token in localStorage ("Kee
 
 ### 8.6 `js/landing.js` (about 955 lines)
 
-One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "accounts unavailable" banner as soon as the server answers), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `enterGuestMode()`, `init()`.
+One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "Could not reach the server" banner as soon as the server answers), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `enterGuestMode()`, `init()`.
 
 `probeSession()` sends a visitor with a valid session straight to `app.html`. Only when they have already typed into the form (`userIsEngaged()`, which uses `hasTypedText()` from `utils.js`) does it stay and show "You're already signed in." with a Continue link, so typed text is never thrown away. The "Keep me signed in" checkbox does not count: its value is always "on".
 
@@ -689,11 +693,11 @@ Note: schedule plans live only in the browser. The server stores a plan only whe
 `create_app(config_class=Config, *, bootstrap_db=None)`:
 
 1. Loads config.
-2. `db.init_app(app)`.
+2. If `TRUST_PROXY` is on, wraps the WSGI app in `ProxyFix(x_for=1, x_proto=1)`; then `db.init_app(app)`.
 3. Unless `SKIP_DB_BOOTSTRAP` is truthy, runs `init_database(app)`: imports models, `db.create_all()`, then `run_migrations()`.
 4. Enables CORS for `/api/*` only, for `FRONTEND_ORIGINS`, with credentials and the `Content-Type` and `Authorization` headers.
 5. Registers blueprints: `auth`, `flags`, `wishlist`, `users`, `directory`, `search_analytics`, `plans`, `admin`, `course_overrides`.
-6. Adds `GET /health` (no `/api` prefix, so no CORS). For SQLite it always returns ok. For Postgres it runs `SELECT 1` and checks `REQUIRED_TABLES`; returns 503 if tables are missing or the DB errors (200 when `ALLOW_BOOTSTRAP_SKIP` is set).
+6. Adds `GET /health` (no `/api` prefix, so no CORS). For SQLite it always returns ok. For Postgres it runs `SELECT 1` and checks `REQUIRED_TABLES`; returns 503 if tables are missing or the DB errors.
 7. JSON 404 handler: `{"error":"not_found","message":"Route not found."}`.
 
 Production runs `gunicorn --workers=1 ... 'backend.app:create_app()'` with `SKIP_DB_BOOTSTRAP=1`.
@@ -757,7 +761,7 @@ When a signed-in **student** opens a course, the frontend posts `/api/search-ana
 
 - `record_event(actor, action, target, **details)` adds an `admin_audit_events` row to the current session; the caller's commit saves it together with the change.
 - Actions written today: `user.update`, `directory.add`, `directory.update`, `directory.remove`, `directory.revoke`, `flag.status`, `flag.note`, `course.add`, `course.update`, `course.revert`, `course.archive`, `course.restore`.
-- `GET /api/admin/overview`: user counts by role and group, new users in 7 and 30 days, active in 7 days (by `last_login`), incomplete profiles, flag counts by status, wishlist totals, plan count, total course lookups, directory row count, `course_data.last_scrape` (read from the top of `backend/data/soc.json` **on the server**, so it reflects the copy of the repo Render deployed, not GitHub Pages), six most recent signups.
+- `GET /api/admin/overview`: user counts by role and group, new users in 7 and 30 days, active in 7 days (by `last_login`), incomplete profiles, flag counts by status, wishlist totals, plan count, total course lookups, directory row count, `course_data.last_scrape` (read from the top of the server's `soc.json`: `SOC_JSON_PATH`, default `backend/data/soc.json`), six most recent signups.
 - `GET /api/admin/insights?semester=F26`: top lookups, top lookups per program, most saved, most flagged, students per program, signups per week for 12 weeks, list of semesters with data.
 - `GET /api/admin/sign-ins?days=7|30|90`: sign-in activity (active people, sign-ins, app opens, daily series, breakdowns, per-person table). See section 13.
 - `GET /api/admin/activity?action=course.&page=1&limit=50`: paginated audit log; `action` is a prefix match (a trailing `*` is ignored).
@@ -1068,7 +1072,7 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 - Blueprint: `render.yaml` at the repo root (the comment says `backend/render.yaml` was removed).
   - Web service `countsfor-backend` (Python, plan `starter`, region Ohio). Build `pip install -r requirements.txt`. Pre-deploy `python -m backend.bootstrap_db`. Start `SKIP_DB_BOOTSTRAP=1 gunicorn --workers=1 --bind 0.0.0.0:$PORT --timeout 120 --access-logfile - 'backend.app:create_app()'`. Health check `/health`.
   - Database `CountsFor_Summer_2026` (plan `starter`, Ohio).
-  - Env: `FLASK_ENV=production`, `DATABASE_URL` from the database, generated `SECRET_KEY`, `ALLOWED_EMAIL_DOMAIN=andrew.cmu.edu`, `FRONTEND_ORIGIN`, `SEED_USERS_PATH=backend/data/faculty_directory.json`, `FRONTEND_RESET_BASE`, and dashboard-only (`sync: false`) values: `GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `MAIL_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `ALLOW_BOOTSTRAP_SKIP`.
+  - Env: `FLASK_ENV=production`, `DATABASE_URL` from the database, generated `SECRET_KEY`, `ALLOWED_EMAIL_DOMAIN=andrew.cmu.edu`, `FRONTEND_ORIGIN`, `SEED_USERS_PATH=backend/data/faculty_directory.json`, `FRONTEND_RESET_BASE`, and dashboard-only (`sync: false`) values: `GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `MAIL_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (and `ALLOW_BOOTSTRAP_SKIP`, which the code no longer reads).
 - The URL actually used by the frontend and keepalive is **`https://countsfor-summer-26.onrender.com`** (the service is named `countsfor-summer-26` in the dashboard; the blueprint calls it `countsfor-backend`). **Render auto-deploys the backend from `main`:** confirmed on November 3, 2026, when a push to `main` moved production `/health` from 10 to 14 tables within minutes. Uncertain: whether the live service is managed by this blueprint or was created by hand.
 - The production database host is `dpg-d9osve67...`. An older host (`dpg-d8nqt2...`) was used earlier in 2026, so the database has been recreated at least once.
 - Older notes mentioned a second service `countsfor-backend.onrender.com` and an Oregon database `countsfor-db`. In November 2026 that hostname did not answer. Check the Render dashboard and delete anything unused.
@@ -1082,7 +1086,7 @@ Deploying the backend: push or merge to `main`; Render builds, runs the pre-depl
 1. Make sure billing is active on the Render account (Account Settings, Billing). Paid plans cannot be chosen without it.
 2. Render dashboard, **New +**, **PostgreSQL**. Name it `CountsFor_Summer_2026` (must match `render.yaml`), region **Ohio**, plan **Starter**. Wait until it is **Available**.
 3. Open the web service `countsfor-summer-26`, **Environment**, and link `DATABASE_URL` to the new database's **Internal Database URL**. On the database's **Apps** tab, check that 1 service is connected.
-4. If a deploy loop blocks you from changing settings, add `ALLOW_BOOTSTRAP_SKIP=1` for **one** deploy (pre-deploy and `/health` then pass in a degraded state), fix the database, and remove the variable again.
+4. (The `ALLOW_BOOTSTRAP_SKIP=1` escape hatch that let one deploy pass with a broken database was removed in November 2026; fix the database link first.)
 5. **Manual Deploy**, **Clear build cache & deploy**. Pre-deploy creates every table. Confirm `/health` shows `"database":"connected"`.
 6. The data is gone with the old database: users must sign up again, and directory entries, course edits and flags are lost. Take regular `pg_dump` backups to avoid this.
 
@@ -1326,7 +1330,7 @@ To remove admin: Directory panel, revoke or change the role; they become student
 ## 20. Troubleshooting and FAQ
 
 **"Could not reach the server" locally.**
-The frontend is not on the port listed in `FRONTEND_ORIGIN` (CORS rejected), or the backend is not on 5050 (the frontend hardcodes `http://localhost:5050` on localhost). Fix the port, or set `cf_backend_override` (5.6).
+The API is not running, or not where `scripts/dev_server.py` forwards to (`--backend`, default `http://127.0.0.1:5050`), or the site is served by something that does not proxy `/api` (a plain `http.server` answers 404). See 5.6. With `cf_backend_override` set, also check that the backend's `FRONTEND_ORIGIN` lists the page's origin.
 
 **`python app.py` fails with "attempted relative import".**
 Run from the repo root: `python -m backend.app`.
@@ -1430,7 +1434,6 @@ What is still out of date:
 |---|---|
 | `docs/archive/*` | History only. Plans, proposals and design specs from 2026; many details no longer match the code. |
 | `landing/DESIGN_NOTES.md` | Design notes for the landing page; refers to `docs/scotty-head.png` (the image is `assets/img/scotty-head.png`). |
-| `backend/.env.example` | Presents `ALLOW_SQLITE=1` as required; it has no effect. |
 | `backend/.env` (local, not in git) | Comment says an empty `SMTP_HOST` returns the reset link inline; that only happens with `EXPOSE_RESET_TOKEN=1`. |
 | Code comments | `backend/users.py` mentions area heads managing users; `backend/models.py` says there is no password column. |
 | `CONTEXT.md` | Not in git at all (gitignored). Successors will not have it. |

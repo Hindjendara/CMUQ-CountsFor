@@ -10,14 +10,16 @@ with no known parent package":
     python -m backend.bootstrap_db         # create the tables once
     python -m backend.app                  # http://localhost:5050
 
-Serve the frontend on port 8765, not 8080: FRONTEND_ORIGIN only allows 8765, and
-any other port is rejected by CORS, which the UI reports as "could not reach the
-server".
+Then serve the frontend the way production does, on the same origin as the API:
 
-    python3 -m http.server 8765 --directory frontend
+    python scripts/dev_server.py           # http://localhost:8765
 
-Run in production (Render):
-    gunicorn --workers=2 --bind 0.0.0.0:$PORT 'backend.app:create_app()'
+It serves frontend/ and proxies /api and /health to this server on :5050, so
+the pages call the API with relative paths, exactly as behind Apache.
+
+Run in production (gunicorn behind Apache, which proxies /api to it), from the
+folder that holds the backend package:
+    gunicorn --bind 127.0.0.1:8000 'backend.app:create_app()'
 """
 import os
 
@@ -25,13 +27,13 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from sqlalchemy import inspect, text
 
-from .config import Config, recovery_deploy_enabled
+from .config import Config
 from .db import db
 from .db_schema import REQUIRED_TABLES, database_host, redact_database_url
 
 
 def init_database(app: Flask) -> list[str]:
-    """Create tables and run additive migrations. Used locally and in Render pre-deploy."""
+    """Create tables and run additive migrations. Used locally and by bootstrap_db."""
     with app.app_context():
         from . import models  # noqa: F401 — register tables
         db.create_all()
@@ -43,6 +45,12 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    if app.config.get("TRUST_PROXY"):
+        # One trusted proxy (Apache) in front: take the client address and scheme
+        # from its X-Forwarded-For / X-Forwarded-Proto headers.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
     db.init_app(app)
     if bootstrap_db is None:
         bootstrap_db = os.environ.get("SKIP_DB_BOOTSTRAP", "").lower() not in (
@@ -53,7 +61,8 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
     if bootstrap_db:
         init_database(app)
 
-    # CORS — cookies + bearer token auth from GitHub Pages
+    # CORS: only for pages on another origin (FRONTEND_ORIGIN). The site itself
+    # calls the API on its own origin, which needs no CORS.
     CORS(
         app,
         resources={r"/api/*": {
@@ -84,7 +93,7 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
     app.register_blueprint(admin_bp)
     app.register_blueprint(course_overrides_bp)
 
-    # Health check (Render pings this). Fails if Postgres tables are missing.
+    # Health check for monitoring (not under /api). 503 if Postgres tables are missing.
     @app.route("/health")
     def health():
         uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
@@ -105,7 +114,7 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
                         db_target=db_target,
                         missing=sorted(missing),
                     )
-                    return jsonify(body), 200 if recovery_deploy_enabled() else 503
+                    return jsonify(body), 503
                 return jsonify(
                     status="ok",
                     database="connected",
@@ -119,7 +128,7 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
                 db_host=db_host,
                 message=str(exc),
             )
-            return jsonify(body), 200 if recovery_deploy_enabled() else 503
+            return jsonify(body), 503
 
     # Friendly 404 in JSON shape
     @app.errorhandler(404)
@@ -130,7 +139,7 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
 
 
 if __name__ == "__main__":
-    # Local dev only — production uses gunicorn via the Procfile.
+    # Local dev only. Production runs gunicorn ('backend.app:create_app()').
     application = create_app()
     application.run(
         host=os.environ.get("HOST", "127.0.0.1"),

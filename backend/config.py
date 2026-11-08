@@ -1,26 +1,28 @@
-"""Centralized configuration. All values come from env vars so the same code
-runs locally, on Render, and in tests without edits.
+"""Centralized configuration. Every setting comes from an environment variable,
+so the same code runs locally, on the server and in tests without edits.
 
-Required env vars in production:
-  SECRET_KEY        — random 32+ byte string for cookie signing
-  DATABASE_URL      — full Postgres URL (Render provides one for free)
-  GOOGLE_CLIENT_ID  — OAuth client ID from Google Cloud Console
-  FRONTEND_ORIGIN   — CORS allow-list, comma-separated
-                      e.g. "https://adicmu.github.io,http://localhost:8765"
-  ADMIN_EMAILS      — comma-separated andrew.cmu.edu emails granted admin role
-                      e.g. "avivek@andrew.cmu.edu,ladyhodhod@andrew.cmu.edu"
+backend/.env.example lists every variable with its local value and, in comments,
+the production value. backend/tests/test_env_example.py keeps that file and the
+variables read in backend/ in sync.
 
-Optional:
-  ALLOWED_EMAIL_DOMAIN  — restrict signups to one domain (e.g. "andrew.cmu.edu")
-                          leave empty to allow any verified Google account
+Where the values come from:
+  local dev   backend/.env (copied from .env.example), loaded below
+  production  /etc/countsfor/countsfor.env, loaded by systemd (EnvironmentFile);
+              template: deploy/countsfor.env.example. Real environment variables
+              always win over backend/.env.
+
+Production is FLASK_ENV=production. It refuses to start without SECRET_KEY and
+DATABASE_URL (no SQLite fallback), and turns on Secure session cookies.
 """
 import os
 from pathlib import Path
 
-# Load .env in development. In production env vars come from the host (Render).
+_BACKEND_DIR = Path(__file__).resolve().parent
+
+# Load backend/.env in development. Never overrides variables already set.
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parent / ".env")
+    load_dotenv(_BACKEND_DIR / ".env")
 except ImportError:
     pass
 
@@ -29,13 +31,20 @@ def _csv(env_value: str) -> list[str]:
     return [v.strip() for v in (env_value or "").split(",") if v.strip()]
 
 
-def recovery_deploy_enabled() -> bool:
-    """One-shot recovery when Render free Postgres/trial expired blocks deploy."""
-    return os.environ.get("ALLOW_BOOTSTRAP_SKIP", "").strip().lower() in ("1", "true", "yes")
+def _flag(name: str, default: bool = False) -> bool:
+    """Boolean env var: 1/true/yes/on are true, 0/false/no/off are false, unset is the default."""
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on")
+
+
+def is_production() -> bool:
+    return os.environ.get("FLASK_ENV", "").strip().lower() == "production"
 
 
 # Local SQLite databases live in backend/instance/ (gitignored).
-_INSTANCE_DIR = Path(__file__).resolve().parent / "instance"
+_INSTANCE_DIR = _BACKEND_DIR / "instance"
 
 
 def _absolutize_sqlite(uri: str) -> str:
@@ -64,58 +73,73 @@ def _absolutize_sqlite(uri: str) -> str:
 
 
 def _resolve_database_url() -> str:
-    """Resolve SQLAlchemy URI. Never silently use SQLite on Render or production."""
+    """SQLAlchemy URI from DATABASE_URL. Production never falls back to SQLite."""
     raw = (os.environ.get("DATABASE_URL") or "").strip()
-    on_render = os.environ.get("RENDER", "").lower() == "true"
-    is_production = os.environ.get("FLASK_ENV", "").strip().lower() == "production"
-
     if raw:
         if raw.startswith("postgres://"):
             raw = raw.replace("postgres://", "postgresql://", 1)
         return _absolutize_sqlite(raw)
-
-    if on_render:
-        raise RuntimeError(
-            "DATABASE_URL is not set on Render. Link the web service to "
-            "CountsFor_Summer_2026: refusing the SQLite fallback."
-        )
-    if is_production:
+    if is_production():
         raise RuntimeError(
             "DATABASE_URL is required when FLASK_ENV=production. "
-            "Refusing SQLite fallback."
+            "Refusing the SQLite fallback."
         )
+    return _absolutize_sqlite("sqlite:///countsfor.db")
 
-    allow_sqlite = os.environ.get("ALLOW_SQLITE", "").lower() in ("1", "true", "yes")
-    if allow_sqlite or not is_production:
-        return _absolutize_sqlite("sqlite:///countsfor.db")
 
-    raise RuntimeError(
-        "DATABASE_URL is unset. Set DATABASE_URL or ALLOW_SQLITE=1 for local SQLite dev."
-    )
+_DEV_SECRET_KEY = "dev-only-change-me"
+
+
+def _secret_key() -> str:
+    """SECRET_KEY signs the session cookie and the bearer tokens; production must set it."""
+    key = os.environ.get("SECRET_KEY", "").strip()
+    if key:
+        return key
+    if is_production():
+        raise RuntimeError("SECRET_KEY is required when FLASK_ENV=production.")
+    return _DEV_SECRET_KEY
+
+
+def _samesite(default: str) -> str:
+    raw = os.environ.get("SESSION_COOKIE_SAMESITE", "").strip().capitalize()
+    if not raw:
+        return default
+    if raw not in ("Lax", "Strict", "None"):
+        raise RuntimeError(
+            f"SESSION_COOKIE_SAMESITE must be Lax, Strict or None, got {raw!r}."
+        )
+    return raw
 
 
 class Config:
-    # ── Flask core ────────────────────────────────────────────
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-me")
+    IS_PRODUCTION = is_production()
 
-    # Cookie / session settings — cross-origin (GH Pages → Render) needs
-    # SameSite=None + Secure=True over HTTPS.
-    ON_RENDER = os.environ.get("RENDER", "").lower() == "true"
-    IS_PRODUCTION = (
-        os.environ.get("FLASK_ENV", "development") == "production" or ON_RENDER
-    )
+    # ── Flask core ────────────────────────────────────────────
+    SECRET_KEY = _secret_key()
+
+    # ── Session cookie ────────────────────────────────────────
+    # The site and the API share one origin (Apache proxies /api), so the cookie is
+    # first-party: SameSite=Lax works and also keeps it off cross-site POSTs.
+    # Secure (HTTPS only) is on in production. Both can be overridden.
     SESSION_COOKIE_NAME = "cf_session"
-    SESSION_COOKIE_SECURE = IS_PRODUCTION
+    SESSION_COOKIE_SECURE = _flag("SESSION_COOKIE_SECURE", IS_PRODUCTION)
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = "None" if IS_PRODUCTION else "Lax"
+    SESSION_COOKIE_SAMESITE = _samesite("Lax")
     SESSION_COOKIE_PATH = "/"
     PERMANENT_SESSION_LIFETIME = 60 * 60 * 24 * 30  # 30 days
+
+    # ── Reverse proxy ─────────────────────────────────────────
+    # TRUST_PROXY=1 wraps the app in werkzeug ProxyFix(x_for=1, x_proto=1), so
+    # request.remote_addr and request.scheme come from the X-Forwarded-For and
+    # X-Forwarded-Proto headers set by the one proxy in front (Apache). Leave it
+    # off when nothing sits in front of the app: clients could forge the headers.
+    TRUST_PROXY = _flag("TRUST_PROXY")
 
     # ── Database ──────────────────────────────────────────────
     _raw_db = _resolve_database_url()
     SQLALCHEMY_DATABASE_URI = _raw_db
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    # Fail fast on Render if Postgres is misconfigured instead of hanging gunicorn.
+    # Fail fast if Postgres is unreachable instead of hanging a gunicorn worker.
     _engine_opts: dict = {"pool_pre_ping": True}
     if _raw_db.startswith("postgresql"):
         _engine_opts["connect_args"] = {"connect_timeout": 10}
@@ -124,51 +148,50 @@ class Config:
     # ── Auth ──────────────────────────────────────────────────
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
     ALLOWED_EMAIL_DOMAIN = os.environ.get("ALLOWED_EMAIL_DOMAIN", "").strip().lower()
-    # Admin emails come ONLY from the directory panel (role=admin).
-    # ADMIN_EMAILS is legacy and ignored by auth sync — kept for backwards-compatible deploy configs.
-    ADMIN_EMAILS = {e.lower() for e in _csv(os.environ.get("ADMIN_EMAILS"))}
+    # Admins come only from the directory (role=admin), never from an env var.
     SEED_USERS_PATH = os.environ.get(
         "SEED_USERS_PATH",
-        str(Path(__file__).resolve().parent / "seed_users.json"),
+        str(_BACKEND_DIR / "seed_users.json"),
     )
     # Hand-kept admins layered over the faculty seed (default backend/data/directory_admins.json).
     # Unset means the default file; an empty string disables it.
     ADMIN_SEED_PATH = os.environ.get("ADMIN_SEED_PATH")
 
+    # ── Course data ───────────────────────────────────────────
+    # The private SOC scrape (written by backend/scraper/scrape_soc.py). The admin
+    # overview reads its last_scrape date. The scraper takes the same variable.
+    SOC_JSON_PATH = os.environ.get("SOC_JSON_PATH", str(_BACKEND_DIR / "data" / "soc.json"))
+
     # ── Password reset email ───────────────────────────────────
     RESET_TOKEN_MINUTES = int(os.environ.get("RESET_TOKEN_MINUTES", "30"))
-    # Override reset link base (default: first FRONTEND_ORIGIN + /index.html)
-    FRONTEND_RESET_BASE = (
-        os.environ.get("FRONTEND_RESET_BASE", "").strip()
-        or os.environ.get("PUBLIC_APP_URL", "").strip()
-    )
+    # Page the emailed reset link opens (the landing page, index.html); the token
+    # is appended as ?token=. Default: first FRONTEND_ORIGIN + /index.html.
+    FRONTEND_RESET_BASE = os.environ.get("FRONTEND_RESET_BASE", "").strip()
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
-    MAIL_FROM = (
-        os.environ.get("MAIL_FROM", "").strip()
-        or os.environ.get("SMTP_FROM", "").strip()
-    )
+    MAIL_FROM = os.environ.get("MAIL_FROM", "").strip()
     SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
     SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
     SMTP_USER = os.environ.get("SMTP_USER", "").strip()
-    SMTP_PASS = os.environ.get("SMTP_PASS") or os.environ.get("SMTP_PASSWORD") or ""
-    SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+    SMTP_PASS = os.environ.get("SMTP_PASS", "")
+    SMTP_USE_TLS = _flag("SMTP_USE_TLS", True)
 
     # ── CORS ──────────────────────────────────────────────────
-    FRONTEND_ORIGINS = _csv(os.environ.get(
-        "FRONTEND_ORIGIN",
-        "http://localhost:8765,https://adicmu.github.io"
-    ))
+    # Only matters when a page on another origin calls the API, e.g. a local page
+    # using the cf_backend_override debugging hook. Same-origin requests (through
+    # Apache, or scripts/dev_server.py locally) never need it.
+    FRONTEND_ORIGINS = _csv(os.environ.get("FRONTEND_ORIGIN", "http://localhost:8765"))
 
 
 class TestConfig(Config):
     TESTING = True
+    IS_PRODUCTION = False
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SECRET_KEY = "test-secret"
     GOOGLE_CLIENT_ID = "test-google-client-id"
-    ADMIN_EMAILS = {"admin@andrew.cmu.edu"}
     ALLOWED_EMAIL_DOMAIN = ""
     SESSION_COOKIE_SECURE = False
     SESSION_COOKIE_SAMESITE = "Lax"
+    TRUST_PROXY = False
     FRONTEND_ORIGINS = ["http://localhost:8765"]
     SEED_USERS_PATH = ""
     ADMIN_SEED_PATH = ""

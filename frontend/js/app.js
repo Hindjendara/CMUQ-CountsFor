@@ -36,9 +36,10 @@ const App = {
   //   1. GET /api/me — if 200 with a complete profile, route to main app.
   //   2. If 200 but profile is incomplete (missing role/program), show the
   //      existing onboarding flow but PATCH /api/me on completion.
-  //   3. If 401, render the login screen.
-  //   4. If the backend is unreachable, fall back to localStorage demo mode
-  //      so the GH-Pages-only deploy keeps working.
+  //   3. Otherwise (401, or the server is unreachable), redirect to the
+  //      landing page (index.html) to sign in or continue as a guest.
+  //   Guest mode (sessionStorage cf_guest) is the only localStorage-only
+  //   "demo" mode.
   authedUser: null,             // server-confirmed user, or null in demo mode
   authMode: 'demo',             // 'authed' | 'demo' | 'login'
   isGuest: false,               // deliberate guest session (sessionStorage cf_guest)
@@ -59,9 +60,9 @@ const App = {
       return;
     }
 
-    // Guest mode — entered deliberately from the landing. Skips the /api/me
-    // probe (a sleeping free-tier backend would stall the guest for ~30s)
-    // and boots straight into localStorage-only demo mode.
+    // Guest mode, entered deliberately from the landing. Skips the /api/me
+    // probe (guests need no server, and an unreachable one would only delay
+    // them) and boots straight into localStorage-only demo mode.
     if (this._readGuestFlag()) {
       this.isGuest = true;
       this.authMode = 'demo';
@@ -77,35 +78,10 @@ const App = {
       return;
     }
 
-    if (me.status === 0) {
-      if (isBackendConfigured()) {
-        this._redirectToLogin();
-        return;
-      }
-      // No backend configured — demo mode preserves the public GH-Pages experience.
-      this.authMode = 'demo';
-      this.profile = loadProfile();
-      if (!this.profile) {
-        this.renderOnboarding(false);
-        return;
-      }
-      this._afterAuthed();
-      return;
-    }
-
-    // 401 / 403 / etc. — send to Heritage landing for sign-in.
-    if (isBackendConfigured()) {
-      this._redirectToLogin();
-      return;
-    }
-
-    this.authMode = 'demo';
-    this.profile = loadProfile();
-    if (!this.profile) {
-      this.renderOnboarding(false);
-      return;
-    }
-    this._afterAuthed();
+    // 401 / 403, or the server could not be reached (status 0): back to the
+    // landing page. It shows the sign-in form, or the "could not reach the
+    // server" banner with a guest link when the API is down.
+    this._redirectToLogin();
   },
 
   _redirectToLogin() {
@@ -253,12 +229,11 @@ const App = {
   /** Load the scraped catalog, apply admin course edits, then index and build trees. */
   async _prepareCatalog() {
     const courses = await fetchAllCourses();
+    // Public route, so guests get admin course edits too.
     let overrides = [];
-    if (isBackendConfigured()) {
-      const r = await apiGetCourseOverrides();
-      if (r.ok && r.data) overrides = r.data.items || [];
-      else console.warn('[CountsFor] Course edits unavailable; showing the scraped catalog.', r.error);
-    }
+    const r = await apiGetCourseOverrides();
+    if (r.ok && r.data) overrides = r.data.items || [];
+    else console.warn('[CountsFor] Course edits unavailable; showing the scraped catalog.', r.error);
     const applied = applyCourseOverrides(courses, overrides);
     this.courses = applied.courses;
     this._archivedCourses = applied.archived;
@@ -778,12 +753,12 @@ const App = {
   },
 
   editRole() {
-    // Admins and faculty have server-assigned roles (ADMIN_EMAILS / seed file
-    // / users.py) and can't self-edit them. Show a non-destructive notice
+    // Admins and faculty have server-assigned roles (the directory, seed file
+    // and users.py) and can't self-edit them. Show a non-destructive notice
     // instead of walking them through a student-only flow that would fail on
     // PATCH. Only students reach the editable onboarding.
     if (this.authedUser && this.authedUser.role === 'admin') {
-      showToast('Admin role is managed via the ADMIN_EMAILS env var on the server.');
+      showToast('Admin roles are managed in the Directory.');
       return;
     }
     if (this.isGuest && isFaculty(this.profile)) {

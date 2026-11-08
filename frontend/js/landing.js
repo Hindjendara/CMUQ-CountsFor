@@ -18,7 +18,7 @@
   }
 
   // Any answer from the server (status other than 0) proves the backend is up,
-  // so drop a stale "accounts unavailable" banner. Wraps every api.js call here.
+  // so drop a stale "could not reach the server" banner. Wraps every api.js call here.
   async function reach(promise) {
     const r = await promise;
     if (r && r.status !== 0 && state.backendUnreachable) clearBackendAlert();
@@ -39,7 +39,7 @@
 
   function authErrorMessage(r, fallback) {
     if (isNetworkError(r)) {
-      return 'Could not reach the server. It may be waking up, so try again in about 30 seconds.';
+      return 'Could not reach the server. Try again in a moment.';
     }
     return (r.data && r.data.message) || fallback;
   }
@@ -122,11 +122,9 @@
     }
   }
 
-  let wakeTimer = null;
   function setLoading(loading, idleLabel) {
     const btn = document.getElementById('cfAuthSubmit');
     if (!btn) return;
-    window.clearTimeout(wakeTimer);
     btn.classList.toggle('is-loading', loading);
     if (loading) {
       btn.disabled = true;
@@ -134,14 +132,6 @@
         '<span class="landing-submit-spinner" aria-hidden="true"></span><span>' +
         idleLabel.replace(' →', '…') +
         '</span>';
-      // A slow response usually means the free-tier backend is cold-starting —
-      // say so instead of looking frozen.
-      wakeTimer = window.setTimeout(function () {
-        const label = btn.querySelector('span:last-child');
-        if (label && btn.classList.contains('is-loading')) {
-          label.textContent = 'Waking up the server…';
-        }
-      }, 4000);
     } else {
       btn.textContent = idleLabel;
       updateSubmitState(state.view);
@@ -371,18 +361,19 @@
   // probe, and every failed submit, so the user never sees two different
   // descriptions of the same outage.
   //
-  // The wording names the consequence (accounts are unavailable) rather than the
-  // mechanism, and points at guest mode, which needs no server and covers the whole
-  // catalog. Leaving a working-looking sign-in form on screen during an outage just
-  // makes people retype passwords that were never wrong.
+  // The wording is plain (the server could not be reached) and points at guest
+  // mode, which needs no server and covers the whole catalog. Leaving a
+  // working-looking sign-in form on screen during an outage just makes people
+  // retype passwords that were never wrong.
   const ACCOUNTS_UNAVAILABLE_MSG =
-    'Accounts are unavailable right now. The server may be waking up, so try again in about 30 seconds, or browse everything as a guest.';
+    'Could not reach the server. Try again in a moment, or browse everything as a guest.';
   const UNREACHABLE_MSG = ACCOUNTS_UNAVAILABLE_MSG;
   const SLOW_MSG =
-    'The server took too long to respond. Try again in about 30 seconds, or browse everything as a guest.';
+    'The server took too long to respond. Try again in a moment, or browse everything as a guest.';
 
   // status 0 means the request never completed: connection refused, DNS, a CORS
-  // rejection, or the abort timeout. It carries no information about the
+  // rejection, the abort timeout, or a gateway error from the reverse proxy
+  // (apiFetch maps those to 0). It carries no information about the
   // credentials, so it must never be reported as a bad password.
   function isUnreachable(r) {
     return !r || r.status === 0;
@@ -405,15 +396,6 @@
   function clearBackendAlert() {
     state.backendUnreachable = false;
     setBackendAlert('');
-  }
-
-  // Called between the first attempt and the retry: the button is still in its
-  // loading state, so relabel it instead of leaving it looking frozen.
-  function showWakingLabel() {
-    const btn = document.getElementById('cfAuthSubmit');
-    if (!btn || !btn.classList.contains('is-loading')) return;
-    const label = btn.querySelector('span:last-child');
-    if (label) label.textContent = 'Waking up the server…';
   }
 
   function setBackendAlert(message, opts) {
@@ -637,14 +619,7 @@
     const persist = wantsPersistentSession();
     setLoading(true, 'Sign in');
     const body = { email: normalizeCmuEmail(email) || email, password };
-    let r = await reach(apiLogin(body));
-    // A cold free-tier backend often drops the first request and answers the
-    // second. Retry exactly once so a real cold start becomes a slow success,
-    // while a genuinely dead server still fails in bounded time.
-    if (isUnreachable(r)) {
-      showWakingLabel();
-      r = await reach(apiLogin(body));
-    }
+    const r = await reach(apiLogin(body));
     setLoading(false, 'Sign in');
     if (isUnreachable(r)) {
       showUnreachable(r);
@@ -703,11 +678,7 @@
       confirm_password: confirm,
       name: name || undefined,
     };
-    let r = await reach(apiRegister(regBody));
-    if (isUnreachable(r)) {
-      showWakingLabel();
-      r = await reach(apiRegister(regBody));
-    }
+    const r = await reach(apiRegister(regBody));
     setLoading(false, 'Create account');
     if (isUnreachable(r)) {
       showUnreachable(r);

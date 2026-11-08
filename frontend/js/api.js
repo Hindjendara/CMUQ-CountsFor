@@ -47,46 +47,28 @@ async function fetchAllCourses() {
 // ============================================================
 // CountsFor Backend client — auth, flags, wishlist
 // ============================================================
-// The Python backend lives in /backend (routes are listed in README.md,
-// section 10). Dev: http://localhost:5050 ; production: the Render URL.
-// Override at runtime by setting window.CF_BACKEND_URL before this file loads.
+// The Flask API lives in backend/ (routes are listed in README.md, section 10).
+// Pages call it on their own origin, so apiFetch('/api/...') is a relative URL:
+//   production: Apache serves frontend/ and proxies /api to gunicorn;
+//   local dev:  scripts/dev_server.py serves frontend/ and proxies /api and
+//               /health to the Flask dev server on 127.0.0.1:5050.
 // Loaded by both index.html (landing.js) and app.html (app.js).
 
-// Backend URL resolution, in priority order:
-//   1. localStorage 'cf_backend_override' — manual escape hatch for odd setups
-//      (e.g. localhost frontend against the production backend)
-//   2. window.CF_BACKEND_URL — set before this script loads
-//   3. localhost/127.0.0.1 hostname — local Flask dev server on :5050, so the
-//      committed production meta never needs hand-editing for local dev
-//   4. <meta name="cf-backend-url"> — the deployed production URL
-//   5. hardcoded fallback
+// Backend base URL, in priority order:
+//   1. localStorage 'cf_backend_override': debugging escape hatch, e.g. a local
+//      page against another backend (whose FRONTEND_ORIGIN must then allow this
+//      page's origin for CORS)
+//   2. window.CF_BACKEND_URL, if set before this script loads
+//   3. '' (same origin): the normal case, in production and in local dev
 function getBackendUrl() {
   try {
     const override = (localStorage.getItem('cf_backend_override') || '').trim();
     if (override) return override.replace(/\/$/, '');
-  } catch (e) { /* storage blocked — fall through */ }
+  } catch (e) { /* storage blocked: fall through */ }
   if (typeof window !== 'undefined' && window.CF_BACKEND_URL) {
     return String(window.CF_BACKEND_URL).replace(/\/$/, '');
   }
-  const host = (typeof location !== 'undefined' ? location.hostname : '');
-  if (host === 'localhost' || host === '127.0.0.1' || host === '') {
-    // 5050, not 5000 — macOS AirPlay Receiver squats on 5000.
-    return 'http://localhost:5050';
-  }
-  const meta = typeof document !== 'undefined'
-    ? document.querySelector('meta[name="cf-backend-url"]')
-    : null;
-  const fromMeta = (meta && meta.getAttribute('content') || '').trim();
-  if (fromMeta) return fromMeta.replace(/\/$/, '');
-  return 'https://countsfor-summer-26.onrender.com';
-}
-
-/** True when index.html sets a production backend URL (not demo-only GH Pages). */
-function isBackendConfigured() {
-  const meta = typeof document !== 'undefined'
-    ? document.querySelector('meta[name="cf-backend-url"]')
-    : null;
-  return !!(meta && (meta.getAttribute('content') || '').trim());
+  return '';
 }
 
 const CF_BACKEND_URL = getBackendUrl();
@@ -152,17 +134,19 @@ function getGoogleClientId() {
 //   - Always sends credentials so the session cookie is included.
 //   - JSON in, JSON out (where applicable).
 //   - Returns { ok, status, data, error } — never throws on HTTP errors so
-//     callers can branch on status.
+//     callers can branch on status. status 0 means the API could not be
+//     reached (network error, timeout, or a proxy gateway error).
 async function apiFetch(path, opts = {}) {
-  const url = CF_BACKEND_URL.replace(/\/$/, '') + path;
+  const url = CF_BACKEND_URL + path;
   const init = {
     method: opts.method || 'GET',
     credentials: 'include',
     headers: { 'Accept': 'application/json' },
   };
-  // Never hang forever on a cold-starting backend. Default covers a full
-  // Render free-tier wake; callers with a local fallback pass something short.
-  const timeoutMs = opts.timeoutMs || 75000;
+  // Never hang forever on an unreachable or overloaded server. The API normally
+  // answers in well under a second, so 20 s means something is wrong; callers
+  // with a local fallback pass something shorter.
+  const timeoutMs = opts.timeoutMs || 20000;
   if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
     init.signal = AbortSignal.timeout(timeoutMs);
   }
@@ -188,6 +172,21 @@ async function apiFetch(path, opts = {}) {
   let data = null;
   if (res.status !== 204) {
     try { data = await res.json(); } catch { data = null; }
+  }
+  // 502/503/504 without a JSON body come from the reverse proxy (Apache, or
+  // scripts/dev_server.py locally), not from Flask: the API itself is down or
+  // too slow. Report them like a network failure (status 0) so callers show
+  // "could not reach the server" instead of, say, "wrong password". Flask's own
+  // 503s (e.g. email_unavailable) carry JSON and are passed through unchanged.
+  if (!data && (res.status === 502 || res.status === 503 || res.status === 504)) {
+    const timedOut = res.status === 504;
+    return {
+      ok: false,
+      status: 0,
+      error: timedOut ? 'timeout' : 'network',
+      message: timedOut ? 'The server took too long to respond.' : 'Could not reach the server.',
+      data: null,
+    };
   }
   if (data && data.auth_token) saveAuthToken(data.auth_token);
   return {
@@ -252,7 +251,7 @@ async function apiAdminActivity(query = '') {
 
 // ── Course catalog edits (read: everyone, write: admin) ──────
 async function apiGetCourseOverrides() {
-  // Short timeout: the catalog renders without edits rather than waiting on a cold backend.
+  // Short timeout: the catalog renders without edits rather than waiting on a slow server.
   return apiFetch('/api/courses/overrides', { timeoutMs: 10000 });
 }
 async function apiAddCourse(body) {

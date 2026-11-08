@@ -5,18 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="CountsFor: see every CMU-Q course and exactly which major and General Education requirements it satisfies." />
   <meta name="theme-color" content="#C41230" />
-  <meta name="cf-backend-url" content="https://countsfor-summer-26.onrender.com" />
-  <link rel="preconnect" href="https://countsfor-summer-26.onrender.com" crossorigin />
-  <script>
-    // Wake the free-tier backend as early as possible (fire-and-forget).
-    (function () {
-      var h = location.hostname;
-      if (h === 'localhost' || h === '127.0.0.1' || h === '') return; // local dev uses localhost:5050
-      var meta = document.querySelector('meta[name="cf-backend-url"]');
-      var url = meta && meta.getAttribute('content');
-      if (url) fetch(url.replace(/\/$/, '') + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
-    })();
-  </script>
+  <!-- The API is called on this page's own origin (/api/..., see js/api.js). -->
   <meta name="cf-google-client-id" content="378923997481-bgnvhg3gsgka5ptijjjsb80q4k7kc2vg.apps.googleusercontent.com" />
   <!-- Google Identity Services — used on the landing for Google-based password recovery. -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>

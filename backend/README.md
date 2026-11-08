@@ -1,8 +1,7 @@
 # CountsFor backend
 
 The Flask API for CountsFor. Everything about it (setup, environment
-variables, every route, the database and migrations, deployment on Render,
-tests) is documented in the main [README](../README.md):
+variables, every route, the database and migrations, deployment, tests) is documented in the main [README](../README.md):
 
 - Run locally: section 5
 - Environment variables: section 6
@@ -15,6 +14,8 @@ Quick start from the repo root:
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m backend.app          # http://localhost:5050
+cp backend/.env.example backend/.env      # local settings, every variable explained
+.venv/bin/python -m backend.app          # API on http://127.0.0.1:5050
+.venv/bin/python scripts/dev_server.py   # site on http://localhost:8765, /api proxied to :5050
 .venv/bin/python -m pytest backend/tests backend/scraper/tests -q
 ```

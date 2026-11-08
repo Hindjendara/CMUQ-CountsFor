@@ -1,16 +1,18 @@
-"""One-shot database bootstrap for Render pre-deploy.
+"""One-shot database bootstrap: create missing tables, run migrations, verify.
 
-Render runs this once before gunicorn starts so workers do not race on
-ALTER TABLE and the web process can bind to $PORT immediately.
+    python -m backend.bootstrap_db      (from the folder that holds the backend package)
+
+In production systemd runs it before gunicorn starts (ExecStartPre), so workers
+do not race on ALTER TABLE; the workers themselves skip it (SKIP_DB_BOOTSTRAP=1).
+Safe to rerun: create_all() only adds missing tables and migrations are idempotent.
 """
 from __future__ import annotations
 
-import os
 import sys
 
 from sqlalchemy import inspect, text
 
-from .config import recovery_deploy_enabled
+from .config import is_production
 from .app import create_app, init_database
 from .db import db
 from .db_schema import REQUIRED_TABLES, redact_database_url
@@ -22,21 +24,17 @@ def verify_bootstrap(app) -> None:
         uri = app.config["SQLALCHEMY_DATABASE_URI"]
         print(f"Database target: {redact_database_url(uri)}")
 
-        on_render = os.environ.get("RENDER", "").lower() == "true"
-        is_production = os.environ.get("FLASK_ENV", "").strip().lower() == "production"
-
         if not uri.startswith("postgresql"):
-            if on_render or is_production:
+            if is_production():
                 print(
-                    f"FATAL: bootstrap expected PostgreSQL but got {uri!r}. "
-                    "Link DATABASE_URL to CountsFor_Summer_2026 on Render.",
+                    f"FATAL: FLASK_ENV=production expects PostgreSQL but DATABASE_URL is "
+                    f"{redact_database_url(uri)!r}.",
                     file=sys.stderr,
                 )
                 raise SystemExit(1)
             print(
                 "WARNING: local SQLite bootstrap. Tables created for dev only. "
-                "To bootstrap Render Postgres, set DATABASE_URL in backend/.env "
-                "(External URL from CountsFor_Summer_2026) and re-run.",
+                "To bootstrap PostgreSQL, set DATABASE_URL and re-run.",
                 file=sys.stderr,
             )
 
@@ -60,34 +58,16 @@ def verify_bootstrap(app) -> None:
 
 
 def main() -> None:
-    try:
-        app = create_app(bootstrap_db=False)
-        logs = init_database(app)
-        for line in logs:
-            print(line)
-        verify_bootstrap(app)
-        uri = app.config["SQLALCHEMY_DATABASE_URI"]
-        if uri.startswith("postgresql"):
-            print("Database bootstrap OK")
-        else:
-            print("Database bootstrap OK (local SQLite, not production Postgres)")
-    except SystemExit as exc:
-        if exc.code and recovery_deploy_enabled():
-            print(
-                "WARNING: bootstrap failed but ALLOW_BOOTSTRAP_SKIP=1, so the deploy continues. "
-                "Upgrade Postgres to Starter, remove ALLOW_BOOTSTRAP_SKIP, redeploy.",
-                file=sys.stderr,
-            )
-            return
-        raise
-    except Exception as exc:
-        if recovery_deploy_enabled():
-            print(
-                f"WARNING: bootstrap skipped ({exc}). Upgrade Postgres, then redeploy without ALLOW_BOOTSTRAP_SKIP.",
-                file=sys.stderr,
-            )
-            return
-        raise
+    app = create_app(bootstrap_db=False)
+    logs = init_database(app)
+    for line in logs:
+        print(line)
+    verify_bootstrap(app)
+    uri = app.config["SQLALCHEMY_DATABASE_URI"]
+    if uri.startswith("postgresql"):
+        print("Database bootstrap OK")
+    else:
+        print("Database bootstrap OK (local SQLite, not production Postgres)")
 
 
 if __name__ == "__main__":

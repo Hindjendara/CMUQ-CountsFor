@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func
 
 from .db import db
@@ -19,8 +19,6 @@ from .permissions import require_role_group, ROLE_GROUP_ADMIN
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
-# Written by backend/scraper/scrape_soc.py (private: never served to the browser).
-SOC_PATH = Path(__file__).resolve().parent / "data" / "soc.json"
 _LAST_SCRAPE_RE = re.compile(r'"last_scrape"\s*:\s*"([^"]+)"')
 
 
@@ -45,9 +43,13 @@ def _as_utc(dt: datetime | None) -> datetime | None:
 
 
 def _course_data_info() -> dict:
-    """Read only the header of the 22 MB SOC file; metadata is its first key."""
+    """Read only the header of the SOC file; metadata is its first key.
+
+    The file (config SOC_JSON_PATH, default backend/data/soc.json) is written by
+    backend/scraper/scrape_soc.py and is private: never served to the browser.
+    """
     try:
-        with SOC_PATH.open("r", encoding="utf-8") as fh:
+        with Path(current_app.config["SOC_JSON_PATH"]).open("r", encoding="utf-8") as fh:
             head = fh.read(4096)
     except OSError:
         return {"last_scrape": None}

@@ -59,7 +59,7 @@ def _reset_token_ttl() -> timedelta:
 
 
 def _frontend_reset_url(raw_token: str) -> str:
-    """Build the link emailed to the user (static GH Pages / local)."""
+    """Build the link emailed to the user: FRONTEND_RESET_BASE?token=..."""
     configured = (current_app.config.get("FRONTEND_RESET_BASE") or "").strip()
     if configured:
         base = configured.rstrip("/")
@@ -71,13 +71,19 @@ def _frontend_reset_url(raw_token: str) -> str:
 
 
 def _email_provider_configured(cfg) -> bool:
-    """True when Resend or SMTP is fully configured enough to send mail."""
-    if (cfg.get("RESEND_API_KEY") or "").strip() and (cfg.get("MAIL_FROM") or "").strip():
+    """True when Resend or SMTP is configured enough to send mail.
+
+    Resend needs RESEND_API_KEY and MAIL_FROM. SMTP needs SMTP_HOST and a sender:
+    MAIL_FROM, or SMTP_USER (email_util uses it as the From address when MAIL_FROM
+    is unset). SMTP_USER/SMTP_PASS are optional because an unauthenticated campus
+    relay accepts mail without a login (email_util only logs in when SMTP_USER is set).
+    """
+    mail_from = (cfg.get("MAIL_FROM") or "").strip()
+    if (cfg.get("RESEND_API_KEY") or "").strip() and mail_from:
         return True
     host = (cfg.get("SMTP_HOST") or "").strip()
     user = (cfg.get("SMTP_USER") or "").strip()
-    password = (cfg.get("SMTP_PASS") or "").strip()
-    return bool(host and user and password)
+    return bool(host and (mail_from or user))
 
 
 def _invalidate_reset_tokens(user_id: int) -> None:
@@ -243,7 +249,7 @@ def _write_session(user: User) -> None:
 
 
 def _auth_payload(user: User) -> dict:
-    """Public user dict plus bearer token for cross-origin clients."""
+    """Public user dict plus the bearer token the frontend stores (see tokens.py)."""
     body = user.to_public_dict()
     body["auth_token"] = make_auth_token(user.id)
     return body
