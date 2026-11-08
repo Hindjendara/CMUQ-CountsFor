@@ -146,6 +146,24 @@ def test_apache_proxies_api_to_gunicorn_without_stripping_the_prefix():
     assert not any("/health" in line and line.startswith("ProxyPass") for line in lines)
 
 
+def test_apache_api_answers_carry_one_no_store_header():
+    # "always" does not replace a header the backend sent (normal table), so the
+    # backend's Cache-Control (no-cache on GET /api/courses/overrides) is unset first.
+    block = re.search(r"<Location /api/>(.*?)</Location>", _text(APACHE), re.S)
+    assert block, "no <Location /api/> block"
+    lines = [line.strip() for line in block.group(1).splitlines()
+             if line.strip() and not line.strip().startswith("#")]
+    assert lines == ["Header unset Cache-Control", 'Header always set Cache-Control "no-store"']
+
+
+def test_apache_denies_the_daily_update_backups():
+    (deny,) = re.findall(r'<FilesMatch "([^"]*\bbak\b[^"]*)">', _text(APACHE))
+    for name in ("courses.json.prev", "soc.json.prev", "x.py", "notes.md", ".env", "a~"):
+        assert re.search(deny, name), name
+    for name in ("courses.json", "courses.json.gz", "index.html", "app.js"):
+        assert not re.search(deny, name), name
+
+
 def test_apache_proxy_timeout_is_above_gunicorn_timeout():
     (timeout,) = [int(line.split()[1]) for line in _active_lines(APACHE)
                   if line.split()[0] == "ProxyTimeout"]
@@ -172,7 +190,8 @@ def test_apache_serves_the_precompressed_catalog_once():
 def test_service_runs_from_the_deploy_root_as_countsfor():
     assert _service_value("WorkingDirectory") == DEPLOY_ROOT
     assert _service_value("User") == "countsfor"
-    assert _service_value("Group") == "www-data"
+    # Not www-data: the API needs nothing of Apache's, and backend/ is countsfor:countsfor.
+    assert _service_value("Group") == "countsfor"
     assert _service_value("EnvironmentFile") == "/etc/countsfor/countsfor.env"
     assert "/etc/countsfor/countsfor.env" in _text(DEPLOY / "countsfor.env.example")
     assert _service_value("Restart") == "on-failure"
@@ -216,7 +235,13 @@ def test_cron_runs_the_scraper_daily_with_a_lock_and_a_timeout():
     assert command[0] == "/usr/bin/flock" and "/usr/bin/timeout" in command
     script = f"{DEPLOY_ROOT}/backend/scraper/run_scrape.sh"
     assert script in command
-    assert command[-3:] == [">>", "/var/log/countsfor/scrape.log", "2>&1"]
+    # All output goes to the log; only the failure line after "||" reaches cron
+    # (and MAILTO, when one is set).
+    run, _, on_failure = " ".join(command).partition(" || ")
+    assert run.split()[-3:] == [">>", "/var/log/countsfor/scrape.log", "2>&1"]
+    assert on_failure.startswith("echo ") and "$?" in on_failure
+    # The header of run_scrape.sh quotes the same line.
+    assert jobs[0] in _text(RUN_SCRAPE)
     # cron turns a bare % into a newline
     for line in _text(CRON).splitlines():
         if not line.startswith("#") or re.match(r"^#\s*\d", line):
@@ -233,6 +258,13 @@ def test_scraper_script_is_executable_in_git():
         return
     assert out.startswith("100755 "), out
     assert _text(RUN_SCRAPE).startswith("#!/usr/bin/env bash\n")
+
+
+def test_scraper_script_refuses_to_run_as_another_user():
+    # A run as root would leave root-owned files that break every later cron run.
+    script = _text(RUN_SCRAPE)
+    check = script.index('if [ "$(id -un)" != "$OWNER" ]')
+    assert check < script.index(". /etc/countsfor/scraper.env") < script.index("exec ")
 
 
 def test_logrotate_covers_the_cron_log_folder():

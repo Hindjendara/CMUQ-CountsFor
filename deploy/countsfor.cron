@@ -26,20 +26,30 @@
 # Output goes to /var/log/countsfor/scrape.log (rotated by deploy/countsfor.logrotate).
 # Check the last run: tail -n 50 /var/log/countsfor/scrape.log
 # Run by hand:        sudo -u countsfor /var/www/html/countsfor/backend/scraper/run_scrape.sh
+#                     (always as countsfor: run_scrape.sh refuses any other user)
 # After a deploy:     sudo -u countsfor /var/www/html/countsfor/backend/scraper/run_scrape.sh --no-scrape
+#
+# FAILURES: the log is the only record. On a non-zero exit (1 failed, 75 busy,
+# 124 or 137 stopped by timeout, 1 from flock when the previous run holds the
+# lock) the "|| echo" after the redirect prints one line, and cron mails a job's
+# output to MAILTO. With MAILTO="" (below) that line is dropped, so a failure is
+# silent. To be told, install a mailer that can send from this server (ask IT
+# for the campus relay) and set MAILTO to an admin address. Either way, check
+# now and then that Admin, Overview shows a recent last scrape.
 #
 # Note: in a crontab line "%" means newline, so a literal % is written "\%".
 
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# CHANGE_ME (optional): an admin address, once the server can send mail.
 MAILTO=""
 
 # m  h  dom mon dow  user       command
-0 15 * * * countsfor /usr/bin/flock -n /run/lock/countsfor-scrape.lock /usr/bin/timeout -k 5m 3h /var/www/html/countsfor/backend/scraper/run_scrape.sh >> /var/log/countsfor/scrape.log 2>&1
+0 15 * * * countsfor /usr/bin/flock -n /run/lock/countsfor-scrape.lock /usr/bin/timeout -k 5m 3h /var/www/html/countsfor/backend/scraper/run_scrape.sh >> /var/log/countsfor/scrape.log 2>&1 || echo "CountsFor daily update failed (exit $?): see /var/log/countsfor/scrape.log"
 
 # Optional second run on weekday mornings during registration (09:00 Qatar,
 # 06:00 UTC), as the old workflow had:
-# 0 9 * * 1-5 countsfor /usr/bin/flock -n /run/lock/countsfor-scrape.lock /usr/bin/timeout -k 5m 3h /var/www/html/countsfor/backend/scraper/run_scrape.sh >> /var/log/countsfor/scrape.log 2>&1
+# 0 9 * * 1-5 countsfor /usr/bin/flock -n /run/lock/countsfor-scrape.lock /usr/bin/timeout -k 5m 3h /var/www/html/countsfor/backend/scraper/run_scrape.sh >> /var/log/countsfor/scrape.log 2>&1 || echo "CountsFor daily update failed (exit $?): see /var/log/countsfor/scrape.log"
 
 # Optional nightly database backup at 02:30, keeping 14 days. The countsfor OS
 # user reaches its own database by peer authentication, so no password is needed.

@@ -26,11 +26,16 @@ Wants=network-online.target
 Requires=postgresql.service
 
 [Service]
-# Gunicorn 22 tells systemd when its workers are up (sd_notify READY=1).
+# Gunicorn 22 tells systemd when its master process is up (sd_notify READY=1),
+# before the workers import the app. So "active (running)" does not prove the
+# app loads: check with curl /health. If a worker cannot import the app, the
+# master exits ("Worker failed to boot") and Restart=on-failure retries.
 Type=notify
 NotifyAccess=main
 User=countsfor
-Group=www-data
+# The user's own group: backend/ is countsfor:countsfor, and the API needs
+# nothing of Apache's (www-data).
+Group=countsfor
 # The folder that holds the "backend" package, so "backend.app" imports.
 WorkingDirectory=/var/www/html/countsfor
 EnvironmentFile=/etc/countsfor/countsfor.env

@@ -124,6 +124,10 @@ def min_catalog_ratio() -> float:
 
 # ---------- Lock ----------
 
+class LockError(Exception):
+    """The lock file cannot be created or opened (not: another run holds it)."""
+
+
 class Lock:
     """An exclusive, non-blocking lock on a file (flock on POSIX, msvcrt on Windows).
 
@@ -136,8 +140,14 @@ class Lock:
         self._fh = None
 
     def acquire(self) -> bool:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        fh = open(self.path, "a+", encoding="utf-8")
+        """True when locked, False when another run holds the lock. Raises
+        LockError when the file cannot be opened at all, typically because a run
+        as another user (root) left backend/var/ or the lock file owned by it."""
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            fh = open(self.path, "a+", encoding="utf-8")
+        except OSError as exc:
+            raise LockError(f"cannot open the lock file {self.path}: {exc}") from exc
         try:
             if os.name == "nt":
                 import msvcrt
@@ -466,7 +476,16 @@ def main(argv: list[str] | None = None) -> int:
 
     paths = Paths.from_env()
     lock = Lock(paths.lock)
-    if not lock.acquire():
+    try:
+        locked = lock.acquire()
+    except LockError as exc:
+        log(f"ERROR: {exc}")
+        log("Not run. If an earlier run was made as root, give the files back to the "
+            f"deploy user: sudo chown -R countsfor:countsfor {paths.lock.parent} "
+            f"{paths.live_soc.parent} {paths.live_courses.parent}")
+        log(f"Update FAILED (exit {EXIT_FAILED})")
+        return EXIT_FAILED
+    if not locked:
         log(f"Another update holds {paths.lock}; exiting")
         return EXIT_LOCKED
     started = datetime.now()

@@ -407,6 +407,30 @@ def test_lock_is_released_after_a_run(deploy, monkeypatch):
     lock.release()
 
 
+def test_unopenable_lock_file_fails_with_a_clear_message(deploy, monkeypatch, capsys):
+    """A lock file the run cannot open (left owned by root by a run as root) is
+    exit 1 with an explanation, not a traceback, and touches nothing."""
+    deploy.fake_steps(monkeypatch, soc=NEW_SOC, catalog=NEW_CATALOG)
+    lock_path = deploy.root / "backend" / "var" / "update.lock"
+    real_open = open
+
+    def guarded_open(path, *args, **kwargs):
+        if Path(path) == lock_path:
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", guarded_open)
+    before = deploy.snapshot()
+    assert update_data.main(["--skip-tests"]) == update_data.EXIT_FAILED == 1
+    monkeypatch.undo()
+    out = capsys.readouterr().out
+    assert "cannot open the lock file" in out and "Permission denied" in out
+    assert "sudo chown -R countsfor:countsfor" in out
+    assert "Traceback" not in out
+    assert deploy.snapshot() == before
+    assert deploy.records() == []
+
+
 def test_log_lines_are_timestamped(deploy, monkeypatch, capsys):
     deploy.fake_steps(monkeypatch, soc=NEW_SOC, catalog=NEW_CATALOG)
     assert update_data.main(["--skip-tests"]) == 0
