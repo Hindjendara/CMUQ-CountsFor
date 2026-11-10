@@ -1,4 +1,4 @@
-"""Reconcile title rules and the coverage validator's renumbering checks."""
+"""Reconcile title rules and the coverage validator checks."""
 import json
 import sys
 from pathlib import Path
@@ -107,9 +107,9 @@ def test_reused_number_is_flagged_and_keeps_mappings(tmp_path):
 
 
 def test_compact_catalog_code_is_not_added_twice(tmp_path):
-    soc = {"semesters": {"F26": {"courses": [soc_course("85211", "Cognitive Psychology")]}}}
-    stats, rows, all_rows = run_reconcile(tmp_path, soc, [catalog_row("85211", "Cognitive Psychology")])
-    assert [r["course_code"] for r in all_rows] == ["85-211"]
+    soc = {"semesters": {"F26": {"courses": [soc_course("85110", "Cognitive Psychology")]}}}
+    stats, rows, all_rows = run_reconcile(tmp_path, soc, [catalog_row("85110", "Cognitive Psychology")])
+    assert [r["course_code"] for r in all_rows] == ["85-110"]
     assert stats["courses_added"] == 0
 
 
@@ -120,10 +120,10 @@ def test_soc_ingested_offered_follows_offerings(tmp_path):
         "S27": {"courses": [soc_course("85110", "Cognitive Psychology", sections=[section(cancelled=True)])]},
     }}
     stub = catalog_row("85-110", "Cognitive Psychology", offered=["F26", "S27"], soc_ingested=True)
-    old = catalog_row("85-211", "Cognitive Psychology", offered=["S25"])
+    old = catalog_row("85-901", "Cognitive Psychology", offered=["S25"])
     _, rows, _ = run_reconcile(tmp_path, soc, [stub, old])
     assert rows["85-110"]["offered"] == ["S26", "F26"]
-    assert rows["85-211"]["offered"] == ["S25"], "catalog rows keep their history"
+    assert rows["85-901"]["offered"] == ["S25"], "catalog rows keep their history"
 
 
 def test_reused_number_keeps_existing_previous_course_name(tmp_path):
@@ -189,35 +189,25 @@ def test_new_stub_uses_cleaned_title(tmp_path):
 
 # ── validate_soc_coverage ────────────────────────────────────
 
-def run_validator(tmp_path, monkeypatch, soc, courses, overlays=None):
+def run_validator(tmp_path, monkeypatch, soc, courses):
     soc_path = tmp_path / "soc.json"
     courses_path = tmp_path / "courses.json"
-    overlays_path = tmp_path / "overlays.json"
     soc_path.write_text(json.dumps(soc), encoding="utf-8")
     courses_path.write_text(json.dumps({"courses": courses}), encoding="utf-8")
-    overlays_path.write_text(json.dumps(overlays or {}), encoding="utf-8")
     monkeypatch.setattr(vsc, "SOC_PATH", str(soc_path))
     monkeypatch.setattr(vsc, "COURSES_PATH", str(courses_path))
-    monkeypatch.setattr(vsc, "OVERLAYS_PATH", str(overlays_path))
     return vsc.main()
 
 
-def test_validator_accepts_superseded_rows(tmp_path, monkeypatch, capsys):
+def test_validator_fails_when_a_soc_code_has_no_row(tmp_path, monkeypatch, capsys):
     soc = {"semesters": {
-        "M25": {"courses": [soc_course("85211", "Cognitive Psychology")]},
+        "M25": {"courses": [soc_course("85901", "Cognitive Psychology")]},
         "F26": {"courses": [soc_course("85110", "Cognitive Psychology")]},
     }}
-    courses = [
-        catalog_row("85-211", "Cognitive Psychology", superseded_by="85-110"),
-        catalog_row("85-110", "Cognitive Psychology", previous_codes=["85-211"]),
-    ]
-    assert run_validator(tmp_path, monkeypatch, soc, courses) == 0
-    assert "OK: every SOC course" in capsys.readouterr().out
-
-
-def test_previous_codes_count_as_covered():
-    courses = [catalog_row("85-190", "Psychopathology", previous_codes=["85-104"])]
-    assert vsc.catalog_codes(courses) == {"85-190", "85-104"}
+    courses = [catalog_row("85-110", "Cognitive Psychology")]
+    assert vsc.catalog_codes(courses) == {"85-110"}
+    assert run_validator(tmp_path, monkeypatch, soc, courses) == 1
+    assert "85-901" in capsys.readouterr().out
 
 
 def test_validator_warns_about_unlinked_same_title_pairs(tmp_path, monkeypatch, capsys):
@@ -230,23 +220,19 @@ def test_validator_warns_about_unlinked_same_title_pairs(tmp_path, monkeypatch, 
     ]}}}
     courses = [
         catalog_row("85-190", "Psychopathology"),
-        catalog_row("85-253", "Psychopathology"),
-        catalog_row("85-261", "Psychopathology This Section Cancelled"),
+        catalog_row("85-901", "Psychopathology"),
+        catalog_row("85-902", "Psychopathology This Section Cancelled"),
         catalog_row("85-110", "Cognitive Psychology"),
-        catalog_row("85-211", "Cognitive Psychology"),
         catalog_row("85-452", "Attitudes and Persuasion"),
         catalog_row("85-852", "Attitudes and Persuasion"),
-        catalog_row("85-377", "Attitudes and Persuasion", superseded_by="85-452"),
         catalog_row("76-190", "Psychopathology"),
     ]
-    overlays = {"renumbered": [{"old": "85-211", "current": "85-110"}]}
-    assert run_validator(tmp_path, monkeypatch, soc, courses, overlays) == 0
+    assert run_validator(tmp_path, monkeypatch, soc, courses) == 0
     out = capsys.readouterr().out
     assert "WARNING: 2 same-title pair(s)" in out
-    assert "[85] 85-253 (not in SOC) / 85-190 (in SOC): Psychopathology" in out
-    assert "[85] 85-261 (not in SOC) / 85-190 (in SOC): Psychopathology" in out
-    assert "85-211" not in out.split("WARNING")[1], "a linked pair is not reported"
-    assert "85-377" not in out, "a superseded row already has its successor"
+    assert "[85] 85-901 (not in SOC) / 85-190 (in SOC): Psychopathology" in out
+    assert "[85] 85-902 (not in SOC) / 85-190 (in SOC): Psychopathology" in out
+    assert "85-852" not in out.split("WARNING")[1], "two rows in the SOC are not a pair"
     assert "76-190" not in out.split("WARNING")[1], "pairs are within one department"
 
 

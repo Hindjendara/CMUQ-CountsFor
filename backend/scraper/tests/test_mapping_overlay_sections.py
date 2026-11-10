@@ -1,4 +1,4 @@
-"""Sections of backend/data/mapping_overlays.json: renumbered, remove_mappings, qatar_visibility.
+"""Sections of backend/data/mapping_overlays.json: overlays, remove_mappings, qatar_visibility.
 
 Small synthetic catalogs check each section, the order they run in and that a
 second run changes nothing. The last tests check the real overlay file against
@@ -65,102 +65,11 @@ def req_keys(row, major=None):
 
 def catalog():
     return [
-        course(
-            "85-211", "Cognitive Psychology",
-            [req("CS", HA), req("BA", SR), req("IS", SS)],
-            description="Old description", prerequisites="None",
-        ),
-        course("85-110", "Cognitive Psychology", [req("CS", HA)]),
-        course("85-219", "Foundations of Brain and Behavior", [req("BS", IEG, False)],
-               description="Brain course"),
-        course("85-170", "Foundations of Brain and Behavior", description="Kept"),
+        course("85-110", "Cognitive Psychology", [req("CS", HA), req("IS", SS)]),
+        course("85-170", "Foundations of Brain and Behavior", [req("BS", IEG, False)]),
         course("85-414", "Cognition in the Age of AI", [req("BA", SR), req("BS", NT)]),
         course("85-100", "Introduction to Psychology", [req("CS", HA)]),
     ]
-
-
-# ── renumbered ───────────────────────────────────────────────
-
-def test_renumbered_copies_rows_and_links_codes():
-    courses = catalog()
-    doc = {"renumbered": [
-        {"old": "85-211", "current": "85-110"},
-        {"old": "85-219", "current": "85-170"},
-    ]}
-    stats = apply_overlay_document(courses, doc)
-    rows = by_code(courses)
-
-    assert req_keys(rows["85-110"]) == {("CS", HA, True), ("BA", SR, True), ("IS", SS, True)}
-    # Copied verbatim, the core (type false) flag included.
-    assert rows["85-170"]["requirements"]["BS"] == [req("BS", IEG, False)]
-    assert rows["85-110"]["description"] == "Old description"
-    assert rows["85-110"]["prerequisites"] == "None"
-    assert rows["85-170"]["description"] == "Kept", "a non-empty description is not replaced"
-    assert rows["85-110"]["previous_codes"] == ["85-211"]
-    assert rows["85-211"]["superseded_by"] == "85-110"
-    # The retired row stays, with its own mappings.
-    assert req_keys(rows["85-211"]) == {("CS", HA, True), ("BA", SR, True), ("IS", SS, True)}
-    assert stats["renumbered_linked"] == 2
-    assert stats["requirements_copied"] == 3  # CS HA was already on 85-110
-
-
-def test_renumbered_missing_old_code_warns_and_skips(capsys, tmp_path, monkeypatch):
-    courses = catalog()
-    doc = {"renumbered": [{"old": "85-151", "current": "85-110"}]}
-    stats = apply_overlay_document(courses, doc)
-    assert stats["renumbered_old_missing"] == ["85-151 -> 85-110"]
-    assert stats["renumbered_linked"] == 0
-    assert "previous_codes" not in by_code(courses)["85-110"]
-
-    path = tmp_path / "courses.json"
-    path.write_text(json.dumps({"courses": catalog()}), encoding="utf-8")
-    overlays = tmp_path / "overlays.json"
-    overlays.write_text(json.dumps(doc), encoding="utf-8")
-    monkeypatch.setattr(amo, "OVERLAYS_PATH", overlays)
-    monkeypatch.setattr(amo, "DEFAULT_CATALOGS", [path])
-    monkeypatch.delenv("CATALOG_PATHS", raising=False)
-    amo.main()
-    out = capsys.readouterr().out
-    assert "WARNING renumbered: old code not in the catalog, skipped: 85-151 -> 85-110" in out
-
-
-def test_renumbered_missing_current_code_fails_without_saving(tmp_path, monkeypatch, capsys):
-    path = tmp_path / "courses.json"
-    original = json.dumps({"courses": catalog()})
-    path.write_text(original, encoding="utf-8")
-    doc = {"renumbered": [{"old": "85-211", "current": "85-999"}]}
-
-    with pytest.raises(OverlayError, match="85-999"):
-        apply_file(path, doc)
-    assert path.read_text(encoding="utf-8") == original
-
-    overlays = tmp_path / "overlays.json"
-    overlays.write_text(json.dumps(doc), encoding="utf-8")
-    monkeypatch.setattr(amo, "OVERLAYS_PATH", overlays)
-    monkeypatch.setenv("CATALOG_PATHS", str(path))
-    assert amo.main() == 1
-    assert "85-999" in capsys.readouterr().out
-    assert path.read_text(encoding="utf-8") == original
-
-
-@pytest.mark.parametrize("entries", [
-    [{"old": "85-211", "current": "85-211"}],
-    [{"old": "85-211", "current": "85-110"}, {"old": "85-211", "current": "85-170"}],
-    [{"old": "85-211", "current": "85-110"}, {"old": "85-110", "current": "85-170"}],
-    [{"old": "85-211"}],
-])
-def test_renumbered_rejects_bad_entries(entries):
-    with pytest.raises(OverlayError):
-        apply_overlay_document(catalog(), {"renumbered": entries})
-
-
-def test_renumbered_links_are_owned_by_the_file():
-    courses = catalog()
-    apply_overlay_document(courses, {"renumbered": [{"old": "85-211", "current": "85-110"}]})
-    apply_overlay_document(courses, {"renumbered": []})
-    rows = by_code(courses)
-    assert "superseded_by" not in rows["85-211"]
-    assert "previous_codes" not in rows["85-110"]
 
 
 # ── remove_mappings and ordering ─────────────────────────────
@@ -179,10 +88,9 @@ def test_remove_mappings_by_program_and_all():
     assert stats["mappings_removed"] == 2
 
 
-def test_remove_mappings_wins_over_overlays_and_renumbering():
+def test_remove_mappings_wins_over_overlays():
     courses = catalog()
     doc = {
-        "renumbered": [{"old": "85-211", "current": "85-110"}],
         "overlays": [{
             "id": "sheet", "course_codes": ["85-110", "85-414"], "create_missing": False,
             "requirements": {"BA": [req("BA", SR)], "BS": [req("BS", NT)]},
@@ -197,23 +105,25 @@ def test_remove_mappings_wins_over_overlays_and_renumbering():
     assert req_keys(rows["85-110"], "BA") == set()
     assert req_keys(rows["85-110"]) == {("CS", HA, True), ("IS", SS, True), ("BS", NT, True)}
     assert req_keys(rows["85-414"]) == set()
-    # The retired row keeps its BA mapping: only the current code is listed.
-    assert ("BA", SR, True) in req_keys(rows["85-211"])
-
-
-def test_renumbering_never_copies_into_removed_programs():
-    courses = catalog()
-    stats = apply_overlay_document(courses, {
-        "renumbered": [{"old": "85-211", "current": "85-110"}],
-        "remove_mappings": [{"course_code": "85-110", "programs": ["IS", "BA"]}],
-    })
-    assert stats["requirements_copied"] == 0
-    assert stats["mappings_removed"] == 0
 
 
 def test_remove_mappings_rejects_unknown_program():
     with pytest.raises(OverlayError):
         apply_overlay_document(catalog(), {"remove_mappings": [{"course_code": "85-414", "programs": ["XX"]}]})
+
+
+def test_invalid_file_fails_without_saving(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "courses.json"
+    original = json.dumps({"courses": catalog()})
+    path.write_text(original, encoding="utf-8")
+    overlays = tmp_path / "overlays.json"
+    overlays.write_text(json.dumps({"remove_mappings": [{"course_code": "85-414", "programs": ["XX"]}]}),
+                        encoding="utf-8")
+    monkeypatch.setattr(amo, "OVERLAYS_PATH", overlays)
+    monkeypatch.setenv("CATALOG_PATHS", str(path))
+    assert amo.main() == 1
+    assert "catalog not saved" in capsys.readouterr().out
+    assert path.read_text(encoding="utf-8") == original
 
 
 # ── qatar_visibility ─────────────────────────────────────────
@@ -265,11 +175,6 @@ def test_ensure_course_defaults_codes_limits_defaults():
 
 def full_doc():
     return {
-        "renumbered": [
-            {"old": "85-211", "current": "85-110"},
-            {"old": "85-219", "current": "85-170"},
-            {"old": "85-151", "current": "85-110"},
-        ],
         "overlays": [{
             "id": "sheet", "course_codes": ["85-110", "85-414"], "create_missing": False,
             "requirements": {"BS": [req("BS", NT)]},
@@ -285,7 +190,6 @@ def test_second_run_changes_nothing():
     once = copy.deepcopy(courses)
     stats = apply_overlay_document(courses, full_doc())
     assert courses == once
-    assert stats["requirements_copied"] == 0
     assert stats["requirements_added"] == 0
     assert stats["mappings_removed"] == 0
 
@@ -327,11 +231,7 @@ def test_overlay_paths_exist_in_catalog(real_courses):
 
 
 def test_overlay_file_lists_only_settled_entries():
-    pairs = {(e["old"], e["current"]) for e in OVERLAY_DOC["renumbered"]}
-    assert pairs == {
-        ("85-211", "85-110"), ("85-219", "85-170"), ("85-221", "85-130"),
-        ("85-241", "85-150"), ("85-377", "85-452"), ("85-104", "85-190"),
-    }
+    assert set(OVERLAY_DOC) == {"description", "overlays", "remove_mappings", "qatar_visibility"}
     removals = {e["course_code"]: e["programs"] for e in OVERLAY_DOC["remove_mappings"]}
     assert removals == {"85-414": "all", "85-426": "all"}
     assert [(e["course_code"], e["rule"]) for e in OVERLAY_DOC["qatar_visibility"]] == [
@@ -351,7 +251,6 @@ def test_real_overlay_merge_result(real_courses):
     courses = copy.deepcopy(real_courses)
     stats = apply_overlay_document(courses, OVERLAY_DOC)
     rows = by_code(courses)
-    assert stats["renumbered_old_missing"] == []
     assert stats["overlay_codes_missing"] == []
     assert "85-459" not in rows
 
@@ -359,7 +258,7 @@ def test_real_overlay_merge_result(real_courses):
         return {(m, r["requirement"].split("---")[-1], r["type"])
                 for m, reqs in rows[code]["requirements"].items() for r in reqs}
 
-    # 85-190 gets the sheet's IS Social Sciences and keeps 85-104's mappings.
+    # 85-190 has the sheet's IS Social Sciences and the mappings moved from its old numbers.
     assert leaves("85-190") == {
         ("IS", "Social Sciences", True),
         ("CS", "Cognition, Choice, and Behavior (CS, CB, & HCI)", True),
@@ -375,8 +274,21 @@ def test_real_overlay_merge_result(real_courses):
     }
     assert leaves("85-414") == set()
     assert leaves("85-426") == set()
-    for old in ("85-211", "85-219", "85-221", "85-241", "85-377", "85-104"):
-        assert rows[old].get("superseded_by"), old
-    for kept in ("85-253", "85-261"):
-        assert "superseded_by" not in rows[kept]
     assert rows["85-100"]["qatar_only"] is True
+
+
+# Removed on 2026-11-09 after their mappings moved to the current numbers.
+OLD_PSYCHOLOGY_NUMBERS = {
+    "85-104": "85-190", "85-253": "85-190", "85-261": "85-190", "85-211": "85-110",
+    "85-219": "85-170", "85-221": "85-130", "85-241": "85-150", "85-377": "85-452",
+    "85-442": "85-454", "85-359": "85-411", "85-340": "85-350",
+}
+
+
+def test_old_psychology_numbers_stay_removed(real_courses):
+    codes = {c["course_code"] for c in real_courses}
+    assert not codes & set(OLD_PSYCHOLOGY_NUMBERS)
+    assert set(OLD_PSYCHOLOGY_NUMBERS.values()) <= codes
+    rows = by_code(real_courses)
+    for current in ("85-454", "85-411"):
+        assert any(rows[current]["requirements"][m] for m in ("CS", "IS", "BA", "BS")), current

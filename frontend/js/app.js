@@ -1184,7 +1184,7 @@ const App = {
   },
 
   // Search respects semester + campus + modality (same as requirement tree).
-  // Retired numbers and Qatar-only courses not offered in Qatar never show.
+  // Qatar-only courses not offered in Qatar never show.
   coursePassesSearchFilter(course) {
     if (!course || isCourseHidden(course)) return false;
     return courseHasMatchingOffering(course, this._filterParams());
@@ -1194,11 +1194,6 @@ const App = {
   coursePassesTreeFilter(course) {
     if (!course || isCourseHidden(course)) return false;
     return courseHasMatchingOffering(course, this._filterParams());
-  },
-
-  /** True when two stored course codes name the same course (old numbers resolve). */
-  _sameCourse(a, b) {
-    return sameCourseCode(this.courseIndex || {}, a, b);
   },
 
   _rankCourseCodeResults(results, qNorm) {
@@ -1221,7 +1216,7 @@ const App = {
   _ensureExactCourseInResults(results, query) {
     const code = normalizeCourseCode((query || '').trim());
     if (!/^\d{1,2}-\d{2,4}$/.test(code)) return results;
-    // An old number finds its current course; hidden courses stay hidden.
+    // Hidden courses stay hidden.
     const hit = lookupCourse(this.courseIndex, code);
     if (!hit || isCourseHidden(hit)) return results;
     const rest = results.filter(c => c.course_code !== hit.course_code);
@@ -2191,8 +2186,6 @@ const App = {
     if (course.offered_qatar) whereParts.push('Qatar');
     if (course.offered_pitts) whereParts.push('Pittsburgh');
     const whereStr = whereParts.length ? whereParts.join(' &amp; ') : 'Not listed';
-    // Retired numbers this course replaced (backend/data/mapping_overlays.json "renumbered").
-    const previousCodes = Array.isArray(course.previous_codes) ? course.previous_codes.filter(Boolean) : [];
 
     // Slim DC banner (spec § 4.4) — student lens only; faculty get the full
     // cross-program grid instead of a "double-counter for you" framing.
@@ -2211,7 +2204,6 @@ const App = {
       <div class="cc-kv"><span class="cc-k">Dept</span><span class="cc-v">${esc(deptName)} (${esc(course.course_code.split('-')[0])})</span></div>
       <div class="cc-kv"><span class="cc-k">Offered</span><span class="cc-v">${semesters.length ? semesters.map(s => esc(semesterLabel(s))).join(' · ') : 'Not listed'}</span></div>
       <div class="cc-kv"><span class="cc-k">Where</span><span class="cc-v">${whereStr}</span></div>
-      ${previousCodes.length ? `<div class="cc-kv"><span class="cc-k">Previously</span><span class="cc-v">${previousCodes.map(esc).join(', ')}</span></div>` : ''}
       <div class="cc-kv"><span class="cc-k">Prereq</span><span class="cc-v">${prereq ? esc(prereq) : '<em>None</em>'}</span></div>
     `;
 
@@ -2805,12 +2797,12 @@ const App = {
   },
 
   _getWishlistNote(code) {
-    const item = this._getWishlistItems().find(i => this._sameCourse(i.course_code, code));
+    const item = this._getWishlistItems().find(i => i.course_code === code);
     return item ? (item.note || '') : '';
   },
 
   _isInWishlist(code) {
-    return this._getWishlistItems().some(i => this._sameCourse(i.course_code, code));
+    return this._getWishlistItems().some(i => i.course_code === code);
   },
 
   async toggleWishlist(code) {
@@ -2820,7 +2812,7 @@ const App = {
     }
     if (!code) return;
     const list = this._getWishlistItems();
-    const idx = list.findIndex(i => this._sameCourse(i.course_code, code));
+    const idx = list.findIndex(i => i.course_code === code);
     if (idx === -1) {
       list.push({ course_code: code, note: '' });
       this._saveWishlistItems(list);
@@ -2834,11 +2826,10 @@ const App = {
       }
       showToast('Saved for later');
     } else {
-      // The saved entry may use an old number; remove it under that code.
-      const [removed] = list.splice(idx, 1);
+      list.splice(idx, 1);
       this._saveWishlistItems(list);
       if (this.authMode === 'authed') {
-        const r = await apiRemoveWishlist(removed.course_code);
+        const r = await apiRemoveWishlist(code);
         if (!r.ok && r.status !== 404) {
           try { localStorage.removeItem('cf_synced'); } catch {}
           showToast('Removed locally. Sync to server failed.');
@@ -2847,7 +2838,7 @@ const App = {
       showToast('Removed from wishlist');
     }
     // Re-render any visible surfaces that show wishlist state
-    if (this.selectedCourse && this._sameCourse(this.selectedCourse.course_code, code)) {
+    if (this.selectedCourse && this.selectedCourse.course_code === code) {
       this.renderCourseCard(this.selectedCourse);
     }
     // Quick re-render of leaf rows (affects bookmark fill state)
@@ -2933,12 +2924,12 @@ const App = {
 
   async _saveWishlistNote(code, note) {
     const items = this._getWishlistItems();
-    const idx = items.findIndex(i => this._sameCourse(i.course_code, code));
+    const idx = items.findIndex(i => i.course_code === code);
     if (idx === -1) return;
     items[idx].note = (note || '').trim();
     this._saveWishlistItems(items);
     if (this.authMode === 'authed') {
-      const r = await apiUpdateWishlistNote(items[idx].course_code, items[idx].note);
+      const r = await apiUpdateWishlistNote(code, items[idx].note);
       if (!r.ok) {
         try { localStorage.removeItem('cf_synced'); } catch {}
         showToast('Note saved on this device. Could not sync to server.');
@@ -3366,9 +3357,8 @@ const App = {
     let total = 0;
     const seen = new Set();
     for (const item of items || []) {
-      const key = resolveCourseCode(this.courseIndex || {}, item.course_code);
-      if (seen.has(key)) continue;
-      seen.add(key);
+      if (seen.has(item.course_code)) continue;
+      seen.add(item.course_code);
       const c = lookupCourse(this.courseIndex, item.course_code);
       total += Number(c && c.units) || 0;
     }
@@ -3479,7 +3469,7 @@ const App = {
     } else if (this._homeView === 'home') {
       this._refreshHomeDock();
     }
-    if (this.selectedCourse && this._sameCourse(this.selectedCourse.course_code, courseCode)) {
+    if (this.selectedCourse && this.selectedCourse.course_code === courseCode) {
       this.renderCourseCard(this.selectedCourse);
     }
   },
@@ -3822,7 +3812,7 @@ const App = {
       ? this.serverFlags
       : this._getFlags();
     return flags.some(f =>
-      this._sameCourse(f.course_code, code) &&
+      f.course_code === code &&
       (f.reason_code === 'not_offered' || f.reason_code === 'campus_wrong') &&
       f.status !== 'dismissed'
     );
@@ -3830,11 +3820,11 @@ const App = {
 
   _courseHasVisibleFlag(code) {
     const flags = this.serverFlags || [];
-    return flags.some(f => this._sameCourse(f.course_code, code) && f.status !== 'dismissed');
+    return flags.some(f => f.course_code === code && f.status !== 'dismissed');
   },
 
   _courseFlagStatus(code) {
-    const f = (this.serverFlags || []).find(x => this._sameCourse(x.course_code, code) && x.status !== 'dismissed');
+    const f = (this.serverFlags || []).find(x => x.course_code === code && x.status !== 'dismissed');
     return f ? f.status : '';
   },
 
@@ -4437,7 +4427,6 @@ const App = {
         c._added ? '<span class="adm-pill adm-pill-new">Added here</span>' : '',
         this._courseIsEdited(c) && !archivedView ? '<span class="adm-pill adm-pill-edit">Edited</span>' : '',
         archivedView ? '<span class="adm-pill">Archived</span>' : '',
-        c.superseded_by ? `<span class="adm-pill">Replaced by ${esc(c.superseded_by)}</span>` : '',
       ].join('');
       const key = esc(this._courseEditKey(c));
       return `
@@ -4581,10 +4570,6 @@ const App = {
       ? `<span class="adm-field-was">Schedule of Classes says: ${esc(fmt ? fmt(cat[field]) : (cat[field] === '' || cat[field] == null ? '(blank)' : String(cat[field])))}</span>` : '';
     const known = this._knownReqPaths || (this._knownReqPaths = knownRequirementPaths(this.courses || []));
     const edit = course && course._edit;
-    // A retired number is hidden from students; its current row is what they see.
-    const retired = !adding && !st.archived && course && course.superseded_by
-      ? normalizeCourseCode(course.superseded_by) : '';
-    const locked = st.archived || !!retired;
 
     const reqSections = MAJOR_ORDER.map(prog => {
       const list = d.requirements[prog] || [];
@@ -4614,9 +4599,6 @@ const App = {
     const actions = adding
       ? `<button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" id="ce-save" onclick="App._saveCourse()">Add course</button>
          <button type="button" class="adm-btn" onclick="App._closeCourseEditor()">Cancel</button>`
-      : retired
-        ? `<button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" onclick="App._openCourseEditor('${esc(retired)}', false)">Edit ${esc(retired)}</button>
-           <button type="button" class="adm-btn" onclick="App._closeCourseEditor()">Back</button>`
       : st.archived
         ? `<button type="button" class="adm-btn adm-btn-resolve" onclick="App._restoreCourse()">Restore course</button>
            <button type="button" class="adm-btn" onclick="App._closeCourseEditor()">Back</button>`
@@ -4632,11 +4614,10 @@ const App = {
         <div class="adm-editor-head">
           <div class="adm-title">${adding ? 'Add a course' : esc(d.course_code) + ' ' + esc(d.course_name)}</div>
           ${st.archived ? '<p class="adm-card-text">This course is archived, so students do not see it. Restore it to edit it again.</p>' : ''}
-          ${retired ? `<p class="adm-card-text">This number was replaced by ${esc(retired)}. Students only see ${esc(retired)}, so edit that course instead.</p>` : ''}
           ${edit && edit.updated_at ? `<p class="adm-cell-sub">Last edited ${esc(this._admWhen(edit.updated_at))}${edit.updated_by_email ? ' by ' + esc(edit.updated_by_email) : ''}</p>` : ''}
           ${!adding && course && !course._added && !this._courseIsEdited(course) ? '<p class="adm-cell-sub">Showing the Schedule of Classes version. Nothing has been changed yet.</p>' : ''}
         </div>
-        <fieldset class="adm-fieldset" ${locked ? 'disabled' : ''}>
+        <fieldset class="adm-fieldset" ${st.archived ? 'disabled' : ''}>
           <div class="adm-form-grid">
             <label class="adm-field">Course number<input class="adm-search" id="ce-code" value="${esc(d.course_code)}" placeholder="15-122" inputmode="numeric" />${was('course_code')}</label>
             <label class="adm-field adm-field-wide">Course name<input class="adm-search" id="ce-name" value="${esc(d.course_name)}" placeholder="Principles of Imperative Computation" />${was('course_name')}</label>
@@ -4762,22 +4743,11 @@ const App = {
       return;
     }
     const course = adding ? null : this._findCourseByKey(st.key, false);
-    if (course && course.superseded_by) {
-      this._courseFormNotice(`This number was replaced by ${course.superseded_by}. Edit that course instead.`);
-      return;
-    }
-    // Exact codes: the course index also maps retired numbers to their
-    // current row, which would make a retired row clash with itself.
+    // Exact codes, across the catalog and the archived rows.
     const clash = [...(this.courses || []), ...(this._archivedCourses || [])]
       .find(c => c !== course && c.course_code === code);
     if (clash) {
       this._courseFormNotice(`${code} is already in the catalog. Edit that course instead.`, 'ce-code');
-      return;
-    }
-    const renamedFrom = (this.courses || []).find(c => Array.isArray(c.previous_codes)
-      && c.previous_codes.some(p => normalizeCourseCode(p) === code));
-    if (renamedFrom && (!course || course.course_code !== code)) {
-      this._courseFormNotice(`${code} is an old number of ${renamedFrom.course_code}. Use a different number.`, 'ce-code');
       return;
     }
     const offered = this._parseOffered(d.offered);
@@ -4861,7 +4831,7 @@ const App = {
   async _archiveCourse() {
     const st = this._courseAdmin;
     const course = this._findCourseByKey(st.key, false);
-    if (!course || course.superseded_by) return;
+    if (!course) return;
     if (!confirm(`Archive ${course.course_code} ${course.course_name}? Students will stop seeing it. Nothing is deleted, and you can restore it from the Archived list.`)) return;
     const r = await apiArchiveCourse(st.key);
     if (!r.ok) {

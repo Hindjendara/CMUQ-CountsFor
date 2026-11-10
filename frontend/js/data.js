@@ -220,17 +220,15 @@ setRule('BS', 'Non-Technical Breadth Electives', { type: 'min_units', units: 63,
 setRule('BS', 'STEM Course', { type: 'pick', n: 1, label: 'elective' });
 
 // ── Rows the app keeps but never lists ───────────────────────
-// Set by backend/scraper/apply_mapping_overlays.py from backend/data/mapping_overlays.json:
-// - superseded_by: a retired number ("renumbered"); the current row carries
-//   its mappings and lists it in previous_codes.
-// - qatar_only: shown only while its SOC offerings include the Qatar campus.
+// qatar_only is set by backend/scraper/apply_mapping_overlays.py from
+// backend/data/mapping_overlays.json: such a course is shown only while its
+// SOC offerings include the Qatar campus.
 function courseOfferedInQatar(course) {
   return getCourseOfferings(course).some(o => o && o.campus === 'Qatar' && !o.cancelled);
 }
 
 function isCourseHidden(course) {
   if (!course) return true;
-  if (course.superseded_by) return true;
   return !!course.qatar_only && !courseOfferedInQatar(course);
 }
 
@@ -377,9 +375,6 @@ function applyCourseOverrides(courses, overrides) {
   // Copy before editing: fetchAllCourses caches the parsed catalog, and a later
   // reload must start from the scraped values, not from edited objects.
   courses = courses.slice();
-  // Exact codes only, no renumbering aliases: an override keyed by a retired
-  // number edits or archives that retired row (which is never deleted, so an
-  // is_new override on it finds it and adds nothing), never its current row.
   const index = new Map(courses.map((c, i) => [normalizeCourseCode(c.course_code), i]));
   const byCode = {
     get(key) {
@@ -459,39 +454,7 @@ function knownRequirementPaths(courses) {
   return out;
 }
 
-/**
- * [oldCode, i] pairs: a retired number and the position of the current row
- * that replaces it. Comes from superseded_by on the retired row and from
- * previous_codes on the current row (a code still held by a row that is not
- * superseded is never aliased).
- */
-function renumberedAliases(courses) {
-  const pos = new Map();
-  courses.forEach((c, i) => {
-    const k = normalizeCourseCode(c && c.course_code);
-    if (k && !pos.has(k)) pos.set(k, i);
-  });
-  const out = [];
-  courses.forEach((c, i) => {
-    if (!c) return;
-    if (c.superseded_by) {
-      const j = pos.get(normalizeCourseCode(c.superseded_by));
-      const k = normalizeCourseCode(c.course_code);
-      if (k && j !== undefined && !courses[j].superseded_by) out.push([k, j]);
-      return;
-    }
-    for (const old of (Array.isArray(c.previous_codes) ? c.previous_codes : [])) {
-      const k = normalizeCourseCode(old);
-      const holder = pos.get(k);
-      if (k && (holder === undefined || courses[holder].superseded_by)) out.push([k, i]);
-    }
-  });
-  return out;
-}
-
 // ── Build course index ──────────────────────────────────────
-// Old numbers resolve to the current row, so wishlist items, flags, plans and
-// search counts saved under a retired code still find the course.
 function buildCourseIndex(courses) {
   const index = {};
   for (const course of courses) {
@@ -503,28 +466,12 @@ function buildCourseIndex(courses) {
     index[canonical] = course;
     index[canonical.replace(/-/g, '')] = course;
   }
-  for (const [oldCode, i] of renumberedAliases(courses)) {
-    index[oldCode] = courses[i];
-    index[oldCode.replace(/-/g, '')] = courses[i];
-  }
   return index;
 }
 
 function lookupCourse(index, code) {
   if (!code) return null;
   return index[normalizeCourseCode(code)] || index[code] || null;
-}
-
-/** The code a stored code resolves to (an old number gives the current code). */
-function resolveCourseCode(index, code) {
-  const c = lookupCourse(index, code);
-  return c ? c.course_code : normalizeCourseCode(code);
-}
-
-/** True when two stored codes name the same course (old numbers included). */
-function sameCourseCode(index, a, b) {
-  if (!a || !b) return false;
-  return resolveCourseCode(index, a) === resolveCourseCode(index, b);
 }
 
 /** Find a requirement node by its --- delimited path. */

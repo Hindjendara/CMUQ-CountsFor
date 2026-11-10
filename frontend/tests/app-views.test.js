@@ -176,15 +176,13 @@ test('app views: guest view switch with a course open shows home in both directi
   assertEqual(leftBodyHtml(document), HOME_MARKER, 'faculty to student');
 });
 
-// Admin course editor and renumbered courses. 85-211 is retired (superseded_by
-// 85-110) and stays in the catalog, hidden from students.
+// Admin course editor.
 function loadCourseAdmin() {
   const env = loadApp();
   const { App, document, ctx } = env;
   const reqs = () => ({ CS: [], IS: [], BA: [], BS: [] });
   App.courses = [
-    { course_code: '85-211', course_name: 'Cognitive Psychology', superseded_by: '85-110', requirements: reqs(), offered: [] },
-    { course_code: '85-110', course_name: 'Cognitive Psychology', previous_codes: ['85-211'], requirements: reqs(), offered: ['F26'] },
+    { course_code: '85-110', course_name: 'Cognitive Psychology', requirements: reqs(), offered: ['F26'] },
     { course_code: '15-112', course_name: 'Fundamentals of Programming', requirements: reqs(), offered: ['F26'] },
   ];
   App.courseIndex = vm.runInContext('buildCourseIndex', ctx)(App.courses);
@@ -204,28 +202,7 @@ function loadCourseAdmin() {
   return { ...env, notices, calls };
 }
 
-test('course editor: a retired row is read only and points to its current code', () => {
-  const { App, document } = loadCourseAdmin();
-  App._openCourseEditor('85-211', false);
-  const html = document.getElementById('admContent').innerHTML;
-  assertTrue(html.includes('replaced by 85-110'), 'explains the replacement');
-  assertTrue(html.includes("App._openCourseEditor('85-110', false)"), 'links to the current course');
-  assertFalse(html.includes('App._archiveCourse()'), 'no Archive button');
-  assertFalse(html.includes('App._saveCourse()'), 'no Save button');
-  assertTrue(/<fieldset class="adm-fieldset" disabled>/.test(html), 'fields are disabled');
-});
-
-test('course editor: save and archive do nothing on a retired row', () => {
-  const { App, notices, calls } = loadCourseAdmin();
-  App._openCourseEditor('85-211', false);
-  App._courseAdmin.draft.course_name = 'Edited';
-  App._saveCourse();
-  App._archiveCourse();
-  assertEqual(calls, []);
-  assertTrue(notices.some(n => n.includes('replaced by 85-110')), notices.join(' | '));
-});
-
-test('course editor: the current row saves under its own code', () => {
+test('course editor: a row saves under its own code', () => {
   const { App, notices, calls } = loadCourseAdmin();
   App._openCourseEditor('85-110', false);
   App._courseAdmin.draft.course_name = 'Cognitive Psychology (edited)';
@@ -235,18 +212,12 @@ test('course editor: the current row saves under its own code', () => {
   assertEqual(calls[0].key, '85-110');
 });
 
-test('course editor: renumbering onto a retired or previous code is a clash', () => {
+test('course editor: renumbering onto a code already in the catalog is a clash', () => {
   const { App, notices, calls } = loadCourseAdmin();
-  App._openCourseEditor('85-110', false);
-  App._courseAdmin.draft.course_code = '85-211';
-  App._saveCourse();
-  assertTrue(notices.some(n => n.includes('85-211 is already in the catalog')), notices.join(' | '));
-
-  App.courses = App.courses.filter(c => c.course_code !== '85-211');
   App._openCourseEditor('15-112', false);
-  App._courseAdmin.draft.course_code = '85-211';
+  App._courseAdmin.draft.course_code = '85-110';
   App._saveCourse();
-  assertTrue(notices.some(n => n.includes('85-211 is an old number of 85-110')), notices.join(' | '));
+  assertTrue(notices.some(n => n.includes('85-110 is already in the catalog')), notices.join(' | '));
   assertEqual(calls, []);
 });
 

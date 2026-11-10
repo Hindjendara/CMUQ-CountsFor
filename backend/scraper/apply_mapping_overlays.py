@@ -8,20 +8,13 @@ The SOC scrape stays the rule; the overlay file is the one place for manual
 complements on top of it. One run applies its sections in this order, and
 running it again changes nothing:
 
-1. "renumbered": copy the retired code's requirement rows (and an empty
-   description or prerequisites) onto the current code, set "previous_codes"
-   on the current row and "superseded_by" on the retired row. The retired row
-   is kept, because validate_soc_coverage needs every code soc.json lists.
-   A retired code missing from the catalog is skipped with a warning; a
-   current code missing from the catalog fails the run (nothing is saved).
-2. "overlays": additive requirement mappings.
-3. "remove_mappings": drop requirement rows per program. Runs after 1 and 2
-   so nothing re-adds them; steps 1 and 2 also skip those programs.
-4. "qatar_visibility": set "qatar_only" on courses the frontend shows only
+1. "overlays": additive requirement mappings.
+2. "remove_mappings": drop requirement rows per program. Runs after 1 so
+   nothing re-adds them; step 1 also skips those programs.
+3. "qatar_visibility": set "qatar_only" on courses the frontend shows only
    when their SOC offerings include the Qatar campus.
 
-"previous_codes", "superseded_by" and "qatar_only" belong to this step: a row
-not listed in the file loses them. Copied requirement rows stay.
+"qatar_only" belongs to this step: a row not listed in the file loses it.
 """
 from __future__ import annotations
 
@@ -233,7 +226,7 @@ def _apply_additive_overlays(
     overlays: list[dict],
     removed: dict[str, set[str]] | None = None,
 ) -> dict:
-    """Section 2. An overlay may set:
+    """Section 1. An overlay may set:
 
     - "create_missing": false to skip (with a warning) codes the catalog lacks
       instead of creating a manual_seed row (default true);
@@ -241,7 +234,7 @@ def _apply_additive_overlays(
       "ensure_course_defaults" (and may be created). Default: every code.
 
     Programs that remove_mappings lists for a course are skipped, so a rerun
-    does not add rows only for section 3 to drop them again.
+    does not add rows only for section 2 to drop them again.
     """
     removed = removed or {}
     stats = {"courses_created": 0, "requirements_added": 0, "overlay_codes_missing": []}
@@ -324,83 +317,8 @@ def removed_programs_by_code(removals: list[dict]) -> dict[str, set[str]]:
     return out
 
 
-def renumbered_pairs(renumbered: list[dict]) -> list[tuple[str, str]]:
-    """(old, current) pairs. Rejects missing fields, self links, conflicts and chains."""
-    pairs: list[tuple[str, str]] = []
-    olds: dict[str, str] = {}
-    for entry in renumbered:
-        old = normalize_course_code(entry.get("old"))
-        current = normalize_course_code(entry.get("current"))
-        if not old or not current:
-            raise OverlayError(f"renumbered entry needs old and current: {entry}")
-        if old == current:
-            raise OverlayError(f"renumbered {old}: old and current are the same code")
-        if olds.get(old, current) != current:
-            raise OverlayError(f"renumbered {old}: listed with two current codes ({olds[old]}, {current})")
-        olds[old] = current
-        pairs.append((old, current))
-    for old, current in pairs:
-        if current in olds:
-            raise OverlayError(
-                f"renumbered {old} -> {current}: {current} is itself renumbered to {olds[current]}; "
-                "link the old code to the final code instead"
-            )
-    return pairs
-
-
-def apply_renumbered(
-    courses: list[dict],
-    by_code: dict[str, dict],
-    renumbered: list[dict],
-    removed: dict[str, set[str]] | None = None,
-) -> dict:
-    """Section 1: link retired codes to their current code (see the module docstring)."""
-    removed = removed or {}
-    pairs = renumbered_pairs(renumbered)
-    missing_current = sorted({cur for _, cur in pairs if cur not in by_code})
-    if missing_current:
-        raise OverlayError(
-            "renumbered: current code(s) missing from the catalog: " + ", ".join(missing_current)
-        )
-
-    stats = {"renumbered_linked": 0, "renumbered_old_missing": [], "requirements_copied": 0}
-    superseded: dict[str, str] = {}
-    previous: dict[str, list[str]] = {}
-    for old, current in pairs:
-        old_row = by_code.get(old)
-        if old_row is None:
-            stats["renumbered_old_missing"].append(f"{old} -> {current}")
-            continue
-        cur_row = by_code[current]
-        blocked = removed.get(current, set())
-        copy = {
-            major: [r for r in reqs or [] if isinstance(r, dict)]
-            for major, reqs in (old_row.get("requirements") or {}).items()
-            if major not in blocked
-        }
-        stats["requirements_copied"] += _merge_requirements(cur_row, copy)
-        for field in ("description", "prerequisites"):
-            if not str(cur_row.get(field) or "").strip() and str(old_row.get(field) or "").strip():
-                cur_row[field] = old_row[field]
-        superseded[old] = current
-        previous.setdefault(current, []).append(old)
-        stats["renumbered_linked"] += 1
-
-    for course in courses:
-        code = course.get("course_code")
-        if code in superseded:
-            course["superseded_by"] = superseded[code]
-        else:
-            course.pop("superseded_by", None)
-        if code in previous:
-            course["previous_codes"] = previous[code]
-        else:
-            course.pop("previous_codes", None)
-    return stats
-
-
 def apply_remove_mappings(by_code: dict[str, dict], removed: dict[str, set[str]]) -> dict:
-    """Section 3: drop the requirement rows of the listed programs."""
+    """Section 2: drop the requirement rows of the listed programs."""
     stats = {"mappings_removed": 0, "remove_codes_missing": []}
     for code, programs in sorted(removed.items()):
         course = by_code.get(code)
@@ -431,7 +349,7 @@ def _visibility_flags(entries: list[dict]) -> dict[str, set[str]]:
 
 
 def apply_qatar_visibility(courses: list[dict], by_code: dict[str, dict], entries: list[dict]) -> dict:
-    """Section 4: set the flag each rule names; rows not listed lose it."""
+    """Section 3: set the flag each rule names; rows not listed lose it."""
     wanted = _visibility_flags(entries)
     stats = {
         "visibility_flags": sum(len(f) for c, f in wanted.items() if c in by_code),
@@ -451,15 +369,13 @@ def apply_overlay_document(courses: list[dict], doc: dict) -> dict:
     """Apply every section of mapping_overlays.json in the documented order.
 
     Raises OverlayError, before any requirement or flag changes, when the file
-    is invalid or a renumbered current code is missing from the catalog.
+    is invalid.
     """
     removed = removed_programs_by_code(doc.get("remove_mappings") or [])
-    renumbered_pairs(doc.get("renumbered") or [])
     _visibility_flags(doc.get("qatar_visibility") or [])
 
     stats: dict = {"codes_normalized": normalize_catalog_codes(courses)}
     by_code = _by_code(courses)
-    stats.update(apply_renumbered(courses, by_code, doc.get("renumbered") or [], removed))
     stats.update(_apply_additive_overlays(courses, by_code, doc.get("overlays") or [], removed))
     stats.update(apply_remove_mappings(by_code, removed))
     stats.update(apply_qatar_visibility(courses, by_code, doc.get("qatar_visibility") or []))
@@ -566,12 +482,9 @@ def main() -> int:
             continue
         print(
             f"{path.name}: normalized={stats['codes_normalized']} "
-            f"renumbered={stats['renumbered_linked']} reqs_copied={stats['requirements_copied']} "
             f"created={stats['courses_created']} reqs_added={stats['requirements_added']} "
             f"mappings_removed={stats['mappings_removed']} visibility_flags={stats['visibility_flags']}"
         )
-        for item in stats["renumbered_old_missing"]:
-            print(f"  WARNING renumbered: old code not in the catalog, skipped: {item}")
         for item in stats["overlay_codes_missing"]:
             print(f"  WARNING overlay: course not in the catalog, not created: {item}")
         for code in stats["remove_codes_missing"]:
