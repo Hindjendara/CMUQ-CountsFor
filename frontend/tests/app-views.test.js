@@ -72,7 +72,8 @@ const HOME_MARKER = '<div class="home-test-marker">home</div>';
 
 // Fresh App in its own context. The network and heavy renderers are stubbed;
 // renderShell(), renderLeftEmpty(), reset() and setGuestRole() are the real code.
-function loadApp() {
+// With { realTree: true } the requirement map (renderTree) is the real code too.
+function loadApp(opts = {}) {
   const document = fakeDocument();
   const ctx = {
     console,
@@ -95,7 +96,7 @@ function loadApp() {
   App._loadMyFlagsSummary = () => {};
   App._loadStudentFlagsSummary = () => {};
   App.bindGlobalEvents = () => {};
-  App.renderTree = () => {};
+  if (!opts.realTree) App.renderTree = () => {};
   App.renderCourseCard = (course) => {
     const el = document.getElementById('leftBody');
     if (el) el.innerHTML = '<div class="course-card">' + course.course_code + '</div>';
@@ -219,5 +220,180 @@ test('course editor: renumbering onto a code already in the catalog is a clash',
   App._saveCourse();
   assertTrue(notices.some(n => n.includes('85-110 is already in the catalog')), notices.join(' | '));
   assertEqual(calls, []);
+});
+
+// ── Minors in the requirement map ────────────────────────────
+// The real renderTree() with a small catalog and the real data/minors.json.
+const MINORS_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'minors.json'), 'utf8'));
+
+function minorsCatalog() {
+  const course = (code, name, units, reqs) => {
+    const requirements = { CS: [], IS: [], BA: [], BS: [] };
+    for (const [major, requirement, type] of reqs || []) requirements[major].push({ requirement, type: !!type, major });
+    return { course_code: code, course_name: name, units, requirements, offered: ['F26'] };
+  };
+  return [
+    course('15-112', 'Fundamentals of Programming and Computer Science', 12,
+      [['CS', 'Computer Science---Intro Programming'], ['IS', 'Information Systems Core---Programming']]),
+    course('15-122', 'Principles of Imperative Computation', 12,
+      [['CS', 'Computer Science---Imperative'], ['IS', 'Information Systems Core---Data Structures']]),
+    course('15-150', 'Principles of Functional Programming', 12,
+      [['CS', 'Computer Science---Functional'], ['IS', 'Information Systems Breadth---Functional']]),
+    course('15-210', 'Parallel and Sequential Data Structures and Algorithms', 12,
+      [['CS', 'Computer Science---Algorithms'], ['IS', 'Information Systems Breadth---Algorithms']]),
+    course('21-127', 'Concepts of Mathematics', 12, [['CS', 'Mathematics and Probability---Mathematical Foundations for CS']]),
+    course('21-241', 'Matrices and Linear Transformations', 11, [['CS', 'Mathematics and Probability---Matrix/Linear Algebra']]),
+    course('21-228', 'Discrete Mathematics', 9, []),
+    course('21-301', 'Combinatorics', 9, []),
+    course('36-200', 'Reasoning with Data', 9, []),
+    course('85-110', 'Cognitive Psychology', 9,
+      [['CS', 'GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)', true]]),
+    course('85-130', 'Social Psychology', 9, []),
+    course('85-310', 'Research Methods in Cognitive Psychology', 9, []),
+    course('85-352', 'Evolutionary Psychology', 9, []),
+    course('03-121', 'Modern Biology', 9, []),
+    course('03-362', 'Cellular Neuroscience', 9, []),
+  ];
+}
+
+function loadMinorsApp(profile, extra = {}) {
+  const env = loadApp({ realTree: true });
+  const { App } = env;
+  Object.assign(App, extra);
+  App.profile = profile;
+  App._buildCatalog(minorsCatalog(), [], MINORS_JSON);
+  App.activeSemester = 'F26';
+  App.layoutMode = 'split';
+  if (profile.primary && profile.primary !== 'AS') App.activeMajor = profile.primary;
+  App.autoExpandFirstLevel(App.activeMajor);  // as loadData() does
+  App.renderShell();
+  return env;
+}
+
+const treeHtml = document => document.getElementById('rightBody').innerHTML;
+const STUDENT = (primary, minors) => ({ role: 'student', primary, secondary: minors[0] || null, secondaries: minors, scope: null });
+
+test('minors: a student sees each chosen minor after the major, with its limit and status controls', () => {
+  const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology', 'math']));
+  App.renderTree();
+  const html = treeHtml(document);
+  assertTrue(html.includes('class="mn-programs"'), 'the programs bar');
+  const iMajor = html.indexOf('data-tree-major="CS"');
+  const iPsych = html.indexOf('id="mn-section-psychology"');
+  const iMath = html.indexOf('id="mn-section-math"');
+  assertTrue(iMajor >= 0 && iPsych > iMajor && iMath > iPsych, 'the major first, then the minors in the chosen order');
+  assertTrue(html.includes('Psychology minor') && html.includes('Mathematical Sciences minor'));
+  assertTrue(html.includes('Courses may also count toward your major or another minor without a limit.'), 'Psychology limit');
+  assertTrue(html.includes('without a limit, except courses used for Mathematical Sciences Electives.'), 'Math limit');
+  assertTrue(html.includes('Audit rule: Courses may double count without any limit with other programs unless specified otherwise.'));
+  assertTrue(html.includes('data-tree-major="minor:psychology"'), 'minor categories render as tree cards');
+  assertTrue(html.includes('class="cs-btn cs-none"'), 'status controls');
+  assertTrue(html.includes('Also counts for Psychology minor'), 'the major tree names the minor');
+  assertTrue(html.includes('Also counts for CS Gen Ed'), 'the minor tree names the major');
+  assertTrue(html.includes('5 requirements. Mark the courses you took to see your progress.'));
+});
+
+test('minors: marking two courses completed updates the minor and is saved in cf_course_status', () => {
+  const { App, document, ctx } = loadMinorsApp(STUDENT('CS', ['psychology', 'math']));
+  App.renderTree();
+  App.cycleCourseStatus('85-110');
+  App.cycleCourseStatus('85-110');
+  App.setCourseStatus('85-130', 'completed');
+  assertEqual(JSON.parse(ctx.localStorage.getItem('cf_course_status')), { '85-110': 'completed', '85-130': 'completed' });
+  const html = treeHtml(document);
+  assertTrue(html.includes('1 of 5 requirements done, 4 left'), 'Psychology summary');
+  assertTrue(html.includes('<span class="mn-st mn-st-done"'), 'Survey Courses is done');
+  assertTrue(html.includes('class="cs-btn cs-done"'));
+  assertTrue(html.includes('1 done'), 'the CS category with 85-110 counts it');
+  App.setCourseStatus('85-130', '');
+  assertEqual(JSON.parse(ctx.localStorage.getItem('cf_course_status')), { '85-110': 'completed' });
+});
+
+test('minors: shared courses over the double counting limit show a warning', () => {
+  const { App, document } = loadMinorsApp(STUDENT('IS', ['cs']));
+  for (const code of ['15-112', '15-122', '15-150', '15-210']) App.setCourseStatus(code, 'completed');
+  const html = treeHtml(document);
+  assertTrue(html.includes('At most 2 courses may also count toward your major or another minor. Courses used for Prerequisites do not count toward this limit.'));
+  assertTrue(html.includes('3 courses you marked count toward this minor and toward your IS major or another minor (15-122, 15-150 and 15-210). At most 2 may.'));
+  assertTrue(html.includes('class="mn-warn"'));
+});
+
+test('minors: the Minors tab lists every minor and shows the chosen one in full (faculty view)', () => {
+  const { App, document } = loadMinorsApp({ role: 'professor', primary: 'AS', secondary: null, scope: null });
+  const tabs = App._renderMajorTabs();
+  assertTrue(tabs.includes('data-major="MINORS"') && tabs.includes('All 16 minors'));
+  App.switchMajor('MINORS');
+  let html = treeHtml(document);
+  assertEqual((html.match(/data-action="minor-browse"/g) || []).length, 16);
+  assertTrue(html.includes('Choose a minor to see its full requirements.'));
+  App.browseMinor('neuroscience');
+  html = treeHtml(document);
+  assertTrue(html.includes('id="mn-section-neuroscience"'));
+  for (const name of ['Required Courses', 'Modern Biology', 'Neuroscience Core', 'Neurobiology Electives']) {
+    assertTrue(html.includes(name), name);
+  }
+  assertTrue(html.includes('data-course-code="03-121"') && html.includes('data-course-code="03-362"'));
+  assertTrue(html.includes('At most 2 courses may also count toward a student&#039;s major or another minor.'));
+  assertFalse(html.includes('cs-btn'), 'no status controls for faculty');
+  assertFalse(html.includes('mn-programs'), 'no programs bar for faculty');
+});
+
+test('minors: a guest student adds and removes minors in the tree and keeps them across a view switch', () => {
+  const { App, document, ctx } = loadMinorsApp(STUDENT('CS', []), { isGuest: true });
+  App._refreshSemesterOptions = () => {};
+  App.addStudentMinor('psychology');
+  App.addStudentMinor('math');
+  App.addStudentMinor('cs');  // not open to CS majors
+  assertEqual(App.profile.secondaries, ['psychology', 'math']);
+  assertEqual(JSON.parse(ctx.localStorage.getItem('cf_minors')), ['psychology', 'math'], 'saved on this device');
+  App.setGuestRole('faculty');
+  assertEqual(App.profile.role, 'professor');
+  App.setGuestRole('student');
+  assertEqual([App.profile.primary, App.profile.secondaries], ['CS', ['psychology', 'math']]);
+  App.removeStudentMinor('math');
+  assertEqual(App.profile.secondaries, ['psychology']);
+  App.addStudentMinor('business');
+  App.setStudentMajor('BA');
+  assertEqual([App.profile.primary, App.profile.secondaries], ['BA', ['psychology']], 'business is not open to BA majors');
+  App.switchMajor('MINORS');
+  App.browseMinor('finance');
+  assertTrue(treeHtml(document).includes('Not open to BA majors'));
+});
+
+test('minors: a signed-in student saves to the account one request at a time, the latest list last', async () => {
+  const { App, ctx } = loadMinorsApp(STUDENT('CS', []), { authMode: 'authed' });
+  const calls = [];
+  const pending = [];
+  ctx.apiPatchMe = body => {
+    calls.push(JSON.parse(JSON.stringify(body)));
+    return new Promise(resolve => pending.push(() => resolve({ ok: true, data: { minor_codes: body.minor_codes } })));
+  };
+  const ticks = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  const first = App.addStudentMinor('psychology');
+  const second = App.addStudentMinor('math');
+  const third = App.removeStudentMinor('psychology');
+  assertEqual(calls, [{ primary_program: 'CS', minor_codes: ['psychology'] }], 'one request in flight');
+  pending.shift()();
+  await ticks();
+  assertEqual(calls.length, 2, 'the changes made meanwhile go in one more request');
+  assertEqual(calls[1], { primary_program: 'CS', minor_codes: ['math'] });
+  pending.shift()();
+  await Promise.all([first, second, third]);
+  assertEqual(calls.length, 2);
+  assertEqual(App.authedUser.minor_codes, ['math']);
+});
+
+test('minors: without minors.json the tree still renders and the minor says why', () => {
+  const { App, document } = loadApp({ realTree: true });
+  App.profile = STUDENT('CS', ['psychology']);
+  App._minorsLoadError = 'HTTP 404';
+  App._buildCatalog(minorsCatalog(), [], null);
+  App.layoutMode = 'split';
+  App.renderShell();
+  App.renderTree();
+  assertTrue(treeHtml(document).includes('data-tree-major="CS"'));
+  assertTrue(treeHtml(document).includes('The minor requirements could not be loaded.'));
+  App.switchMajor('MINORS');
+  assertTrue(treeHtml(document).includes('The minor requirements could not be loaded.'));
 });
 

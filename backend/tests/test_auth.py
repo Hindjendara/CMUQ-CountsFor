@@ -1,6 +1,7 @@
 """Auth route tests. /api/auth/google's signature check is mocked — real
 JWT verification needs network round-trips to Google."""
 import json
+from pathlib import Path
 from unittest.mock import patch
 import pytest
 
@@ -153,6 +154,90 @@ def test_patch_me_accepts_multiple_minors(client, student):
     body = r.get_json()
     assert body["minor_codes"] == ["finance", "history"]
     assert body["minor_code"] is None
+
+
+# ── Minor codes and blocked majors (frontend/data/minors.json) ──
+
+MINORS_JSON = Path(__file__).resolve().parents[2] / "frontend" / "data" / "minors.json"
+
+
+def test_minor_codes_and_blocked_majors_match_minors_file():
+    """The API accepts exactly the minors of minors.json and blocks the same
+    majors as its blocked_majors (MINOR_BLOCKED_MAJORS in js/profile.js)."""
+    from backend.auth import MAJOR_MINOR_COLLISION, VALID_MINORS_FOR_PATCH
+
+    minors = json.loads(MINORS_JSON.read_text(encoding="utf-8"))["minors"]
+    assert VALID_MINORS_FOR_PATCH == set(minors)
+    blocked = {}
+    for code, minor in minors.items():
+        for major in minor.get("blocked_majors") or []:
+            blocked.setdefault(major, set()).add(code)
+    assert {m: set(codes) for m, codes in MAJOR_MINOR_COLLISION.items()} == blocked
+
+
+def test_patch_me_accepts_the_new_minor_codes(client, student):
+    login(client, student)
+    r = client.patch("/api/me", json={"primary_program": "CS", "minor_codes": ["business_analytics", "comp_bio"]})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["minor_codes"] == ["business_analytics", "comp_bio"]
+
+
+def test_patch_me_rejects_the_dropped_product_minor(client, student):
+    login(client, student)
+    r = client.patch("/api/me", json={"minor_codes": ["product"]})
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "inconsistent_profile"
+    assert "product" in r.get_json()["message"]
+
+
+@pytest.mark.parametrize("major,minor", [
+    ("BA", "business"), ("BA", "business_analytics"), ("BA", "finance"), ("CS", "cs"), ("BS", "biology"),
+])
+def test_patch_me_rejects_a_minor_blocked_for_the_major(client, student, major, minor):
+    login(client, student)
+    r = client.patch("/api/me", json={"primary_program": major, "minor_codes": ["history", minor]})
+    assert r.status_code == 400
+    assert r.get_json() == {"error": "inconsistent_profile",
+                            "message": "That minor is not open to students in your major."}
+
+
+def test_patch_me_keeps_tepper_minors_open_to_other_majors(client, student):
+    login(client, student)
+    r = client.patch("/api/me", json={"primary_program": "IS",
+                                      "minor_codes": ["business", "business_analytics", "finance"]})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["minor_codes"] == ["business", "business_analytics", "finance"]
+
+
+def test_patch_me_keeps_a_minor_while_adding_another(client, student):
+    """Saving a list that keeps a saved minor used to fail with a 500: the new
+    user_minors rows were inserted before the old ones were deleted."""
+    login(client, student)
+    for codes in (["history"], ["history", "finance"], ["finance"], ["psychology", "finance"], ["psychology", "finance"]):
+        r = client.patch("/api/me", json={"minor_codes": codes})
+        assert r.status_code == 200, (codes, r.get_json())
+        assert r.get_json()["minor_codes"] == codes
+
+
+def test_admin_edits_a_students_minors_keeping_one(client, admin, student):
+    login(client, student)
+    assert client.patch("/api/me", json={"minor_codes": ["history"]}).status_code == 200
+    login(client, admin)
+    r = client.patch(f"/api/users/{student.id}", json={"minor_codes": ["history", "comp_bio"]})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["minor_codes"] == ["history", "comp_bio"]
+
+
+def test_patch_me_major_change_is_checked_against_saved_minors(client, student):
+    """Switching to BA with a saved finance minor fails until the minor goes."""
+    login(client, student)
+    assert client.patch("/api/me", json={"minor_codes": ["finance"]}).status_code == 200
+    r = client.patch("/api/me", json={"primary_program": "BA"})
+    assert r.status_code == 400
+    assert r.get_json()["message"] == "That minor is not open to students in your major."
+    r = client.patch("/api/me", json={"primary_program": "BA", "minor_codes": ["economics"]})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["minor_codes"] == ["economics"]
 
 
 def test_patch_me_rejects_unknown_fields(client, student):

@@ -1,19 +1,12 @@
 // ── computeViewMode ──────────────────────────────────────
 
-test('computeViewMode: student with major + business minor → focused-dual', () => {
-  // 'business' minor maps to BA (a major we have requirement data for).
-  assertEqual(
-    computeViewMode({ role: 'student', primary: 'CS', secondary: 'business' }),
-    'focused-dual'
-  );
-});
-
-test('computeViewMode: student with major + arabic minor → focused-single', () => {
-  // Arabic minor has no requirement-tree data, so view stays single.
-  assertEqual(
-    computeViewMode({ role: 'student', primary: 'CS', secondary: 'arabic' }),
-    'focused-single'
-  );
+test('computeViewMode: a student with minors stays focused on their major', () => {
+  // Minors are sections of the student's own tree (minors.json); a minor no
+  // longer borrows another major's tree.
+  for (const minors of [['business'], ['cs', 'psychology'], ['arabic']]) {
+    assertEqual(computeViewMode({ role: 'student', primary: 'IS', secondaries: minors }), 'focused-single', minors.join());
+  }
+  assertEqual(computeViewMode({ role: 'student', primary: 'CS', secondary: 'business' }), 'focused-single');
 });
 
 test('computeViewMode: student with major, no minor → focused-single', () => {
@@ -154,6 +147,48 @@ test('validateProfile: student with unknown minor code → invalid', () => {
   assertFalse(validateProfile({ role: 'student', primary: 'CS', secondary: 'unknown_minor' }));
 });
 
+test('validateProfile: product is no longer a minor; business_analytics and comp_bio are', () => {
+  assertFalse(validateProfile({ role: 'student', primary: 'CS', secondaries: ['product'] }));
+  assertTrue(validateProfile({ role: 'student', primary: 'CS', secondaries: ['business_analytics', 'comp_bio'] }));
+});
+
+test('validateProfile: blocked majors follow minors.json (BA may not take three Tepper minors)', () => {
+  for (const mc of ['business', 'business_analytics', 'finance']) {
+    assertFalse(validateProfile({ role: 'student', primary: 'BA', secondaries: [mc] }), 'BA + ' + mc);
+    assertTrue(validateProfile({ role: 'student', primary: 'IS', secondaries: [mc] }), 'IS + ' + mc);
+  }
+  assertFalse(validateProfile({ role: 'student', primary: 'BS', secondaries: ['biology'] }));
+  assertTrue(validateProfile({ role: 'student', primary: 'BS', secondaries: ['comp_bio', 'neuroscience'] }));
+  assertTrue(validateProfile({ role: 'student', primary: 'BA', secondaries: ['economics', 'psychology'] }));
+  assertFalse(validateProfile({ role: 'student', primary: 'CS', secondaries: ['math', 'math'] }), 'no repeats');
+});
+
+test('isMinorBlockedForMajor and cleanProfileMinors', () => {
+  assertTrue(isMinorBlockedForMajor('finance', 'BA'));
+  assertFalse(isMinorBlockedForMajor('finance', 'CS'));
+  assertFalse(isMinorBlockedForMajor('psychology', 'BA'));
+  assertFalse(isMinorBlockedForMajor('cs', null));
+  assertEqual(cleanProfileMinors('BA', ['finance', 'psychology', 'product', 'psychology', '', 'economics']),
+    ['psychology', 'economics']);
+});
+
+test('minorListFromData: names sorted, blocked majors kept, bad entries skipped', () => {
+  const { list, blocked } = minorListFromData({ minors: {
+    zed: { name: 'Zoology', blocked_majors: [] },
+    abc: { name: 'Accounting', blocked_majors: ['BA', ''] },
+    bad: null,
+  } });
+  assertEqual(list, [{ code: 'abc', label: 'Accounting' }, { code: 'zed', label: 'Zoology' }]);
+  assertEqual(blocked, { abc: ['BA'] });
+  assertEqual(minorListFromData(null), { list: [], blocked: {} });
+});
+
+test('applyMinorsCatalog: an empty file leaves the list alone', () => {
+  const before = JSON.stringify(MINOR_LIST);
+  assertFalse(applyMinorsCatalog({ minors: {} }));
+  assertEqual(JSON.stringify(MINOR_LIST), before);
+});
+
 test('validateProfile: invalid role → invalid', () => {
   assertFalse(validateProfile({ role: 'wizard', primary: 'CS', secondary: null }));
 });
@@ -263,6 +298,18 @@ test('loadProfile migrates legacy student minor stored as major code', () => {
   const loaded = loadProfile();
   assertEqual(loaded.role, 'student');
   assertEqual(loaded.secondary, 'business');  // migrated
+});
+
+test('loadProfile drops minors the app no longer offers or the major may not take', () => {
+  localStorage.setItem('cf_role', 'student');
+  localStorage.setItem('cf_primary', 'BA');
+  localStorage.setItem('cf_secondary', 'product');
+  localStorage.setItem('cf_minors', JSON.stringify(['product', 'finance', 'psychology']));
+  const loaded = loadProfile();
+  assertEqual(loaded.primary, 'BA');
+  assertEqual(loaded.secondaries, ['psychology']);
+  assertEqual(loaded.secondary, 'psychology');
+  assertEqual(JSON.parse(localStorage.getItem('cf_minors')), ['psychology'], 'the cleaned list is saved');
 });
 
 test('loadProfile returns null when no role stored', () => {

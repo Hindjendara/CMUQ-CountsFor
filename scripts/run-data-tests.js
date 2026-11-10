@@ -32,7 +32,7 @@ load('js/profile.js');
 load('tests/test-runner.js');
 
 // Load each test file separately so results can be reported per file.
-const TEST_FILES = ['tests/profile.test.js', 'tests/data.test.js', 'tests/utils.test.js'];
+const TEST_FILES = ['tests/profile.test.js', 'tests/data.test.js', 'tests/minors.test.js', 'tests/utils.test.js'];
 const byFile = [];
 for (const file of TEST_FILES) {
   const start = __tests.length;
@@ -40,34 +40,37 @@ for (const file of TEST_FILES) {
   byFile.push({ file, tests: __tests.slice(start) });
 }
 // Node-only suites (they read source files with fs), loaded with require().
-const NODE_TEST_FILES = ['tests/dash-guard.test.js', 'tests/app-views.test.js'];
+const NODE_TEST_FILES = ['tests/dash-guard.test.js', 'tests/minors-file.test.js', 'tests/app-views.test.js'];
 for (const file of NODE_TEST_FILES) {
   const start = __tests.length;
   require(path.join(ROOT, file));
   byFile.push({ file, tests: __tests.slice(start) });
 }
 
-let pass = 0;
-let fail = 0;
-for (const { file, tests } of byFile) {
-  let filePass = 0;
-  let fileFail = 0;
-  console.log(`\n# ${file}`);
-  for (const t of tests) {
-    localStorage.clear();
-    sessionStorage.clear();
-    try {
-      t.fn();
-      filePass++;
-      console.log('PASS', t.name);
-    } catch (e) {
-      fileFail++;
-      console.log('FAIL', t.name, e.message);
+(async () => {
+  let pass = 0;
+  let fail = 0;
+  for (const { file, tests } of byFile) {
+    let filePass = 0;
+    let fileFail = 0;
+    console.log(`\n# ${file}`);
+    for (const t of tests) {
+      localStorage.clear();
+      sessionStorage.clear();
+      try {
+        // A test may return a promise (the Node-only load tests do).
+        await t.fn();
+        filePass++;
+        console.log('PASS', t.name);
+      } catch (e) {
+        fileFail++;
+        console.log('FAIL', t.name, e.message);
+      }
     }
+    console.log(`${file}: ${filePass} passed, ${fileFail} failed`);
+    pass += filePass;
+    fail += fileFail;
   }
-  console.log(`${file}: ${filePass} passed, ${fileFail} failed`);
-  pass += filePass;
-  fail += fileFail;
-}
-console.log(`\nTotal: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+  console.log(`\nTotal: ${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+})();

@@ -91,7 +91,8 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **GenEd** | General Education. University core requirements every student in a major must satisfy (humanities, cultural analysis and so on). `splitTreeSections()` treats top-level nodes named `GenEd` or containing `University Core`, `EY2022`, `EY2024` as GenEd. |
 | **Majors** | `CS` Computer Science, `IS` Information Systems, `BA` Business Administration, `BS` Biological Sciences. Live in `MAJOR_ORDER`. Scaffolded but not live: `AI`, `GS`. |
 | **`AS`** | "Arts & Sciences". Not a major. A grouping used as the `primary_program` of cross-program faculty and as the default program for directory entries (`DEFAULT_DIRECTORY_PROGRAM = "AS"`). Students can never pick it. |
-| **Minors** | Codes in `VALID_MINORS_FOR_PATCH` (`backend/auth.py`) and `MINOR_LIST` (`js/profile.js`): arabic, biology, business, cs, economics, finance, history, math, neuroscience, product, writing, psychology, sociology, self_defined, tech_entre. Minor requirements are in `frontend/data/minors.json`, built from the official files in `backend/data/minors/` (4.4); the app does not load that file yet. A student cannot take a minor in their own major field (`MAJOR_MINOR_COLLISION`). |
+| **Minors** | The 16 minors of `frontend/data/minors.json`, built from the official files in `backend/data/minors/` (4.4): arabic, biology, business, business_analytics, comp_bio, cs, economics, finance, history, math, neuroscience, writing, psychology, sociology, self_defined, tech_entre. `product` was dropped in November 2026 (it has no official file). The same codes are in `VALID_MINORS_FOR_PATCH` (`backend/auth.py`) and in the fallback `MINOR_LIST` (`js/profile.js`). Some majors may not declare some minors (`blocked_majors` in the file, `MAJOR_MINOR_COLLISION` in `auth.py`, `MINOR_BLOCKED_MAJORS` in `profile.js`): CS not `cs`, BS not `biology`, BA not `business`, `business_analytics` or `finance`. A student's minors show in their requirement tree, and every minor in the Minors tab (8.10). |
+| **Course status** | What a student marked a course as: not taken, in progress or completed. Kept in the browser (`localStorage['cf_course_status']`) for guests and signed-in students alike; the server does not store it yet. It drives the minor progress and the double counting warnings (8.10). |
 | **Role** | Exact title stored on the user: `student`, `professor`, `area_head`, `associate_area_head`, `advisor`, `admin`. |
 | **Role group** | Permission bucket computed by `User.role_group()`: `student`, `faculty` (the four faculty titles), `admin`. **All permission checks use role groups**, except a few student-only routes that use the exact role. |
 | **Directory** | The list of people who get faculty or admin access. Two layers: a JSON seed file (static) plus the `directory_entries` table (editable, wins on conflict). Your role is recomputed from the directory **on every sign-in**. |
@@ -161,9 +162,10 @@ There are two different "base URLs" in `js/api.js`. Do not confuse them.
 | Constant / function | Used for | Value / logic |
 |---|---|---|
 | `LOCAL_DATA` | The course catalog | `frontend/data/courses.json` with `?v=<cf-build meta>` appended by `_bundledDataUrl()` |
+| `MINORS_DATA` | The minor requirements | `frontend/data/minors.json`, with the same `?v=` tag, loaded by `fetchMinors()` |
 | `getBackendUrl()` / `CF_BACKEND_URL` | **The Flask backend** (all `/api/...` calls) | See resolution order below |
 
-`fetchAllCourses()` loads only the bundled `frontend/data/courses.json`. There is no remote fallback: if the file cannot be loaded or has no courses, it throws and `App.loadData()` shows "Failed to load data".
+`fetchAllCourses()` loads only the bundled `frontend/data/courses.json`. There is no remote fallback: if the file cannot be loaded or has no courses, it throws and `App.loadData()` shows "Failed to load data". `fetchMinors()` loads `frontend/data/minors.json` the same way, at the same time; when it fails, the app still runs and each minor section says its requirements could not be loaded.
 
 The pages call the API on their own origin: `CF_BACKEND_URL` is normally `''`, so `apiFetch('/api/me')` requests the relative URL `/api/me`. In production Apache serves `frontend/` and proxies `/api` to gunicorn; locally `scripts/dev_server.py` serves `frontend/` and proxies `/api` and `/health` to the Flask dev server on `127.0.0.1:5050` (5.6). There is no backend URL in the HTML.
 
@@ -238,7 +240,7 @@ CountsFor/
 | `deploy/` | yes | Everything the CMU-Q server needs besides the code. No secrets. See [4.3](#43-deploy). | Live |
 | `scripts/dev_server.py` | yes | Local server that mirrors production: serves `frontend/` on port 8765 and proxies `/api` and `/health` to the API on `127.0.0.1:5050` (5.6). Standard library only. | Live |
 | `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `frontend/app.html`, and every `?v=` tag in `frontend/index.html`. A release tool, run by hand. Optional on the server, where Apache makes browsers revalidate (15.16). | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js` and `app-views.test.js`. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js`, `minors.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js`, `minors-file.test.js` and `app-views.test.js`. It waits for tests that return a promise. | Live |
 | `pytest.ini` | yes | Lets `python -m pytest` from the repo root run `backend/tests` and `backend/scraper/tests` together. | Live |
 | `.gitattributes` | yes | Keeps `*.sh` and everything in `deploy/` at LF line endings in every checkout (a CR breaks bash, cron and systemd, for example on Windows with `core.autocrlf`). | Live |
 | `README.md` | yes | This manual. | Keep current |
@@ -312,7 +314,7 @@ The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The p
 | File | Purpose |
 |---|---|
 | `frontend/data/courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`, 6,784 courses, about 30 MB (about 1.2 MB gzipped). Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`), `soc_sections`, `offerings`. Set by the overlay step (14.5): `qatar_only`. Set by reconcile: `previous_course_name` when a number was reused for a different course. |
-| `frontend/data/minors.json` | Minor requirements: the 15 minors that have an official file in `backend/data/minors/`, plus `self_defined` (no fixed requirements). Each minor has its blocked majors, unit total, double counting limits (the audit file's), grade rules, notes and a tree of categories; each category has a rule and lists its courses by code (`courses`), matches them by number (`select`) or holds sub categories (`children`). One course fills one category. Built by hand from the official files, with old Psychology numbers shown as their current numbers; `backend/scraper/tests/test_minors_file.py` checks it against them. The daily update does not touch it, and the app does not load it yet. |
+| `frontend/data/minors.json` | Minor requirements: the 15 minors that have an official file in `backend/data/minors/`, plus `self_defined` (no fixed requirements). Each minor has its blocked majors, unit total, double counting limits (the audit file's), grade rules, notes and a tree of categories; each category has a rule and lists its courses by code (`courses`), matches them by number (`select`) or holds sub categories (`children`). One course fills one category. Built by hand from the official files, with old Psychology numbers shown as their current numbers; `backend/scraper/tests/test_minors_file.py` checks it against them. The daily update does not touch it. The app loads it with `fetchMinors()` and builds each minor's tree against the catalog (8.10). |
 | `backend/data/soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 31 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
 | `backend/data/mapping_overlays.json` | The one place for Qatar information and other manual complements to the SOC scrape (14.5): `overlays` (additive mappings, 21 entries, including the H&SS Course Offerings sheet), `remove_mappings` (85-414, 85-426) and `qatar_visibility` (85-100). |
 | `backend/data/faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. The directory seed in production (`SEED_USERS_PATH` in `deploy/countsfor.env.example`). |
@@ -511,7 +513,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to `frontend/data/courses.json`. Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=soc-2026-11-08b`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=minors-2026-11-10`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
@@ -597,7 +599,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 ### 8.1 Load order and globals
 
-`app.html` loads, in order: `js/utils.js`, `js/data.js`, `js/profile.js`, `js/api.js`, `js/app.js`. There are no modules; every top-level `function` and `const` is a global. Later files depend on earlier ones. `tests/test.html` loads `utils.js`, `data.js`, `profile.js` in the same order.
+`app.html` loads, in order: `js/utils.js`, `js/data.js`, `js/profile.js`, `js/api.js`, `js/app.js`. There are no modules; every top-level `function` and `const` is a global. Later files depend on earlier ones. `tests/test.html` loads `utils.js`, `data.js`, `profile.js` in the same order, then the profile, data, minors and utils tests.
 
 `index.html` loads `js/utils.js`, `js/api.js` and `js/landing.js`, in that order. `landing.js` is wrapped in an IIFE and uses the globals from the other two: the backend URL, token storage, `apiFetch` and the auth calls from `api.js`; `esc`, `showToast` and the CMU email check from `utils.js`. Both pages therefore share one copy of each.
 
@@ -616,7 +618,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | `downloadExcelSheet(filename, sheetName, headers, rows, metaRows)` | Despite the name, writes a UTF-8 CSV (with BOM). |
 | `slugifyFilename(text)` | Safe file names for exports. |
 
-### 8.3 `js/data.js` (about 1,140 lines): catalog logic, pure functions
+### 8.3 `js/data.js` (about 1,680 lines): catalog logic, pure functions
 
 | Lines (approx.) | Item | Purpose |
 |---|---|---|
@@ -635,9 +637,10 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | 628 to 646 | `DEPT_NAMES`, `getDeptName()` | Department number to name. |
 | 650 to 784 | `SEMESTER_OPTIONS`, `MODALITY_OPTIONS`, `availableSemesterOptions()`, `semesterLabel()`, `getCourseOfferings()`, `filterOfferings()`, `courseHasMatchingOffering()` | Semester, campus and modality filters over SOC offerings. |
 | 787 to 1020 | `PLAN_DAY_COLUMNS`, `parseDaysTimes()`, `formatDaysTimesForDisplay()`, `planOfferingKey()`, `groupOfferingsBySection()`, `findPlanConflicts()`, `layoutPlanDayBlocks()` and friends | Schedule planner math: parsing times, conflicts, calendar layout (7:00 to 22:00). Stored `days_times` keep the SOC form `MW 03:30PM-04:50PM` (plan keys and `parseDaysTimes` read it); `formatDaysTimesForDisplay()` shows it as `MW 3:30 PM to 4:50 PM` on course cards and the plan list, and returns any other string unchanged. |
-| 1007 to end | `courseCountsForMinor()`, `annotateDoubleCounters()`, `annotateMultiProgram()` | Profile-aware flags on courses: `_doubleCounter` (counts for major and minor) and `_programCount`. |
+| 1034 to 1643 | `COURSE_STATUSES`, `COURSE_STATUS_KEY`, `normalizeCourseStatuses()`, `nextCourseStatus()`, `courseMatchesSelect()`, `expandMinorCategory()`, `minorRuleLabel()`, `buildMinorTree()`, `buildMinorIndex()`, `courseCountsForMinor()`, `majorCountKind()`, `computeMinorProgress()`, `minorStatusText()`, `minorSummaryText()`, `countMarkedCourses()`, `minorDoubleCountRules()`, `minorDoubleCountLimitText()`, `checkMinorDoubleCounting()`, `minorDoubleCountWarnings()`, `plainDataText()` | Minors: each minor of `data/minors.json` as a tree against the catalog, a student's progress from their course statuses, and double counting (8.10). |
+| 1644 to end | `annotateDoubleCounters()`, `annotateMultiProgram()` | Profile-aware flags on courses: for a student `_majorKind` (`degree`, `gened` or none for their major), `_minorMatches` (their minors the course can count for) and `_doubleCounter` (both); `_programCount`. |
 
-### 8.4 `js/profile.js` (about 325 lines): roles and programs
+### 8.4 `js/profile.js` (about 380 lines): roles and programs
 
 | Item | Purpose |
 |---|---|
@@ -645,19 +648,19 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | `DEPARTMENT_LIST` | Must match `VALID_DEPARTMENTS` in `backend/models.py`. |
 | `getRoleGroup()`, `isFaculty()`, `isStudent()` | Role group helpers (mirror of backend). |
 | `canManageDirectory()`, `canFlagCourses()`, `canManageUsers()`, `canUseSchedulePlan()` | UI gates only. The backend enforces the real rules. |
-| `MINOR_LIST`, `MAJOR_TO_MINOR_CODE`, `getMinorLabel()`, `getProfileMinors()` | Minors. |
+| `MINOR_LIST`, `MINOR_BLOCKED_MAJORS`, `minorListFromData()`, `applyMinorsCatalog()`, `isKnownMinor()`, `isMinorBlockedForMajor()`, `cleanProfileMinors()`, `getMinorLabel()`, `getProfileMinors()` | Minors. The two constants are the fallback used before `data/minors.json` loads (onboarding); `applyMinorsCatalog()` rebuilds them from the file, and `tests/minors-file.test.js` checks that the fallback matches it. `cleanProfileMinors()` drops unknown codes and minors the major may not take. |
 | `VALID_ROLES`, `ROLE_META` | Role labels and per-role flags. |
 | `ADVISOR_SCOPES`, `getAdvisorScopeLabel()` | Advisor scope labels. |
-| `computeViewMode()`, `validateProfile()` | Which programs to show for a profile. |
-| `saveProfile()`, `loadProfile()`, `clearProfile()` | Persist the local profile in localStorage keys `cf_role`, `cf_primary`, `cf_secondary`, `cf_minors`, `cf_scope`. |
+| `computeViewMode()`, `validateProfile()` | Which programs to show for a profile. Students always get `focused-single` (their own major; their minors are sections of that tree). The old `focused-dual` mode, where a minor borrowed another major's tree, is gone. |
+| `saveProfile()`, `loadProfile()`, `clearProfile()` | Persist the local profile in localStorage keys `cf_role`, `cf_primary`, `cf_secondary`, `cf_minors`, `cf_scope`. `loadProfile()` drops minors the app no longer offers or the major may not take, and saves the cleaned list. |
 
-### 8.5 `js/api.js` (about 345 lines): all network calls
+### 8.5 `js/api.js` (about 360 lines): all network calls
 
 `apiFetch(path, opts)` is the single wrapper. It requests `CF_BACKEND_URL + path` (normally just the relative path), always sends `credentials: 'include'` and the bearer token, times out after 20 s by default (`opts.timeoutMs`), never throws on HTTP errors, saves any `auth_token` it sees in a response, and returns `{ ok, status, data, error, message }`. `status: 0` means the API could not be reached: network failure, timeout, or a 502/503/504 without a JSON body (the proxy, Apache or `scripts/dev_server.py`, reporting the API down). Flask's own JSON error responses pass through unchanged.
 
 | Group | Functions | Endpoint |
 |---|---|---|
-| Course data | `fetchAllCourses()` | static files (see 3.3) |
+| Course data | `fetchAllCourses()`, `fetchMinors()` | static files (see 3.3) |
 | Backend URL and token | `getBackendUrl()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
 | Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword` (these six are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
@@ -679,43 +682,44 @@ One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "C
 
 `js/app.js` has no sign-in screens of its own (the old in-app copy was removed in November 2026). It redirects to `index.html` whenever a sign-in is needed.
 
-### 8.7 `js/app.js` (about 5,850 lines): the `App` object
+### 8.7 `js/app.js` (about 6,500 lines): the `App` object
 
-Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for the `cleanup` branch after the November 2026 dead code removal; they will drift as the file is edited. Search for the function name.
+Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for the `minors-tree` branch (November 10, 2026); they will drift as the file is edited. Search for the function name.
 
 | Lines (approx.) | Section | Key functions |
 |---|---|---|
-| 5 to 11 | Home constants | `HOME_POPULAR_COURSES`, `HOME_SEARCH_CHIPS`, `HOME_RECENT_MAPPINGS` |
-| 12 to 46 | State | `courses`, `courseIndex`, `trees`, `treeSections`, `layoutMode`, `activeMajor`, `selectedCourse`, filters (`locationFilter`, `activeSemester` default `F26`, `modalityFilter`), `profile`, `authedUser`, `authMode` (`authed`, `demo`, `login`), `isGuest`, `serverFlags` |
-| 47 to 240 | Boot and auth state | `init()`, `_redirectToLogin()`, `_restorePendingSharePlan()`, `_afterAuthed()`, `_syncLocalToServer()` (one-time upload of local flags and wishlist), `_loadServerFlags()`, `_needsOnboarding()`, `_hydrateProfileFromServer()` |
-| 241 to 251 | Theme | `applyTheme()`, `toggleTheme()` |
-| 252 to 329 | Data loading | `_prepareCatalog()` (fetch catalog, fetch overrides, `applyCourseOverrides`, index, annotate, build trees), `loadData()`, `autoExpandFirstLevel()` |
-| 330 to 580 | Onboarding (students only) | `renderOnboarding()`, `_renderOnboardingScreen()`, `_obPickMajor()`, `_obPickMinor()`, `_obAddMinor()`, `_obRemoveMinor()`, `_finishOnboarding()` (PATCHes `/api/me`) |
-| 581 to 833 | Sign-in result, guest, sign-out, role badge | `_afterSignIn()`, `_readGuestFlag()`, `exitGuest()`, `setGuestRole()`, `signOut()`, `_roleBadgeHtml()`, `editRole()`, `_visibleMajors()`, `_guestBannerHtml()` |
-| 834 to 1049 | Shell rendering | `renderShell()` (navbar with Saved, Plans, Admin or Flag review buttons, directory button), `_syncDirectoryFabLayout()`, `_initPanelResizer()` (split view drag handle) |
-| 1050 to 1318 | Events and filters | `bindGlobalEvents()`, `_filterParams()`, `_refreshSemesterOptions()`, `setSemester()`, `setModalityFilter()`, `setLocation()`, `setMobileLens()`, `reset()` |
-| 1319 to 1540 | Explorer mode and course search | `enterExplorer()`, `exitExplorer()`, `handleSearchKeydown()`, `_selectCourse()`, `selectSearchResult()` |
-| 1541 to 1760 | Category index and unified home search | `_buildCategoryIndex()`, `selectCategoryResult()`, `handleUnifiedSearchKeydown()`, `selectUnifiedResult()`, `runHomeSearchChip()` |
-| 1761 to 2148 | Home screen | `renderLeftEmpty()`, `_renderHome()`, `_renderHomeDock()`, popular courses (`_recordCourseSearch()`, `_loadPopularCourses()`, local fallback counts), `_renderQuickStart()`, navbar counters |
-| 2149 to 2177 | Flag counts for the home screen | `_loadStudentFlagsSummary()`, `_loadMyFlagsSummary()` |
-| 2178 to 2375 | Course card | `renderCourseCard()`, `_renderSchedRowGroup()` |
-| 2376 to 2777 | Requirement tree | `_renderMajorTabs()`, `switchMajor()`, `toggleNode()`, `renderTree()`, `renderTreeNode()`, `downloadRequirementExcel()` (CSV), `_renderLeafCourse()`, `_renderRowActions()`, `_renderCardActions()` |
-| 2778 to 2794 | Cross-linking | `selectCourseFromTree()` |
-| 2795 to 2955 | Wishlist (Saved) | `_getWishlistItems()`, `toggleWishlist()`, `showWishlistView()`, `_saveWishlistNote()` |
-| 2956 to 3738 | Schedule plans | `_loadPlansStore()` (localStorage `cf_plans_v2`, migrates legacy `cf_plan`), `createNewPlan()`, `deletePlan()`, `renamePlan()`, `_loadServerPlans()`, `_mergeServerPlan()`, `_handlePendingSharePlanLink()`, `openSharePlanModal()`, `submitSharePlanEmail()`, `copySharePlanLink()`, `togglePlanSection()`, `_renderPlanCalendar()`, `showPlanView()`, `openPlanDetail()` |
-| 3739 to 3800 | Student flag view and favourites | `showStudentFlagsView()`, `showStudentFavorites()` |
-| 3801 to 3974 | Flags | `FLAG_REASONS` (must match `VALID_REASON_CODES` in `backend/flags.py`), `_getFlags()` (local `cf_flags`), `openFlagModal()`, `submitFlag()` |
-| 3975 to 4208 | Directory panel | `toggleDirectoryPanel()`, `_loadDirectoryPanel()`, `_renderDirectoryPanel()`, `_editDirectoryRow()`, `_revokeDirectoryRow()`, `_submitDirectoryForm()` |
-| 4209 to 4338 | Admin console shell | `_adminConsole` state, `ADMIN_TABS`, `showAdminConsole()`, `_setAdminTab()`, `_loadAdminTab()` (dispatch), helpers `_admEl()`, `_admError()`, `_admWhen()`, `_admStat()` |
-| 4339 to 4890 | Admin: Courses tab (course editor) | `_courseAdmin` state, `_renderAdminCourses()`, `_renderCourseResults()`, `_openCourseEditor()`, `_openCourseAdd()`, `_renderCourseEditor()`, `_addCourseReq()`, `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()` |
-| 4891 to 5224 | Admin: Overview tab and sign-in activity | `_loadAdminOverview()`, `_openIncompleteUsers()`, `_openSignIns()`, `_renderSignIns()`, `_exportSignInsCsv()` |
-| 5225 to 5264 | Admin: Faculty access tab | `_loadAdminAccess()`, `_openDirectoryFromAdmin()` |
-| 5265 to 5360 | Admin: Insights tab | `_loadAdminInsights()` |
-| 5361 to 5440 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()`, `_describeAdminEvent()` (human text per audit action) |
-| 5441 to 5651 | Admin: Users tab | `_loadUserAdmin()`, `_exportUsersCsv()`, `_renderUserAdmin()`, `_renderUserAdminRow()`, `_saveUserAdmin()` (opened with `showAdminConsole('users')`) |
-| 5652 to 5780 | Admin and faculty: Flags review | `showFlagReview()`, `_loadFlagReview()`, `_renderFlagReview()`, `_setFlagStatus()`, `_promptFlagNote()` |
-| 5781 to 5818 | Deep links into the tree | `navigateToReqNode()` |
-| 5819 to 5826 | Bootstrap | `DOMContentLoaded` handler, picks dark theme from OS if no saved theme, calls `App.init()` |
+| 5 to 14 | Home constants | `HOME_POPULAR_COURSES`, `HOME_SEARCH_CHIPS`, `HOME_RECENT_MAPPINGS`, `MINORS_TAB` (id of the Minors tab) |
+| 15 to 39 | State | `courses`, `courseIndex`, `trees` (the majors and `minor:<code>`), `treeSections`, `minorsData`, `minorIndex`, `browseMinorCode`, `layoutMode`, `activeMajor` (a major code or `MINORS_TAB`), `selectedCourse`, filters (`locationFilter`, `activeSemester` default `F26`, `modalityFilter`), `profile`, `authedUser`, `authMode` (`authed`, `demo`, `login`), `isGuest`, `serverFlags` |
+| 40 to 224 | Boot and auth state | `init()`, `_redirectToLogin()`, `_restorePendingSharePlan()`, `_afterAuthed()`, `_syncLocalToServer()` (one-time upload of local flags and wishlist), `_loadServerFlags()`, `_needsOnboarding()`, `_hydrateProfileFromServer()` (drops minors the app no longer offers) |
+| 225 to 236 | Theme | `applyTheme()`, `toggleTheme()` |
+| 237 to 345 | Data loading | `_prepareCatalog()` (fetch the catalog, `minors.json` and the overrides), `_buildCatalog()` (apply edits, index, annotate, build the major and minor trees), `loadData()`, `autoExpandFirstLevel()` |
+| 346 to 595 | Onboarding (students only) | `renderOnboarding()`, `_renderOnboardingScreen()`, `_obPickMajor()`, `_obPickMinor()`, `_obAddMinor()`, `_obRemoveMinor()`, `_finishOnboarding()` (PATCHes `/api/me`) |
+| 596 to 851 | Sign-in result, guest, sign-out, role badge | `_afterSignIn()`, `_readGuestFlag()`, `exitGuest()`, `setGuestRole()` (keeps the guest student's major and minors in `cf_guest_student` while the Faculty view is on), `signOut()`, `_roleBadgeHtml()`, `editRole()`, `_visibleMajors()`, `_guestBannerHtml()` |
+| 852 to 1067 | Shell rendering | `renderShell()` (navbar with Saved, Plans, Admin or Flag review buttons, directory button; redraws the requirement map in split view), `_syncDirectoryFabLayout()`, `_initPanelResizer()` (split view drag handle) |
+| 1068 to 1351 | Events and filters | `bindGlobalEvents()`, `_filterParams()`, `_refreshSemesterOptions()`, `setSemester()`, `setModalityFilter()`, `setLocation()`, `setMobileLens()`, `reset()` |
+| 1352 to 1571 | Explorer mode and course search | `enterExplorer()`, `exitExplorer()`, `handleSearchKeydown()`, `_selectCourse()`, `selectSearchResult()` |
+| 1572 to 1808 | Category index and unified home search | `_buildCategoryIndex()` (requirement categories and one entry per minor), `selectCategoryResult()`, `handleUnifiedSearchKeydown()`, `selectUnifiedResult()`, `runHomeSearchChip()` |
+| 1809 to 2201 | Home screen | `renderLeftEmpty()`, `_renderHome()`, `_renderHomeDock()`, popular courses (`_recordCourseSearch()`, `_loadPopularCourses()`, local fallback counts), `_renderQuickStart()`, navbar counters |
+| 2202 to 2231 | Flag counts for the home screen | `_loadStudentFlagsSummary()`, `_loadMyFlagsSummary()` |
+| 2232 to 2431 | Course card | `renderCourseCard()` (for a student also their status for the course; the minors the course counts for), `_renderSchedRowGroup()` |
+| 2432 to 2911 | Requirement tree | `_renderMajorTabs()` (the majors and the Minors tab), `switchMajor()`, `toggleNode()`, `renderTree()`, `renderTreeNode()`, `downloadRequirementExcel()` (CSV), `_renderLeafCourse()`, `_renderRowActions()`, `_renderCardActions()`, `_leafPassesTreeFilter()` |
+| 2912 to 2928 | Cross-linking | `selectCourseFromTree()` |
+| 2929 to 3089 | Wishlist (Saved) | `_getWishlistItems()`, `toggleWishlist()`, `showWishlistView()`, `_saveWishlistNote()` |
+| 3090 to 3873 | Schedule plans | `_loadPlansStore()` (localStorage `cf_plans_v2`, migrates legacy `cf_plan`), `createNewPlan()`, `deletePlan()`, `renamePlan()`, `_loadServerPlans()`, `_mergeServerPlan()`, `_handlePendingSharePlanLink()`, `openSharePlanModal()`, `submitSharePlanEmail()`, `copySharePlanLink()`, `togglePlanSection()`, `_renderPlanCalendar()`, `showPlanView()`, `openPlanDetail()` |
+| 3874 to 3934 | Student flag view and favourites | `showStudentFlagsView()`, `showStudentFavorites()` |
+| 3935 to 4108 | Flags | `FLAG_REASONS` (must match `VALID_REASON_CODES` in `backend/flags.py`), `_getFlags()` (local `cf_flags`), `openFlagModal()`, `submitFlag()` |
+| 4109 to 4342 | Directory panel | `toggleDirectoryPanel()`, `_loadDirectoryPanel()`, `_renderDirectoryPanel()`, `_editDirectoryRow()`, `_revokeDirectoryRow()`, `_submitDirectoryForm()` |
+| 4343 to 4472 | Admin console shell | `_adminConsole` state, `ADMIN_TABS`, `showAdminConsole()`, `_setAdminTab()`, `_loadAdminTab()` (dispatch), helpers `_admEl()`, `_admError()`, `_admWhen()`, `_admStat()` |
+| 4473 to 5033 | Admin: Courses tab (course editor) | `_courseAdmin` state, `_renderAdminCourses()`, `_renderCourseResults()`, `_openCourseEditor()`, `_openCourseAdd()`, `_renderCourseEditor()`, `_addCourseReq()`, `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()` |
+| 5034 to 5367 | Admin: Overview tab and sign-in activity | `_loadAdminOverview()`, `_openIncompleteUsers()`, `_openSignIns()`, `_renderSignIns()`, `_exportSignInsCsv()` |
+| 5368 to 5407 | Admin: Faculty access tab | `_loadAdminAccess()`, `_openDirectoryFromAdmin()` |
+| 5408 to 5503 | Admin: Insights tab | `_loadAdminInsights()` |
+| 5504 to 5583 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()`, `_describeAdminEvent()` (human text per audit action) |
+| 5584 to 5794 | Admin: Users tab | `_loadUserAdmin()`, `_exportUsersCsv()`, `_renderUserAdmin()`, `_renderUserAdminRow()`, `_saveUserAdmin()` (opened with `showAdminConsole('users')`) |
+| 5795 to 5924 | Admin and faculty: Flags review | `showFlagReview()`, `_loadFlagReview()`, `_renderFlagReview()`, `_setFlagStatus()`, `_promptFlagNote()` |
+| 5925 to 6453 | Minors (8.10) | course statuses (`setCourseStatus()`, `cycleCourseStatus()`, `_courseStatusButtonHtml()`, `_courseCardStatusHtml()`), `_courseCardMinorsHtml()`, `_nodeStatusHtml()`, `_minorNodeInfoHtml()`, `_studentProgramsBarHtml()`, `setStudentMajor()`, `addStudentMinor()`, `removeStudentMinor()`, `_applyStudentPrograms()`, `_saveStudentProgramsToAccount()` (one `PATCH /api/me` at a time), `browseMinor()`, `openMinorRequirements()`, `_navigateToMinorNode()`, `_renderMinorsBrowse()`, `_renderMinorSection()`, `_minorProgressHtml()` |
+| 6454 to 6497 | Deep links into the tree | `navigateToReqNode()` (a `minor:<code>` target goes to `_navigateToMinorNode()`) |
+| 6498 to 6505 | Bootstrap | `DOMContentLoaded` handler, picks dark theme from OS if no saved theme, calls `App.init()` |
 
 Admin tabs, in order (`ADMIN_TABS`): `courses` (Courses), `overview` (Overview), `users` (Users), `access` (Faculty access), `flags` (Flags), `insights` (Insights), `activity` (Activity log). The Admin button appears only when `canManageUsers(this.authedUser)`.
 
@@ -737,15 +741,33 @@ Every browser storage key (found by searching `localStorage`, `sessionStorage`, 
 | `cf_flags` | local | `app.js` | Locally queued flags |
 | `cf_synced` | local | `app.js` | One-time local to server sync done |
 | `cf_plans_v2` | local | `app.js` | `{ activePlanId, plans: [{ id, name, items }] }` |
+| `cf_course_status` | local | `app.js` | A student's course statuses, `{ "15-122": "completed", "85-110": "in_progress" }` (not taken is no entry). Guests and signed-in students alike, this browser only; kept at sign-out, like plans. |
+| `cf_guest_student` | local | `app.js` | The guest Student view's major and minors, kept while the guest looks at the Faculty view |
 | `cf_plan` | local | legacy | Old single plan, migrated into `cf_plans_v2` on load |
 | `cf_split_left_px` | local | `app.js` | Split view panel width |
 | `cf_search_counts_<PROGRAM>_<SEMESTER>` | local | `app.js` | Local fallback for "popular courses" |
 
-Note: schedule plans live only in the browser. The server stores a plan only when someone shares it (`/api/plans/share`, `/api/plans/accept-share`), and `GET /api/plans` returns those copies. There is no endpoint that saves a user's own plans.
+Note: course statuses live only in the browser too; saving them on the account comes with the server (21.4). Schedule plans live only in the browser. The server stores a plan only when someone shares it (`/api/plans/share`, `/api/plans/accept-share`), and `GET /api/plans` returns those copies. There is no endpoint that saves a user's own plans.
 
 ### 8.9 CSS
 
-`css/styles.css` starts with light theme custom properties in `:root` (line 9, including `--major-cs`, `--major-is` and friends), then `[data-theme="dark"]` overrides (line 107), then sections for layout (focused and split mode), search, course card, tree, onboarding, navbar, plans, directory panel (around line 3767), and the Admin page and course editor (around lines 3887 and 4042). The theme is switched by setting `data-theme` on `<html>`.
+`css/styles.css` starts with light theme custom properties in `:root` (line 9, including `--major-cs`, `--major-is` and friends, and `--minor-accent` and the `--status-*` colors of the minors UI), then `[data-theme="dark"]` overrides, then sections for layout (focused and split mode), search, course card, tree (with the minors and course status styles right after it, `.mn-*`, `.cs-btn`, `.tr-dc-tag`, `.cc-status`, `.cc-mn-*`), onboarding, navbar, plans, directory panel, and the Admin page and course editor. The theme is switched by setting `data-theme` on `<html>`.
+
+### 8.10 Minors in the requirement map
+
+**Data.** `frontend/data/minors.json` (4.4) lists each minor as a tree of categories. `fetchMinors()` loads it with the catalog; `applyMinorsCatalog()` rebuilds `MINOR_LIST` and `MINOR_BLOCKED_MAJORS` from it, and `buildMinorIndex()` builds every minor's tree against the loaded catalog (`App.minorIndex`, and `App.trees['minor:<code>']`). A category's courses are its listed codes that have a catalog row plus every course its `select` rule matches (prefix, number range, excluded codes and ranges, unit floor), sorted by code; listed codes with no catalog row are named under the category ("Also listed, but not in the course catalog"). Minor trees have the same node shape as the major trees, so the same cards, rows, rule chips and course rows render them; their paths are category ids joined by `---`.
+
+**Student view.** On their own major tab, a student (guest or signed in) sees a programs bar (major picker, minor chips, "Add a minor"), the major's cards, then one section per chosen minor: "Psychology minor" with the title, unit total, campus note (for the Pittsburgh versions), the official version, a progress bar, the double counting limit in plain English with the audit rule, warnings, and "About this minor" (notes, grade rules, double counting notes). Changes are saved locally (`saveProfile()`) and, when signed in, on the account (`PATCH /api/me`, one request at a time). The role badge's Edit (onboarding) still works too.
+
+**Course statuses.** Every course row in a student's tree starts with a round control: one click for in progress, two for completed, three back to not taken; the course card has the same three states as buttons. Statuses are saved in `localStorage['cf_course_status']` only (guests and signed-in students alike; server sync comes with the server, 21.4). A marked course always shows in the tree, even when the semester, campus or modality filter would hide it.
+
+**Progress** (`computeMinorProgress()`). One course fills one category. Each marked course is assigned to at most one bottom-level category: the categories with the fewest matching marked courses are filled first (then the narrower lists, then file order), each with completed courses before in progress ones and only until its rule is met; then a group that counts courses or units across its parts (Sociology Electives, Writing's Core Writing) takes more courses into its parts, never past a `max_units` cap. A category is Done when its completed courses meet its rule (`take_all`, `required`, `pick` n with an optional unit floor, `min_units`, parts for groups), In progress when completed plus in progress courses meet it, and otherwise shows what is left ("1 course left", "9 units left", "1 part left"). A row says where a marked course is counted ("Counted in Survey Courses") or that it is not needed. The header sums up the top-level requirements ("2 of 5 requirements done, 1 in progress, 2 left"). In the major tree, a category shows how many of its courses are marked.
+
+**Double counting.** A course in a minor's tree that also counts for the student's major is tagged "Also counts for CS" (a major requirement) or "Also counts for CS Gen Ed"; in the major tree a course a chosen minor can use is tagged "Also counts for Psychology minor". The header states the limit (`minorDoubleCountLimitText()`): "At most 2 courses may also count toward your major or another minor", "No course may ..." with the categories that are free, "... without a limit" with the categories that may never be shared, or "Confirm double counting with your advisor" when the file states no rule (Biological Sciences, Student-defined). `checkMinorDoubleCounting()` takes the marked courses used for the minor that also count for a major requirement of the student's major (General Education overlap is free) or are used by another of their minors; courses in a `no_limit` category are free, courses in a `no_sharing` category are flagged, and the rest count toward the one shared limit (`max_with_major`, which equals `max_with_other_minors` in every file). Over the limit, the header warns and names the courses.
+
+**Browse view.** Every role has a Minors tab after the major tabs. It lists all 16 minors; choosing one shows its full tree. Students also see their progress there and an "Add to my minors" button (or "Not open to BA majors"); an advisor with minor scope starts on their minor. Course cards list the minors a course counts for ("Psychology: Survey Courses or Psychology Elective", the student's own first), and the home search offers each minor ("Minor · Neuroscience minor").
+
+Tests: `tests/minors.test.js` (selection rules, trees, progress, double counting), `tests/minors-file.test.js` (the real file through `fetchMinors()`, the fallback list, every category's rule) and the minors part of `tests/app-views.test.js` (the student tree, statuses, a warning, the Minors tab, guest changes, the save queue, a missing file).
 
 ---
 
@@ -785,7 +807,7 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 - `google`: verifies the ID token with `google.oauth2.id_token.verify_oauth2_token`, requires `email_verified`, upserts by `google_sub` then by email.
 - `logout`: clears the session (the frontend also clears the token).
 - `GET /api/me`: the user, plus a fresh `auth_token`.
-- `PATCH /api/me`: allowed fields `name`, `role`, `primary_program`, `minor_code`, `minor_codes`, `advisor_scope`, `department_scope`, `department`. Validates the whole resulting profile with `_validate_consistent_profile()`: students need a major in `CS IS BA BS AI GS`, no department, no advisor scope; faculty and admin need a valid department and program, no minors, no advisor scope. A non-admin can only set their own role to `student`; an admin cannot change their own role.
+- `PATCH /api/me`: allowed fields `name`, `role`, `primary_program`, `minor_code`, `minor_codes`, `advisor_scope`, `department_scope`, `department`. Validates the whole resulting profile with `_validate_consistent_profile()`: students need a major in `CS IS BA BS AI GS`, no department, no advisor scope, and minors from `VALID_MINORS_FOR_PATCH` that their major may take (`MAJOR_MINOR_COLLISION`); faculty and admin need a valid department and program, no minors, no advisor scope. `minor_codes` replaces the student's minors in the order given (`_sync_user_minors()` deletes the old rows before inserting the new ones; before November 10, 2026 keeping a minor while adding another failed with a 500). A non-admin can only set their own role to `student`; an admin cannot change their own role.
 
 ### 9.4 Directory (`backend/directory.py`, `backend/directory_routes.py`)
 
@@ -1471,6 +1493,21 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    WHERE course_code IN ('85-104','85-253','85-261','85-211','85-219','85-221','85-241','85-377','85-442','85-359','85-340');
    ```
 
+   Then the minors the API no longer accepts: `product` (dropped in November 2026) and the minors a BA major may not declare (`business`, `business_analytics`, `finance`). The app already ignores them, but a saved one makes every later profile save of that student fail ("Unknown minor_code" or "That minor is not open to students in your major."). List them, then remove them:
+
+   ```sql
+   SELECT u.email, u.primary_program, m.minor_code FROM user_minors m JOIN users u ON u.id = m.user_id
+   WHERE m.minor_code = 'product'
+      OR (u.primary_program = 'BA' AND m.minor_code IN ('business', 'business_analytics', 'finance'));
+   BEGIN;
+   DELETE FROM user_minors m USING users u
+   WHERE u.id = m.user_id AND (m.minor_code = 'product'
+      OR (u.primary_program = 'BA' AND m.minor_code IN ('business', 'business_analytics', 'finance')));
+   UPDATE users SET minor_code = NULL
+   WHERE minor_code = 'product' OR (primary_program = 'BA' AND minor_code IN ('business', 'business_analytics', 'finance'));
+   COMMIT;
+   ```
+
 9. **Bootstrap**, which adds anything the current code needs that the Render database lacks, and verifies the tables:
 
    ```bash
@@ -1640,7 +1677,7 @@ As of November 8, 2026 the live site is still the old one: GitHub Pages serves t
 5. **Final database copy:** `sudo systemctl stop countsfor-api`, then drop and recreate the `countsfor` database, which holds the rehearsal import (the two commands at the end of 15.8 step 5), and run 15.8 steps 3 to 10 (recreate `~/.pg_service.conf` first, step 1, if you already removed it).
 6. **Deploy the merged `main`** (15.16) and start the API: `sudo systemctl start countsfor-api`. Run the checks in 15.13.
 7. **DNS and Google:** make sure IT points `countsfor.qatar.cmu.edu` at the server, and that the Google origin is in place (15.14).
-8. **Tell users:** everyone signs in again (sign-in tokens are kept per site). Accounts, saved courses, flags and shared plans moved with the database. Schedule plans that were never shared live only in the browser's storage for the old address and do not move; a student can carry one over by creating a share link on the old site before step 4 and opening it on the new site with the host changed (the link token is in the database).
+8. **Tell users:** everyone signs in again (sign-in tokens are kept per site). Accounts, saved courses, flags and shared plans moved with the database. Schedule plans that were never shared, and the course statuses students marked (8.10), live only in the browser's storage for the old address and do not move; a student can carry one over by creating a share link on the old site before step 4 and opening it on the new site with the host changed (the link token is in the database).
 9. **Retire the old hosting**, once the new site has worked for a few days: unpublish GitHub Pages (repo **Settings**, **Pages**) or replace it with a page that links to the new address; keep the final dump in two places; then delete the Render web service and database (they are paid plans). Update the top of this README, section 15.20 and 23.1.
 
 ### 15.16 Updating the code later
@@ -1765,22 +1802,22 @@ python -m pytest backend/tests -q
 # Data pipeline, daily update, dev server and bump script (no network)
 python -m pytest backend/scraper/tests -q
 
-# Frontend (Node): tests/profile.test.js, tests/data.test.js and tests/utils.test.js
-# like tests/test.html, then the Node-only tests/dash-guard.test.js and tests/app-views.test.js
+# Frontend (Node): tests/profile.test.js, data.test.js, minors.test.js and utils.test.js like
+# tests/test.html, then the Node-only dash-guard.test.js, minors-file.test.js and app-views.test.js
 node scripts/run-data-tests.js
 
-# Frontend in the browser (profile, data and utils tests)
+# Frontend in the browser (profile, data, minors and utils tests)
 python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 8, 2026 (`cleanup` branch, after the review fixes)
+### 16.2 Results on November 10, 2026 (`minors-tree` branch)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **160 passed, 6 failed** (the known failures below) |
+| `python -m pytest backend/tests` | **172 passed, 6 failed** (the known failures below) |
 | `python -m pytest backend/scraper/tests` | 173 passed |
-| `node scripts/run-data-tests.js` | **121 passed, 1 failed** (profile 46/46, data 59/60, utils 5/5, dash guard 3/3, app views 8/8) |
+| `node scripts/run-data-tests.js` | 164 passed (profile 51/51, data 59/59, minors 25/25, utils 5/5, dash guard 3/3, minors file 6/6, app views 15/15) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
@@ -1792,7 +1829,6 @@ Known failures (all pre-date the admin page; the tests are stale, the code is th
 | `test_auth.py::test_register_faculty_from_seed` | Same seed issue. |
 | `test_users.py::test_area_head_can_patch_user_role` | User management is now admin only (403). |
 | `test_users.py::test_seeded_professor_skips_incomplete_on_login` | Same seed issue. |
-| JS `annotateDoubleCounters: focused-dual marks courses fulfilling both programs` | Known stale test (also listed in `docs/archive/UX_REVIEW_2026-07-17.md` item 52). |
 
 Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in a fixture, or by inserting `DirectoryEntry` rows) is a good first task for a new maintainer.
 
@@ -1805,9 +1841,10 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
 - `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list, the daily update (`test_update_data.py`), `scripts/dev_server.py` (`test_dev_server.py`), `scripts/bump_cf_build.py` and `frontend/data/minors.json` (`test_minors_file.py`: every course code comes from that minor's official file, with old Psychology numbers as their current numbers, no listed code is lost, the number ranges, rule numbers, unit totals and double counting sentences match the file, every category has a rule, no category lists a code twice, and the user-facing text has no dashes). `backend/scraper/tests/` has no `__init__.py`; its `conftest.py` puts `backend/scraper/` on `sys.path`, which is why the scripts are imported as top-level modules there.
-- `frontend/tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
+- `frontend/tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), waits for a test that returns a promise, and prints counts per file and in total. It exits non-zero if any test fails.
+- `frontend/tests/minors.test.js` covers the minors logic of `js/data.js` with small fixtures: selection rules, category expansion, rule chips, the trees, progress (one course fills one category, unit floors, parts, caps, completed before in progress), the double counting limit text, shared courses, warnings and the major and minor tags. `frontend/tests/minors-file.test.js` (Node only) loads the real `data/minors.json` through `fetchMinors()` with a fake `fetch`, checks that the fallback `MINOR_LIST` and `MINOR_BLOCKED_MAJORS` match it, that every category has a known rule and builds, and that the text the app shows has no dashes. `backend/tests/test_auth.py` checks that `VALID_MINORS_FOR_PATCH` and `MAJOR_MINOR_COLLISION` match the file.
 - `frontend/tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also written as an HTML entity) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason: today only the four `LABEL_OVERRIDES` keys that must match requirement paths in the data.
-- `frontend/tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen, and that the course editor saves a row under its own code and refuses a number another row already has.
+- `frontend/tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen, and that the course editor saves a row under its own code and refuses a number another row already has. Its minors tests run the real `renderTree()` with a small catalog and the real `minors.json`: a student's minor sections after the major, statuses saved in `cf_course_status`, a double counting warning, the Minors tab for faculty, a guest adding and removing minors across a view switch, one account save at a time, and a missing minors file.
 - `frontend/tests/utils.test.js` covers `hasTypedText()` (the landing page check for typed text).
 
 There is no CI that runs the tests. On the server, the daily update runs the two SOC parser test files before every scrape (14.2), which is why pytest is in `backend/requirements.txt`.
@@ -1886,7 +1923,7 @@ Requirement data is the hard part. The scrape does not produce requirement mappi
    - `js/profile.js`: set `dataPending: false` in `PROGRAM_GROUPS`.
    - `css/styles.css`: add `--major-ai` tokens next to `--major-cs` (line 26) for light and dark themes, and any `.ai` classes the tree uses (copy the existing ones for `cs`).
 4. Backend: `VALID_PROGRAMS_FOR_PATCH` (`auth.py`), `REQUIREMENT_PROGRAMS` (`course_overrides.py`) and `_VALID_PROGRAMS` (`search_analytics.py`) already include `AI` and `GS`. For a brand new code, add it to all three.
-5. If the program has a matching minor, update `MAJOR_MINOR_COLLISION` (`auth.py`) and `MAJOR_TO_MINOR_CODE` (`profile.js`).
+5. If students of the new major may not take some minors, add the major to those minors' `blocked_majors` in `frontend/data/minors.json`, to `MAJOR_MINOR_COLLISION` (`auth.py`) and to `MINOR_BLOCKED_MAJORS` (`profile.js`); `backend/tests/test_auth.py` and `frontend/tests/minors-file.test.js` fail until all three agree.
 6. Test: a student with that major sees the tree; course cards show the new column.
 
 ### 19.2 Add a new admin tab
@@ -2068,7 +2105,8 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 ### 21.4 Product roadmap (from docs and code comments)
 
 - AI and GS majors: waiting on authoritative requirement specs (`frontend/js/data.js` line 16).
-- Minors: `frontend/data/minors.json` holds the requirements of every minor, built from the official files in `backend/data/minors/`, but the app does not show them yet.
+- Course statuses (8.10) on the account: today they live in the browser only (`cf_course_status`), so they do not follow a student to another device or to a new site address. A table such as `course_statuses (user_id, course_code, status)` with `GET` and `PUT /api/me/course-statuses`, and a one-time upload of the local copy at sign-in (like `_syncLocalToServer()`), would add server sync.
+- Minors: the open questions of the minors review (double counting where the Scotty page and the audit differ, the Pittsburgh versions of three minors, codes not in the catalog) are noted in each minor's "About this minor"; settle them with the advisors and update `frontend/data/minors.json`.
 - Server-side storage of a user's own schedule plans (today they are browser-only, which also means they do not survive a change of site address, 15.15).
 - UX review (`docs/archive/UX_REVIEW_2026-07-17.md`): dark theme parity, copy consistency, accessibility (keyboard navigation of the tree, ARIA for typeahead), slimmer boot payload.
 - Not done yet: CMU Andrew SSO (Shibboleth, needs IT; easier now that the site is on a CMU-Q server), ML-based offering prediction (current `predictOffering()` is rule-based), deduplication of `courses.json`.

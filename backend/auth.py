@@ -167,7 +167,15 @@ def _create_user_with_password(email: str, name: str, password: str) -> User:
     return _finalize_user(user, email, method="register")
 
 
-MAJOR_MINOR_COLLISION = {"CS": "cs", "BA": "business", "BS": "biology"}
+# Minors a major may not declare: blocked_majors in frontend/data/minors.json
+# (the minor in the student's own field, and for BA also the two other Tepper
+# minors). MINOR_BLOCKED_MAJORS in frontend/js/profile.js holds the same rule.
+MAJOR_MINOR_COLLISION = {
+    "CS": frozenset({"cs"}),
+    "BA": frozenset({"business", "business_analytics", "finance"}),
+    "BS": frozenset({"biology"}),
+}
+MINOR_BLOCKED_MESSAGE = "That minor is not open to students in your major."
 
 
 def _sync_user_minors(user: User, minor_codes: list[str] | None, *, role: str) -> str | None:
@@ -191,9 +199,13 @@ def _sync_user_minors(user: User, minor_codes: list[str] | None, *, role: str) -
         if mc not in VALID_MINORS_FOR_PATCH:
             return f"Unknown minor_code: {mc}."
     pp = user.primary_program
-    if pp in MAJOR_MINOR_COLLISION and MAJOR_MINOR_COLLISION[pp] in unique:
-        return "Minor cannot match your major field."
+    if MAJOR_MINOR_COLLISION.get(pp, frozenset()) & set(unique):
+        return MINOR_BLOCKED_MESSAGE
     user.minors.clear()
+    # Delete the old rows before inserting the new ones. Without this flush the
+    # unit of work inserts first, and keeping a minor while adding another
+    # broke the (user_id, minor_code) unique key with a 500.
+    db.session.flush()
     for mc in unique:
         user.minors.append(UserMinor(minor_code=mc))
     user.sync_minor_code_legacy()
@@ -563,10 +575,11 @@ SELF_SETTABLE_ROLES = {"student"}
 
 
 VALID_PROGRAMS_FOR_PATCH = {"CS", "IS", "BA", "BS", "AI", "GS", "AS"}
+# The minors of frontend/data/minors.json (MINOR_LIST in frontend/js/profile.js).
 VALID_MINORS_FOR_PATCH = {
-    "arabic", "biology", "business", "cs", "economics", "finance", "history",
-    "math", "neuroscience", "product", "writing", "psychology", "sociology",
-    "self_defined", "tech_entre",
+    "arabic", "biology", "business", "business_analytics", "comp_bio", "cs",
+    "economics", "finance", "history", "math", "neuroscience", "writing",
+    "psychology", "sociology", "self_defined", "tech_entre",
 }
 VALID_ADVISOR_SCOPES = {"major", "minor", "arts_sciences", "all_programs"}
 
@@ -580,8 +593,8 @@ def _validate_consistent_profile(role, primary_program, minor_codes, advisor_sco
         for mc in minor_codes:
             if mc not in VALID_MINORS_FOR_PATCH:
                 return f"Unknown minor_code: {mc}."
-            if primary_program in MAJOR_MINOR_COLLISION and MAJOR_MINOR_COLLISION[primary_program] == mc:
-                return "Minor cannot match your major field."
+            if mc in MAJOR_MINOR_COLLISION.get(primary_program, frozenset()):
+                return MINOR_BLOCKED_MESSAGE
         if advisor_scope:
             return "Students cannot have an advisor_scope."
         if department:
