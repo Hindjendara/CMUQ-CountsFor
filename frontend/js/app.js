@@ -249,17 +249,26 @@ const App = {
         return null;
       }),
     ]);
-    // Public route, so guests get admin course edits too.
+    // Public routes, so guests get admin course edits and minor settings too.
     let overrides = [];
-    const r = await apiGetCourseOverrides();
+    let minorOverrides = [];
+    const [r, mr] = await Promise.all([apiGetCourseOverrides(), apiGetMinorOverrides()]);
     if (r.ok && r.data) overrides = r.data.items || [];
     else console.warn('[CountsFor] Course edits unavailable; showing the scraped catalog.', r.error);
-    this._buildCatalog(courses, overrides, minorsData);
+    if (mr.ok && mr.data) minorOverrides = mr.data.items || [];
+    else if (minorsData) console.warn('[CountsFor] Minor settings unavailable; showing the minor file as it is.', mr.error);
+    this._buildCatalog(courses, overrides, minorsData, minorOverrides);
   },
 
   /** The synchronous half of _prepareCatalog: edits, index, annotations, trees. */
-  _buildCatalog(courses, overrides, minorsData) {
+  _buildCatalog(courses, overrides, minorsData, minorOverrides) {
+    // The categories of the scraped catalog, before admin edits: the course
+    // editor's pick list (with data/requirement_buckets.json once loaded).
+    this._scrapedCourses = courses;
+    this._catalogReqPaths = knownRequirementPaths(courses, this._requirementBuckets);
     if (minorsData) {
+      // Admin minor settings apply to a copy; the fetched file stays as it is.
+      minorsData = applyMinorOverrides(minorsData, minorOverrides || []);
       this.minorsData = minorsData;
       this._minorsLoadError = null;
       applyMinorsCatalog(minorsData);
@@ -2856,8 +2865,20 @@ const App = {
     } else if (isStudent(this.profile) && this._courseHasVisibleFlag(course.course_code)) {
       parts.push(`<span class="cc-flag-badge">Faculty flagged · ${esc(this._courseFlagStatus(course.course_code))}</span>`);
     }
+    const editKey = canManageUsers(this.authedUser) ? this._courseEditKey(course) : '';
+    if (/^\d{2}-\d{3}$/.test(editKey)) {
+      parts.push(`
+        <button class="cc-action cc-action-edit" onclick="App._editCourseInAdmin('${editKey}')" title="Open this course in the admin course editor" aria-label="Edit course data">
+          ${this._iconEdit()}
+          <span>Edit course data</span>
+        </button>`);
+    }
     if (!parts.length) return '';
     return `<div class="cc-head-actions">${parts.join('')}</div>`;
+  },
+
+  _iconEdit() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M10.8 2.6l2.6 2.6L6 12.6 2.8 13.2 3.4 10z"/></svg>';
   },
 
   _iconBookmarkOutline() {
@@ -4415,7 +4436,10 @@ const App = {
     if (!el) return;
     el.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
     const tab = this._adminConsole.tab;
-    if (tab === 'courses') return this._renderAdminCourses();
+    if (tab === 'courses') {
+      await this._ensureRequirementBuckets();
+      return this._renderAdminCourses();
+    }
     if (tab === 'overview') return this._loadAdminOverview();
     if (tab === 'users') return this._loadUserAdmin();
     if (tab === 'access') return this._loadAdminAccess();
@@ -4483,7 +4507,12 @@ const App = {
   },
 
   // ── Courses (catalog edits) ───────────────────────────────
+  // What a course counts for is saved per program and per minor as a change to
+  // the catalog ({ add, remove }, README 12.2), so everything an admin did not
+  // touch keeps following the catalog and the daily updates.
   _courseAdmin: { view: 'list', q: '', filter: 'all', key: null, draft: null },
+
+  COURSE_VIEWS: [['list', 'Courses'], ['category', 'Courses in a category'], ['minors', 'Minor settings']],
 
   _courseEditKey(course) {
     // Edits to a scraped course stay keyed by its catalog number, even after renumbering.
@@ -4493,7 +4522,7 @@ const App = {
 
   _courseIsEdited(c) {
     const e = c._edit;
-    return !!(e && !c._added && (Object.keys(e.fields || {}).length || e.requirements));
+    return !!(e && !c._added && (Object.keys(e.fields || {}).length || Object.keys(e.requirements || {}).length));
   },
 
   // Raw segments joined with ›. Used for datalist values, which
@@ -4514,18 +4543,71 @@ const App = {
       || (c.course_name || '').toLowerCase().includes(q);
   },
 
+  /** Load data/requirement_buckets.json once for the pick lists. Optional: without it the catalog rows are the list. */
+  async _ensureRequirementBuckets() {
+    if (this._bucketsRequested) return;
+    this._bucketsRequested = true;
+    const buckets = await fetchRequirementBuckets();
+    if (!buckets) return;
+    this._requirementBuckets = buckets;
+    this._catalogReqPaths = knownRequirementPaths(this._scrapedCourses || [], buckets);
+  },
+
+  /** The 2026-27 categories of a program (the scraped catalog, before edits), sorted. */
+  _catalogPathsOf(prog) {
+    const known = (this._catalogReqPaths && this._catalogReqPaths[prog]) || new Map();
+    return [...known.keys()].sort();
+  },
+
+  _isCatalogPath(prog, path) {
+    return !!(this._catalogReqPaths && this._catalogReqPaths[prog] && this._catalogReqPaths[prog].has(path));
+  },
+
+  _isGenEdPath(path) {
+    return String(path || '').split('---')[0] === 'GenEd';
+  },
+
+  /** "Statistics › Introductory Statistics" for a category path of a minor. */
+  _minorCategoryLabel(m, path) {
+    const names = [];
+    let cats = (m && m.def && m.def.categories) || [];
+    for (const id of String(path || '').split('---').filter(Boolean)) {
+      const cat = cats.find(c => c && c.id === id);
+      names.push(cat ? (cat.name || id) : id);
+      cats = (cat && cat.children) || [];
+    }
+    return names.join(' › ');
+  },
+
+  _courseViewsHtml(active) {
+    return `<div class="adm-seg adm-course-views" role="tablist" aria-label="Course tools">${this.COURSE_VIEWS.map(([id, label]) => `
+      <button type="button" class="adm-seg-btn ${active === id ? 'is-active' : ''}" role="tab" aria-selected="${active === id ? 'true' : 'false'}" onclick="App._setCourseView('${id}')">${label}</button>`).join('')}</div>`;
+  },
+
+  _setCourseView(view) {
+    const st = this._courseAdmin;
+    st.view = view;
+    st.draft = null;
+    st.saved = null;
+    this._renderAdminCourses();
+  },
+
   _renderAdminCourses() {
     const st = this._courseAdmin;
     if (st.view === 'edit' || st.view === 'add') return this._renderCourseEditor();
     if (st.view === 'saved') return this._renderCourseSaved();
+    if (st.view === 'category') return this._renderCategoryView();
+    if (st.view === 'minors') return this._renderMinorSettings();
     const el = document.getElementById('admContent');
     if (!el) return;
     const all = this.courses || [];
     const archived = this._archivedCourses || [];
     const editedCount = all.filter(c => this._courseIsEdited(c)).length;
     const addedCount = all.filter(c => c._added).length;
+    const checkCount = all.filter(c => this._courseEditProblems(c).length).length;
     const chip = (id, label, n) => `<button type="button" class="adm-chip ${st.filter === id ? 'is-active' : ''}" onclick="App._setCourseFilter('${id}')">${label}${n != null ? ` <span class="adm-chip-n">${n}</span>` : ''}</button>`;
     el.innerHTML = `
+      ${this._courseViewsHtml('list')}
       <div class="adm-card adm-card-row">
         <div>
           <div class="adm-card-title">Course catalog</div>
@@ -4541,6 +4623,7 @@ const App = {
         ${chip('all', 'All courses')}
         ${chip('edited', 'Edited', editedCount)}
         ${chip('added', 'Added here', addedCount)}
+        ${chip('check', 'Check these', checkCount)}
         ${chip('archived', 'Archived', archived.length)}
         <span class="adm-toolbar-count" id="admCourseCount"></span>
       </div>
@@ -4558,6 +4641,78 @@ const App = {
     this._renderCourseResults();
   },
 
+  /**
+   * The [key, value] pairs of a stored requirements edit in a steady order:
+   * the programs as in MAJOR_ORDER, then any other program, then the minors by
+   * name. (The API returns the keys sorted, which would put AI first.)
+   */
+  _orderedEdits(reqs) {
+    const rank = key => {
+      if (key.startsWith(MINOR_EDIT_PREFIX)) return [2, getMinorLabel(key.slice(MINOR_EDIT_PREFIX.length)) || key];
+      const i = MAJOR_ORDER.indexOf(key);
+      return i >= 0 ? [0, i] : [1, key];
+    };
+    return Object.entries(reqs || {}).sort(([a], [b]) => {
+      const x = rank(a);
+      const y = rank(b);
+      return x[0] - y[0] || (typeof x[1] === 'number' ? x[1] - y[1] : String(x[1]).localeCompare(String(y[1])));
+    });
+  },
+
+  /** One line of what was changed, e.g. "Units · Computer Science: 1 added, 1 removed · Psychology minor: 1 added". */
+  _courseEditSummary(c) {
+    const e = c && c._edit;
+    if (!e) return '';
+    const labels = { course_code: 'Number', course_name: 'Name', department: 'Department', units: 'Units', description: 'Description', prerequisites: 'Prerequisites', offered_qatar: 'Qatar offering', offered_pitts: 'Pittsburgh offering', offered: 'Semesters' };
+    const parts = c._added ? [] : Object.keys(e.fields || {}).map(f => labels[f] || f);
+    for (const [key, value] of this._orderedEdits(e.requirements)) {
+      const minor = key.startsWith(MINOR_EDIT_PREFIX);
+      const name = minor ? `${getMinorLabel(key.slice(MINOR_EDIT_PREFIX.length))} minor` : (getProgramLabel(key) || key);
+      if (Array.isArray(value)) {
+        parts.push(`${name}: saved before the 2026-27 names`);
+        continue;
+      }
+      const bits = [];
+      const added = ((value && value.add) || []).length;
+      const removed = ((value && value.remove) || []).length;
+      if (added) bits.push(`${added} added`);
+      if (removed) bits.push(`${removed} removed`);
+      if (bits.length) parts.push(`${name}: ${bits.join(', ')}`);
+    }
+    return parts.join(' · ');
+  },
+
+  /**
+   * Why a course's edits need a look: a category that is not in the 2026-27
+   * catalog, a minor category that is not in minors.json, or a list saved
+   * before the change to per program edits. [] when all is well.
+   */
+  _courseEditProblems(c) {
+    const e = c && c._edit;
+    if (!e || !e.requirements) return [];
+    const out = [];
+    for (const [key, value] of this._orderedEdits(e.requirements)) {
+      if (key.startsWith(MINOR_EDIT_PREFIX)) {
+        if (!this.minorIndex) continue;
+        const code = key.slice(MINOR_EDIT_PREFIX.length);
+        const m = this.minorIndex.byCode[code];
+        const leaves = new Set(m ? minorLeafCategories(m.def).map(l => l.path) : []);
+        const paths = value && !Array.isArray(value) ? [...(value.add || []), ...(value.remove || [])] : [];
+        if (!m || Array.isArray(value) || paths.some(p => !leaves.has(p))) out.push(`${getMinorLabel(code)} minor category not in the minor file`);
+        continue;
+      }
+      const name = getProgramLabel(key) || key;
+      if (Array.isArray(value)) {
+        out.push(`${name} saved before the 2026-27 names`);
+        continue;
+      }
+      if (!this._catalogReqPaths || !this._catalogReqPaths[key] || !value) continue;
+      const paths = [...(value.add || []).map(r => (typeof r === 'string' ? r : r && r.requirement)), ...(value.remove || [])].filter(Boolean);
+      if (paths.some(p => !this._isCatalogPath(key, p))) out.push(`${name} category not in the 2026-27 catalog`);
+    }
+    return out;
+  },
+
   _renderCourseResults() {
     const st = this._courseAdmin;
     const box = document.getElementById('admCourseResults');
@@ -4567,6 +4722,7 @@ const App = {
     if (st.filter === 'archived') pool = this._archivedCourses || [];
     else if (st.filter === 'edited') pool = (this.courses || []).filter(c => this._courseIsEdited(c));
     else if (st.filter === 'added') pool = (this.courses || []).filter(c => c._added);
+    else if (st.filter === 'check') pool = (this.courses || []).filter(c => this._courseEditProblems(c).length);
     else pool = this.courses || [];
     const matches = pool.filter(c => this._courseMatches(c, q))
       .sort((a, b) => (a.course_code || '').localeCompare(b.course_code || ''));
@@ -4579,15 +4735,18 @@ const App = {
       return;
     }
     if (!matches.length) {
-      box.innerHTML = '<div class="empty-state"><div class="empty-text">No courses match.</div></div>';
+      box.innerHTML = `<div class="empty-state"><div class="empty-text">${st.filter === 'check' && !q ? 'Nothing to check. Every edit uses categories of the 2026-27 catalog and the minor files.' : 'No courses match.'}</div></div>`;
       return;
     }
     const archivedView = st.filter === 'archived';
     box.innerHTML = `<ul class="adm-course-list">${matches.slice(0, LIMIT).map(c => {
       const where = [c.offered_qatar ? 'Qatar' : '', c.offered_pitts ? 'Pittsburgh' : ''].filter(Boolean).join(' · ');
+      const summary = this._courseEditSummary(c);
+      const problems = archivedView ? [] : this._courseEditProblems(c);
       const tags = [
         c._added ? '<span class="adm-pill adm-pill-new">Added here</span>' : '',
         this._courseIsEdited(c) && !archivedView ? '<span class="adm-pill adm-pill-edit">Edited</span>' : '',
+        problems.length ? '<span class="adm-pill adm-pill-warn">Check</span>' : '',
         archivedView ? '<span class="adm-pill">Archived</span>' : '',
       ].join('');
       const key = esc(this._courseEditKey(c));
@@ -4598,6 +4757,8 @@ const App = {
             <span class="adm-course-item-body">
               <span class="adm-course-item-name">${esc(c.course_name || 'Untitled')}</span>
               <span class="adm-cell-sub">${c.units ? esc(String(c.units)) + ' units' : 'Units not set'}${where ? ' · ' + esc(where) : ''}</span>
+              ${summary ? `<span class="adm-course-item-summary">${esc(summary)}</span>` : ''}
+              ${problems.length ? `<span class="adm-course-item-warn">Check: ${esc(problems.join(', '))}</span>` : ''}
             </span>
             <span class="adm-course-item-tags">${tags}</span>
           </button>
@@ -4605,27 +4766,44 @@ const App = {
     }).join('')}</ul>`;
   },
 
-  // One "counts for" row as the course editor stores it. A row kept from an
-  // earlier requirement keeps its flag, so saving other fields does not drop it.
-  _courseReqRow(r) {
-    const row = { requirement: r.requirement, type: !!r.type };
-    if (r.earlier) {
-      row.earlier = true;
-      row.earlier_reason = r.earlier_reason || '';
-    }
-    return row;
-  },
-
   _findCourseByKey(key, archived) {
     const pool = archived ? (this._archivedCourses || []) : (this.courses || []);
     return pool.find(c => this._courseEditKey(c) === key) || null;
+  },
+
+  /** The catalog's rows of one program for a course, before admin edits ([] for a course added here). */
+  _courseBaseRows(course, prog) {
+    if (!course || course._added) return [];
+    const reqs = course._catalog && 'requirements' in course._catalog ? course._catalog.requirements : course.requirements;
+    return (reqs && reqs[prog]) || [];
+  },
+
+  /** The categories of a minor that take a course by the minor file alone. */
+  _courseMinorBase(course, code) {
+    const m = this.minorIndex && this.minorIndex.byCode[code];
+    return m && course ? minorFileCategories(m.def, course) : [];
+  },
+
+  /** A course's categories in a minor after its saved edit: the file's, minus removals, plus additions. */
+  _courseMinorDraft(course, code) {
+    const base = this._courseMinorBase(course, code);
+    const e = course && course._minorEdits && course._minorEdits[code];
+    if (!e) return base;
+    const out = base.filter(p => !(e.remove || []).includes(p));
+    for (const p of e.add || []) if (!out.includes(p)) out.push(p);
+    return out;
   },
 
   _courseDraftFrom(course) {
     const reqs = {};
     for (const m of MAJOR_ORDER) {
       reqs[m] = ((course && course.requirements && course.requirements[m]) || [])
-        .map(r => this._courseReqRow(r));
+        .map(r => ({ requirement: r.requirement, type: this._isGenEdPath(r.requirement) }));
+    }
+    const minors = {};
+    for (const mc of (course && this.minorIndex ? this.minorIndex.order : [])) {
+      const paths = this._courseMinorDraft(course, mc);
+      if (paths.length) minors[mc] = paths;
     }
     return {
       course_code: course ? course.course_code : '',
@@ -4638,6 +4816,7 @@ const App = {
       offered_pitts: course ? !!course.offered_pitts : false,
       offered: course && Array.isArray(course.offered) ? course.offered.join(', ') : '',
       requirements: reqs,
+      minors,
     };
   },
 
@@ -4654,6 +4833,16 @@ const App = {
     this._renderCourseEditor();
     const top = document.getElementById('admContent');
     if (top) top.scrollIntoView({ block: 'start' });
+  },
+
+  /** Open a course in the admin course editor, from its course card or the activity log. */
+  async _editCourseInAdmin(key) {
+    if (!canManageUsers(this.authedUser)) return;
+    const archived = !this._findCourseByKey(key, false) && !!this._findCourseByKey(key, true);
+    this._courseAdmin.view = 'list';
+    this._courseAdmin.draft = null;
+    await this.showAdminConsole('courses');
+    this._openCourseEditor(key, archived);
   },
 
   _openCourseAdd() {
@@ -4741,34 +4930,10 @@ const App = {
     const cat = (course && course._catalog) || {};
     const was = (field, fmt) => (field in cat)
       ? `<span class="adm-field-was">Schedule of Classes says: ${esc(fmt ? fmt(cat[field]) : (cat[field] === '' || cat[field] == null ? '(blank)' : String(cat[field])))}</span>` : '';
-    const known = this._knownReqPaths || (this._knownReqPaths = knownRequirementPaths(this.courses || []));
     const edit = course && course._edit;
-
-    const reqSections = MAJOR_ORDER.map(prog => {
-      const list = d.requirements[prog] || [];
-      const options = [...known[prog].keys()].sort().map(p => `<option value="${esc(this._courseReqLabel(p))}"></option>`).join('');
-      const chips = list.map((r, i) => `
-        <li class="adm-req">
-          <span class="adm-req-tag ${r.type ? 'is-gened' : ''}">${r.type ? 'Gen Ed' : 'Core'}</span>
-          <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}</span>
-          ${r.earlier ? this._earlierTagHtml(r.earlier_reason, 'adm-req-earlier') : ''}
-          <button type="button" class="adm-req-x" onclick="App._removeCourseReq('${prog}', ${i})" aria-label="Remove this requirement">×</button>
-        </li>`).join('');
-      return `
-        <div class="adm-req-group">
-          <div class="adm-req-head">${esc(getProgramLabel(prog) || prog)} <span class="adm-cell-sub">${list.length ? list.length + ' requirement' + (list.length === 1 ? '' : 's') : 'Does not count for anything'}</span></div>
-          ${chips ? `<ul class="adm-req-list">${chips}</ul>` : ''}
-          <div class="adm-req-add">
-            <input class="adm-search" id="ce-req-${prog}" list="ce-dl-${prog}" placeholder="Pick or type a category, for example GenEd › Foundations › Data Analysis" oninput="App._onCourseReqInput('${prog}')" />
-            <datalist id="ce-dl-${prog}">${options}</datalist>
-            <select class="adm-select" id="ce-req-type-${prog}" title="Only used for a category that does not exist yet" hidden>
-              <option value="core">Core</option><option value="gened">Gen Ed</option>
-            </select>
-            <button type="button" class="adm-btn" onclick="App._addCourseReq('${prog}')">Add</button>
-          </div>
-          <div class="adm-req-hint" id="ce-req-hint-${prog}" hidden>New category. Choose whether it is Core or Gen Ed.</div>
-        </div>`;
-    }).join('');
+    const stored = (edit && edit.requirements) || {};
+    const legacy = Object.entries(stored).some(([k, v]) => !k.startsWith(MINOR_EDIT_PREFIX) && Array.isArray(v));
+    const reqSections = MAJOR_ORDER.map(prog => this._courseReqGroupHtml(prog, course, adding)).join('');
 
     const actions = adding
       ? `<button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" id="ce-save" onclick="App._saveCourse()">Add course</button>
@@ -4808,11 +4973,119 @@ const App = {
             <label class="adm-field adm-field-full">Prerequisites<input class="adm-search" id="ce-prereq" value="${esc(d.prerequisites)}" placeholder="15-112" />${was('prerequisites')}</label>
           </div>
           <div class="adm-card-title adm-section-title">What it counts for</div>
-          <p class="adm-card-text">The requirements this course fulfills in each major. ${'requirements' in cat ? 'These have been edited here.' : ''}</p>
+          <p class="adm-card-text">The categories this course counts for in each major. Only what you add or remove here is kept; everything else follows the catalog as it updates.</p>
+          ${legacy ? '<div class="adm-legacy-note" role="note">These categories were saved before the 2026-27 catalog names. Check the ones marked Not in the 2026-27 catalog, then save.</div>' : ''}
           <div class="adm-req-groups">${reqSections}</div>
+          <div class="adm-card-title adm-section-title adm-section-gap">Minors</div>
+          ${this._courseMinorSectionHtml(course, adding)}
         </fieldset>
         <div class="adm-actions adm-editor-actions">${actions}
           <div class="adm-form-notice" id="ce-notice" role="alert" hidden></div>
+        </div>
+      </div>`;
+  },
+
+  /** One program's categories in the editor: what is listed, what the admin added or removed, and the pick list. */
+  _courseReqGroupHtml(prog, course, adding) {
+    const d = this._courseAdmin.draft;
+    const list = d.requirements[prog] || [];
+    const base = adding ? [] : this._courseBaseRows(course, prog);
+    const basePaths = new Set(base.map(r => r.requirement));
+    const draftPaths = new Set(list.map(r => r.requirement));
+    const tag = path => (this._isGenEdPath(path)
+      ? '<span class="adm-req-tag is-gened">Gen Ed</span>' : '<span class="adm-req-tag">Core</span>');
+    const flag = (text, cls) => `<span class="adm-req-flag${cls ? ' ' + cls : ''}">${text}</span>`;
+    const chips = list.map((r, i) => {
+      const added = !adding && !basePaths.has(r.requirement);
+      const flags = (added ? flag('Added here', 'is-added') : '')
+        + (this._isCatalogPath(prog, r.requirement) ? '' : flag('Not in the 2026-27 catalog', 'is-warn'));
+      return `
+        <li class="adm-req${added ? ' is-added' : ''}">
+          ${tag(r.requirement)}
+          <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}${flags ? `<span class="adm-req-flags">${flags}</span>` : ''}</span>
+          <button type="button" class="adm-req-x" onclick="App._removeCourseReq('${prog}', ${i})" aria-label="Remove this category">×</button>
+        </li>`;
+    }).join('');
+    const removed = base.filter(r => !draftPaths.has(r.requirement)).map((r, i) => `
+        <li class="adm-req is-removed">
+          ${tag(r.requirement)}
+          <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}<span class="adm-req-flags">${flag('Removed here')}</span></span>
+          <button type="button" class="adm-btn adm-btn-small" onclick="App._putBackCourseReq('${prog}', ${i})">Put back</button>
+        </li>`).join('');
+    const edited = !adding && !!programEditDelta(base, list);
+    // AI's general education rows are copies of the SCS rows CS uses, so a fix may belong in both.
+    let pairHint = '';
+    const pair = { CS: 'AI', AI: 'CS' }[prog];
+    if (pair && !adding && d.requirements[pair]) {
+      const otherDraft = new Set(d.requirements[pair].map(r => r.requirement));
+      const otherBase = new Set(this._courseBaseRows(course, pair).map(r => r.requirement));
+      const changed = [...new Set([...draftPaths, ...basePaths])]
+        .filter(p => this._isGenEdPath(p) && draftPaths.has(p) !== basePaths.has(p));
+      if (changed.some(p => (otherBase.has(p) || otherDraft.has(p)) && otherDraft.has(p) !== draftPaths.has(p))) {
+        pairHint = `<div class="adm-req-hint">${esc(getProgramLabel(pair) || pair)} lists the same Gen Ed category. Change it there too if it applies.</div>`;
+      }
+    }
+    const options = this._catalogPathsOf(prog).map(p => `<option value="${esc(this._courseReqLabel(p))}"></option>`).join('');
+    return `
+        <div class="adm-req-group${edited ? ' is-edited' : ''}" data-prog="${prog}">
+          <div class="adm-req-head">
+            <span>${esc(getProgramLabel(prog) || prog)} <span class="adm-cell-sub">${list.length ? list.length + ' requirement' + (list.length === 1 ? '' : 's') : 'Does not count for anything'}</span></span>
+            ${edited ? `<span class="adm-req-head-actions"><span class="adm-pill adm-pill-edit">Edited here</span><button type="button" class="adm-btn adm-btn-small" onclick="App._resetCourseProgram('${prog}')">Reset to the catalog</button></span>` : ''}
+          </div>
+          ${chips || removed ? `<ul class="adm-req-list">${chips}${removed}</ul>` : ''}
+          <div class="adm-req-add">
+            <input class="adm-search" id="ce-req-${prog}" list="ce-dl-${prog}" placeholder="Pick or type a category, for example GenEd › Foundations › Data Analysis" oninput="App._onCourseReqInput('${prog}')" />
+            <datalist id="ce-dl-${prog}">${options}</datalist>
+            <button type="button" class="adm-btn" onclick="App._addCourseReq('${prog}')">Add</button>
+          </div>
+          <div class="adm-req-hint" id="ce-req-hint-${prog}" hidden></div>
+          ${pairHint}
+        </div>`;
+  },
+
+  /** The minor categories of a course in the editor, with a picker of every category that lists courses. */
+  _courseMinorSectionHtml(course, adding) {
+    const idx = this.minorIndex;
+    if (!idx) return '<p class="adm-card-text">Minor requirements could not be loaded, so minor categories cannot be edited now.</p>';
+    const d = this._courseAdmin.draft;
+    const items = [];
+    for (const mc of idx.order) {
+      const m = idx.byCode[mc];
+      const name = `${m.def.name || getMinorLabel(mc)} minor`;
+      const draft = (d.minors && d.minors[mc]) || [];
+      const base = adding ? [] : this._courseMinorBase(course, mc);
+      draft.forEach((pth, i) => {
+        const fromFile = base.includes(pth);
+        items.push(`
+          <li class="adm-req${fromFile ? '' : ' is-added'}">
+            <span class="adm-req-tag is-minor">Minor</span>
+            <span class="adm-req-path">${esc(name)} › ${esc(this._minorCategoryLabel(m, pth))}<span class="adm-req-flags"><span class="adm-req-flag${fromFile ? '' : ' is-added'}">${fromFile ? 'From the minor file' : 'Added here'}</span></span></span>
+            <button type="button" class="adm-req-x" onclick="App._removeCourseMinor('${mc}', ${i})" aria-label="Remove this minor category">×</button>
+          </li>`);
+      });
+      base.filter(p => !draft.includes(p)).forEach((pth, i) => {
+        items.push(`
+          <li class="adm-req is-removed">
+            <span class="adm-req-tag is-minor">Minor</span>
+            <span class="adm-req-path">${esc(name)} › ${esc(this._minorCategoryLabel(m, pth))}<span class="adm-req-flags"><span class="adm-req-flag">Removed here</span></span></span>
+            <button type="button" class="adm-btn adm-btn-small" onclick="App._putBackCourseMinor('${mc}', ${i})">Put back</button>
+          </li>`);
+      });
+    }
+    const groups = idx.order.map(mc => {
+      const m = idx.byCode[mc];
+      const opts = minorLeafCategories(m.def).map(leaf => `<option value="${esc(mc + '|' + leaf.path)}">${esc(leaf.pathLabel)}</option>`).join('');
+      return opts ? `<optgroup label="${esc((m.def.name || mc) + ' minor')}">${opts}</optgroup>` : '';
+    }).join('');
+    return `
+      <p class="adm-card-text">The minor categories this course fills. They come from the minor files; only what you add or remove here is kept.</p>
+      <div class="adm-req-group adm-minor-group">
+        ${items.length ? `<ul class="adm-req-list">${items.join('')}</ul>` : '<p class="adm-cell-sub adm-minor-none">No minor category lists this course.</p>'}
+        <div class="adm-req-add">
+          <select class="adm-select adm-minor-pick" id="ce-minor-pick" aria-label="Minor category">
+            <option value="">Choose a minor category</option>${groups}
+          </select>
+          <button type="button" class="adm-btn" onclick="App._addCourseMinor()">Add</button>
         </div>
       </div>`;
   },
@@ -4824,19 +5097,33 @@ const App = {
     return raw.split(/\s*›\s*|\s*---\s*/).map(s => s.trim()).filter(Boolean).join('---');
   },
 
-  _onCourseReqInput(prog) {
-    const path = this._reqPathFromInput(prog);
-    const known = this._knownReqPaths || {};
-    const isNew = !!path && !(known[prog] && known[prog].has(path));
-    const sel = document.getElementById('ce-req-type-' + prog);
-    const hint = document.getElementById('ce-req-hint-' + prog);
-    if (sel) {
-      sel.hidden = !isNew;
-      if (isNew) sel.value = /^gened/i.test(path) ? 'gened' : 'core';
+  /** What is wrong with a typed category: { kind: 'shape' | 'root' | 'unknown', text }, or null when it is a catalog category. */
+  _reqInputProblem(prog, path) {
+    if (!path) return null;
+    const name = getProgramLabel(prog) || prog;
+    if (path.split('---').length < 2) {
+      return { kind: 'shape', text: 'Pick a category from the list, or type its full name, for example GenEd › Foundations › Data Analysis.' };
     }
-    if (hint) hint.hidden = !isNew;
+    if (/[\u2012-\u2015]/.test(path)) return { kind: 'shape', text: 'Category names use plain hyphens, not long dashes.' };
+    if (!requirementPathRootOk(prog, path)) {
+      return { kind: 'root', text: `A ${name} category starts with GenEd or ${DEGREE_ROOTS[prog]}.` };
+    }
+    if (!this._isCatalogPath(prog, path)) {
+      return { kind: 'unknown', text: 'Not a category in the 2026-27 catalog. Check the name, or add it as a new category.' };
+    }
+    return null;
   },
 
+  _onCourseReqInput(prog) {
+    const problem = this._reqInputProblem(prog, this._reqPathFromInput(prog));
+    const hint = document.getElementById('ce-req-hint-' + prog);
+    if (hint) {
+      hint.textContent = problem ? problem.text : '';
+      hint.hidden = !problem;
+    }
+  },
+
+  /** Add the typed category. One that is not in the 2026-27 catalog is added only after a confirmation. */
   _addCourseReq(prog) {
     const path = this._reqPathFromInput(prog);
     if (!path) return;
@@ -4846,10 +5133,14 @@ const App = {
       showToast('Already listed.');
       return;
     }
-    const known = this._knownReqPaths[prog];
-    const sel = document.getElementById('ce-req-type-' + prog);
-    const type = known.has(path) ? known.get(path) : (sel ? sel.value === 'gened' : false);
-    list.push({ requirement: path, type });
+    const problem = this._reqInputProblem(prog, path);
+    if (problem && problem.kind !== 'unknown') {
+      this._onCourseReqInput(prog);
+      this._courseFormNotice(problem.text, 'ce-req-' + prog);
+      return;
+    }
+    if (problem && !confirm(`${this._courseReqLabel(path)} is not a category in the 2026-27 catalog. Add it anyway as a new category?`)) return;
+    list.push({ requirement: path, type: this._isGenEdPath(path) });
     this._renderCourseEditor();
     const next = document.getElementById('ce-req-' + prog);
     if (next) next.focus();
@@ -4858,6 +5149,81 @@ const App = {
   _removeCourseReq(prog, index) {
     this._syncCourseDraft();
     this._courseAdmin.draft.requirements[prog].splice(index, 1);
+    this._renderCourseEditor();
+  },
+
+  /** Catalog rows of a program that the draft no longer lists, in catalog order (the "Removed here" rows). */
+  _courseRemovedRows(prog) {
+    const st = this._courseAdmin;
+    const course = st.view === 'add' ? null : this._findCourseByKey(st.key, st.archived);
+    const draft = new Set((st.draft.requirements[prog] || []).map(r => r.requirement));
+    return this._courseBaseRows(course, prog).filter(r => !draft.has(r.requirement));
+  },
+
+  _putBackCourseReq(prog, index) {
+    this._syncCourseDraft();
+    const row = this._courseRemovedRows(prog)[index];
+    if (row) this._courseAdmin.draft.requirements[prog].push({ requirement: row.requirement, type: this._isGenEdPath(row.requirement) });
+    this._renderCourseEditor();
+  },
+
+  /** Every category of one program back to the catalog's (saved as no edit for that program). */
+  _resetCourseProgram(prog) {
+    this._syncCourseDraft();
+    const st = this._courseAdmin;
+    const course = st.view === 'add' ? null : this._findCourseByKey(st.key, st.archived);
+    st.draft.requirements[prog] = this._courseBaseRows(course, prog)
+      .map(r => ({ requirement: r.requirement, type: this._isGenEdPath(r.requirement) }));
+    this._renderCourseEditor();
+  },
+
+  _addCourseMinor() {
+    this._syncCourseDraft();
+    const sel = document.getElementById('ce-minor-pick');
+    const value = sel ? String(sel.value || '') : '';
+    const cut = value.indexOf('|');
+    if (cut < 1) {
+      this._courseFormNotice('Choose a minor category first.', 'ce-minor-pick');
+      return;
+    }
+    const code = value.slice(0, cut);
+    const path = value.slice(cut + 1);
+    const d = this._courseAdmin.draft;
+    if (!d.minors) d.minors = {};
+    const list = d.minors[code] || (d.minors[code] = []);
+    if (list.includes(path)) {
+      showToast('Already listed.');
+      return;
+    }
+    list.push(path);
+    this._renderCourseEditor();
+  },
+
+  _removeCourseMinor(code, index) {
+    this._syncCourseDraft();
+    const d = this._courseAdmin.draft;
+    const list = (d.minors && d.minors[code]) || [];
+    list.splice(index, 1);
+    if (!list.length && d.minors) delete d.minors[code];
+    this._renderCourseEditor();
+  },
+
+  /** Minor categories of the file that the draft no longer lists (the "Removed here" rows of one minor). */
+  _courseRemovedMinors(code) {
+    const st = this._courseAdmin;
+    const course = st.view === 'add' ? null : this._findCourseByKey(st.key, st.archived);
+    const draft = (st.draft.minors && st.draft.minors[code]) || [];
+    return this._courseMinorBase(course, code).filter(p => !draft.includes(p));
+  },
+
+  _putBackCourseMinor(code, index) {
+    this._syncCourseDraft();
+    const path = this._courseRemovedMinors(code)[index];
+    const d = this._courseAdmin.draft;
+    if (path) {
+      if (!d.minors) d.minors = {};
+      (d.minors[code] || (d.minors[code] = [])).push(path);
+    }
     this._renderCourseEditor();
   },
 
@@ -4884,26 +5250,69 @@ const App = {
     }
   },
 
-  /** A category typed into a "Pick or type" box but never added with its Add button still counts on save. */
+  /**
+   * A category typed into a "Pick or type" box but never added with its Add
+   * button: a catalog category is added on save; anything else stops the save
+   * with a notice ({ text, field }) instead of being added silently.
+   */
   _collectPendingCourseReqs() {
     const d = this._courseAdmin.draft;
-    const known = this._knownReqPaths || {};
     for (const prog of MAJOR_ORDER) {
       const path = this._reqPathFromInput(prog);
       if (!path) continue;
       const list = d.requirements[prog];
       if (list.some(r => r.requirement === path)) continue;
-      const sel = document.getElementById('ce-req-type-' + prog);
-      const type = known[prog] && known[prog].has(path) ? known[prog].get(path) : (sel ? sel.value === 'gened' : /^gened/i.test(path));
-      list.push({ requirement: path, type });
+      const problem = this._reqInputProblem(prog, path);
+      if (problem) {
+        const text = problem.kind === 'unknown'
+          ? `The category typed for ${getProgramLabel(prog) || prog} is not in the 2026-27 catalog. Press its Add button to add it as a new category, or clear the box.`
+          : problem.text;
+        return { text, field: 'ce-req-' + prog };
+      }
+      list.push({ requirement: path, type: this._isGenEdPath(path) });
     }
+    return null;
+  },
+
+  /**
+   * The "requirements" of a save: for each program and minor, the change from
+   * the catalog ({ add, remove }), sent only when it differs from what is
+   * stored; null puts a program or minor back to the catalog. A list stored
+   * before 2026-11-10 always differs, so saving turns it into a change.
+   */
+  _courseRequirementsPatch(course, d, adding) {
+    const out = {};
+    const stored = (!adding && course && course._edit && course._edit.requirements) || {};
+    const put = (key, delta) => {
+      const had = Object.prototype.hasOwnProperty.call(stored, key);
+      if (delta) {
+        if (!had || !sameRequirementEdit(stored[key], delta)) out[key] = delta;
+      } else if (had) {
+        out[key] = null;
+      }
+    };
+    for (const prog of MAJOR_ORDER) {
+      put(prog, programEditDelta(adding ? [] : this._courseBaseRows(course, prog), d.requirements[prog] || []));
+    }
+    for (const mc of (this.minorIndex ? this.minorIndex.order : [])) {
+      const draft = (d.minors && d.minors[mc]) || [];
+      const base = adding ? [] : this._courseMinorBase(course, mc);
+      const add = draft.filter(p => !base.includes(p));
+      const remove = base.filter(p => !draft.includes(p));
+      put(MINOR_EDIT_PREFIX + mc, add.length || remove.length ? { add, remove } : null);
+    }
+    return out;
   },
 
   async _saveCourse() {
     if (this._courseSaving) return;
     this._syncCourseDraft();
-    this._collectPendingCourseReqs();
+    const pending = this._collectPendingCourseReqs();
     this._courseFormNotice('');
+    if (pending) {
+      this._courseFormNotice(pending.text, pending.field);
+      return;
+    }
     const st = this._courseAdmin;
     const d = st.draft;
     const adding = st.view === 'add';
@@ -4929,8 +5338,7 @@ const App = {
       this._courseFormNotice('Semesters must be codes like F26 or S27, separated by commas.', 'ce-offered');
       return;
     }
-    const reqs = {};
-    for (const m of MAJOR_ORDER) reqs[m] = d.requirements[m].map(r => this._courseReqRow(r));
+    const reqPatch = this._courseRequirementsPatch(course, d, adding);
 
     let r;
     let changes = [];
@@ -4947,7 +5355,7 @@ const App = {
         offered_qatar: d.offered_qatar,
         offered_pitts: d.offered_pitts,
         offered,
-        requirements: reqs,
+        requirements: reqPatch,
       });
     } else {
       const before = this._courseDraftFrom(course);
@@ -4960,7 +5368,7 @@ const App = {
       if (d.offered_qatar !== before.offered_qatar) body.offered_qatar = d.offered_qatar;
       if (d.offered_pitts !== before.offered_pitts) body.offered_pitts = d.offered_pitts;
       if (offered.join(',') !== this._parseOffered(before.offered).join(',')) body.offered = offered;
-      if (JSON.stringify(reqs) !== JSON.stringify(before.requirements)) body.requirements = reqs;
+      if (Object.keys(reqPatch).length) body.requirements = reqPatch;
       if (!Object.keys(body).length) {
         this._courseFormNotice('There is nothing to save yet. Change a field first, or press Cancel to go back.');
         return;
@@ -4969,9 +5377,11 @@ const App = {
         new_code: `Course number is now ${code}`, course_name: 'Course name', department: 'Department number',
         units: 'Units', description: 'Description', prerequisites: 'Prerequisites',
         offered_qatar: 'Campus (Qatar)', offered_pitts: 'Campus (Pittsburgh)', offered: 'Semesters offered',
-        requirements: 'What it counts for',
       };
-      changes = Object.keys(body).map(k => labels[k] || k);
+      changes = Object.keys(body).filter(k => k !== 'requirements').map(k => labels[k] || k);
+      const keys = Object.keys(reqPatch);
+      if (keys.some(k => !k.startsWith(MINOR_EDIT_PREFIX))) changes.push('What it counts for');
+      if (keys.some(k => k.startsWith(MINOR_EDIT_PREFIX))) changes.push('Minors');
       this._setCourseSaving(true, 'Saving...');
       r = await apiEditCourse(st.key, body);
     }
@@ -5048,11 +5458,418 @@ const App = {
   async _reloadCatalog() {
     try {
       await this._prepareCatalog();
-      this._knownReqPaths = null;
     } catch (err) {
       console.error(err);
       showToast('Saved, but the catalog could not be refreshed. Reload the page.');
     }
+  },
+
+  // ── Courses in a category (bulk changes) ──────────────────
+  // One program's (or minor's) category with all its courses, to add or remove
+  // several courses at once. Every course still gets its own per program edit;
+  // one POST /api/courses/overrides/batch saves them together (one event each).
+
+  /** Programs and minors of the category view: [{ id, label, minor }]; a minor's id is "minor:<code>". */
+  _categoryTargets() {
+    const out = MAJOR_ORDER.map(p => ({ id: p, label: getProgramLabel(p) || p, minor: null }));
+    for (const mc of (this.minorIndex ? this.minorIndex.order : [])) {
+      out.push({ id: 'minor:' + mc, label: `${this.minorIndex.byCode[mc].def.name || mc} minor`, minor: mc });
+    }
+    return out;
+  },
+
+  /** The categories of a program (2026-27 catalog) or of a minor (those that list courses): [{ path, label }]. */
+  _categoryPaths(target) {
+    if (String(target).startsWith('minor:')) {
+      const m = this.minorIndex && this.minorIndex.byCode[String(target).slice(6)];
+      return m ? minorLeafCategories(m.def).map(l => ({ path: l.path, label: l.pathLabel })) : [];
+    }
+    return this._catalogPathsOf(target).map(p => ({ path: p, label: this._courseReqDisplayLabel(p) }));
+  },
+
+  /** The courses in a category now ('catalog' or 'added' here) and the ones removed here: [{ course, state }]. */
+  _categoryRows(target, path) {
+    const rows = [];
+    if (String(target).startsWith('minor:')) {
+      const m = this.minorIndex && this.minorIndex.byCode[String(target).slice(6)];
+      const node = m && findTreeNode(m.tree, path);
+      if (!node) return rows;
+      const added = new Set(node.adminAdded || []);
+      for (const c of node.courses || []) {
+        const course = lookupCourse(this.courseIndex, c.code);
+        if (course) rows.push({ course, state: added.has(c.code) ? 'added' : 'catalog' });
+      }
+      for (const code of node.adminRemoved || []) {
+        const course = lookupCourse(this.courseIndex, code);
+        if (course) rows.push({ course, state: 'removed' });
+      }
+    } else {
+      for (const course of this.courses || []) {
+        const has = ((course.requirements && course.requirements[target]) || []).some(r => r.requirement === path);
+        const inBase = this._courseBaseRows(course, target).some(r => r.requirement === path);
+        if (has) rows.push({ course, state: inBase ? 'catalog' : 'added' });
+        else if (inBase) rows.push({ course, state: 'removed' });
+      }
+    }
+    return rows.sort((a, b) => String(a.course.course_code).localeCompare(String(b.course.course_code)));
+  },
+
+  _renderCategoryView() {
+    const el = document.getElementById('admContent');
+    if (!el) return;
+    const st = this._courseAdmin;
+    const targets = this._categoryTargets();
+    if (!targets.some(t => t.id === st.catTarget)) {
+      st.catTarget = targets.length ? targets[0].id : 'CS';
+      st.catPath = '';
+    }
+    const paths = this._categoryPaths(st.catTarget);
+    if (st.catPath && !paths.some(p => p.path === st.catPath)) st.catPath = '';
+    if (!st.catSelected) st.catSelected = new Set();
+    const opt = (value, label, on) => `<option value="${esc(value)}"${on ? ' selected' : ''}>${esc(label)}</option>`;
+    const majors = targets.filter(t => !t.minor);
+    const minors = targets.filter(t => t.minor);
+    const targetSelect = `<select class="adm-select" id="cv-target" onchange="App._setCategoryTarget(this.value)">
+        <optgroup label="Majors">${majors.map(t => opt(t.id, t.label, t.id === st.catTarget)).join('')}</optgroup>
+        ${minors.length ? `<optgroup label="Minors">${minors.map(t => opt(t.id, t.label, t.id === st.catTarget)).join('')}</optgroup>` : ''}
+      </select>`;
+    const pathSelect = `<select class="adm-select" id="cv-path" onchange="App._setCategoryPath(this.value)">
+        ${opt('', 'Choose a category', !st.catPath)}${paths.map(p => opt(p.path, p.label, p.path === st.catPath)).join('')}
+      </select>`;
+    let body = '<p class="adm-empty-line">Choose a category to see its courses.</p>';
+    if (st.catPath) {
+      const rows = this._categoryRows(st.catTarget, st.catPath);
+      const inNow = rows.filter(r => r.state !== 'removed').length;
+      const items = rows.map(({ course, state }) => {
+        const code = normalizeCourseCode(course.course_code);
+        const pill = state === 'added' ? '<span class="adm-pill adm-pill-new">Added here</span>'
+          : state === 'removed' ? '<span class="adm-pill adm-pill-removed">Removed here</span>' : '';
+        const action = state === 'removed'
+          ? `<button type="button" class="adm-btn adm-btn-small" onclick="App._categoryChange(['${code}'], true)">Put back</button>`
+          : `<button type="button" class="adm-btn adm-btn-small" onclick="App._categoryChange(['${code}'], false)">Remove</button>`;
+        return `
+          <li class="adm-cat-row${state === 'removed' ? ' is-removed' : ''}">
+            <label class="adm-cat-check">
+              <input type="checkbox" data-code="${esc(code)}" ${st.catSelected.has(code) ? 'checked' : ''} onchange="App._toggleCategoryRow(this.dataset.code, this.checked)" />
+              <span class="adm-course-item-code">${esc(code)}</span>
+              <span class="adm-cat-name">${esc(course.course_name || 'Untitled')}</span>
+            </label>
+            ${pill}
+            ${action}
+          </li>`;
+      }).join('');
+      body = `
+        <div class="adm-toolbar">
+          <span class="adm-toolbar-label">${inNow} course${inNow === 1 ? '' : 's'} in this category</span>
+          <button type="button" class="adm-btn adm-btn-small" onclick="App._categoryBulk(false)">Remove selected</button>
+          <button type="button" class="adm-btn adm-btn-small" onclick="App._categoryBulk(true)">Put back selected</button>
+          <span class="adm-toolbar-count" id="cv-selected">${st.catSelected.size} selected</span>
+        </div>
+        ${items ? `<ul class="adm-course-list adm-cat-list">${items}</ul>` : '<p class="adm-empty-line">No course is in this category yet.</p>'}
+        <div class="adm-cat-add">
+          <input class="adm-search" id="cv-add" placeholder="Course numbers to add, for example 15-151, 21-127" autocomplete="off" />
+          <button type="button" class="adm-btn adm-btn-resolve" onclick="App._categoryAddCodes()">Add to this category</button>
+        </div>`;
+    }
+    el.innerHTML = `
+      ${this._courseViewsHtml('category')}
+      <div class="adm-card">
+        <div class="adm-card-title">Courses in a category</div>
+        <p class="adm-card-text">See every course of one category and add or remove several at once. Each course keeps its own change, so the rest of what it counts for still follows the catalog. The changes are saved together and logged per course.</p>
+        <div class="adm-cat-pick">
+          <label class="adm-field">Program${targetSelect}</label>
+          <label class="adm-field adm-cat-path">Category${pathSelect}</label>
+        </div>
+      </div>
+      ${st.catStatus ? `<div class="adm-saved-line" role="status">${esc(st.catStatus)}</div>` : ''}
+      <div class="adm-form-notice" id="cv-notice" role="alert" hidden></div>
+      ${body}`;
+  },
+
+  _setCategoryTarget(value) {
+    const st = this._courseAdmin;
+    st.catTarget = value;
+    st.catPath = '';
+    st.catSelected = new Set();
+    st.catStatus = '';
+    this._renderCategoryView();
+  },
+
+  _setCategoryPath(value) {
+    const st = this._courseAdmin;
+    st.catPath = value;
+    st.catSelected = new Set();
+    st.catStatus = '';
+    this._renderCategoryView();
+  },
+
+  _toggleCategoryRow(code, on) {
+    const sel = this._courseAdmin.catSelected || (this._courseAdmin.catSelected = new Set());
+    if (on) sel.add(code);
+    else sel.delete(code);
+    const count = document.getElementById('cv-selected');
+    if (count) count.textContent = `${sel.size} selected`;
+  },
+
+  _categoryNotice(msg) {
+    const box = document.getElementById('cv-notice');
+    if (box) {
+      box.textContent = msg || '';
+      box.hidden = !msg;
+    } else if (msg) {
+      showToast(msg);
+    }
+  },
+
+  /** Remove (putBack false) or put back the selected courses. */
+  _categoryBulk(putBack) {
+    const st = this._courseAdmin;
+    const rows = this._categoryRows(st.catTarget, st.catPath);
+    const codes = rows
+      .filter(r => (st.catSelected || new Set()).has(normalizeCourseCode(r.course.course_code)) && (r.state === 'removed') === putBack)
+      .map(r => normalizeCourseCode(r.course.course_code));
+    if (!codes.length) {
+      this._categoryNotice(putBack ? 'Select a course marked Removed here first.' : 'Select a course in this category first.');
+      return;
+    }
+    return this._categoryChange(codes, putBack);
+  },
+
+  /** Add the typed course numbers (separated by commas or spaces) to the category. */
+  _categoryAddCodes() {
+    const st = this._courseAdmin;
+    const input = document.getElementById('cv-add');
+    const codes = [...new Set(String((input && input.value) || '').split(/[\s,;]+/).map(s => normalizeCourseCode(s)).filter(Boolean))];
+    if (!codes.length) {
+      this._categoryNotice('Type one or more course numbers, for example 15-151, 21-127.');
+      return;
+    }
+    const unknown = codes.filter(c => !/^\d{2}-\d{3}$/.test(c) || !lookupCourse(this.courseIndex, c));
+    if (unknown.length) {
+      this._categoryNotice(`${joinWithAnd(unknown)} ${unknown.length === 1 ? 'is' : 'are'} not in the catalog. Add the course on the Courses view first.`);
+      return;
+    }
+    const inNow = new Set(this._categoryRows(st.catTarget, st.catPath)
+      .filter(r => r.state !== 'removed').map(r => normalizeCourseCode(r.course.course_code)));
+    const toAdd = codes.filter(c => !inNow.has(c));
+    if (!toAdd.length) {
+      this._categoryNotice(`${joinWithAnd(codes)} ${codes.length === 1 ? 'is' : 'are'} already in this category.`);
+      return;
+    }
+    return this._categoryChange(toAdd, true);
+  },
+
+  /** One course's change for the category view: { key, value } to put in its "requirements". */
+  _categoryPatchFor(course, target, path, present) {
+    if (String(target).startsWith('minor:')) {
+      const mc = String(target).slice(6);
+      const base = course._added ? [] : this._courseMinorBase(course, mc);
+      const draft = this._courseMinorDraft(course, mc).filter(p => p !== path);
+      if (present) draft.push(path);
+      const add = draft.filter(p => !base.includes(p));
+      const remove = base.filter(p => !draft.includes(p));
+      return { key: MINOR_EDIT_PREFIX + mc, value: add.length || remove.length ? { add, remove } : null };
+    }
+    const rows = ((course.requirements && course.requirements[target]) || []).filter(r => r.requirement !== path);
+    if (present) rows.push({ requirement: path });
+    return { key: target, value: programEditDelta(this._courseBaseRows(course, target), rows) };
+  },
+
+  /** Put the courses in (present true) or take them out of the category, in one batch save. */
+  async _categoryChange(codes, present) {
+    if (this._categorySaving) return;
+    const st = this._courseAdmin;
+    const items = [];
+    for (const code of codes) {
+      const course = lookupCourse(this.courseIndex, code);
+      if (!course) continue;
+      const { key, value } = this._categoryPatchFor(course, st.catTarget, st.catPath, present);
+      const stored = (course._edit && course._edit.requirements) || {};
+      const had = Object.prototype.hasOwnProperty.call(stored, key);
+      if (value ? had && sameRequirementEdit(stored[key], value) : !had) continue;
+      items.push({ course_code: this._courseEditKey(course), requirements: { [key]: value } });
+    }
+    if (!items.length) {
+      this._categoryNotice('Nothing to change.');
+      return;
+    }
+    this._categorySaving = true;
+    const r = await apiBatchEditCourses(items);
+    this._categorySaving = false;
+    if (!r.ok) {
+      this._categoryNotice((r.data && r.data.message) || r.error || 'Could not save the changes. Try again.');
+      return;
+    }
+    await this._reloadCatalog();
+    const label = (this._categoryPaths(st.catTarget).find(p => p.path === st.catPath) || {}).label || st.catPath;
+    const n = items.length;
+    const what = `${n} course${n === 1 ? '' : 's'}`;
+    st.catSelected = new Set();
+    st.catStatus = present ? `Saved: ${what} now in ${label}.` : `Saved: ${what} removed from ${label}.`;
+    if (this._courseAdmin.view === 'category') this._renderCategoryView();
+  },
+
+  // ── Minor settings ────────────────────────────────────────
+  // Corrections to a minor's numbers in minors.json (unit total, double
+  // counting limits) and a note for students; /api/minors/overrides.
+
+  async _openMinorSettings(code) {
+    const st = this._courseAdmin;
+    st.view = 'minors';
+    st.minorCode = code || null;
+    st.minorStatus = '';
+    st.draft = null;
+    if (this._homeView === 'admin-console' && this._adminConsole.tab === 'courses' && document.getElementById('admContent')) {
+      this._renderMinorSettings();
+      return;
+    }
+    await this.showAdminConsole('courses');
+  },
+
+  _closeMinorSettings() {
+    this._courseAdmin.minorCode = null;
+    this._courseAdmin.minorStatus = '';
+    this._renderMinorSettings();
+  },
+
+  _renderMinorSettings() {
+    const el = document.getElementById('admContent');
+    if (!el) return;
+    const st = this._courseAdmin;
+    const idx = this.minorIndex;
+    if (!idx) {
+      el.innerHTML = `${this._courseViewsHtml('minors')}<div class="empty-state"><div class="empty-text">The minor requirements could not be loaded, so their settings cannot be edited now.</div></div>`;
+      return;
+    }
+    const sel = st.minorCode && idx.byCode[st.minorCode] ? st.minorCode : null;
+    const limit = v => (v == null ? 'no limit' : String(v));
+    const list = idx.order.map(code => {
+      const def = idx.byCode[code].def;
+      const rules = minorDoubleCountRules(def);
+      return `
+        <li>
+          <button type="button" class="adm-course-item adm-minor-item${code === sel ? ' is-active' : ''}" onclick="App._openMinorSettings('${code}')">
+            <span class="adm-course-item-body">
+              <span class="adm-course-item-name">${esc(def.name || code)} minor</span>
+              <span class="adm-cell-sub">${def.total_units != null ? esc(String(def.total_units)) + ' units' : 'No unit total'} · shared with the major: ${esc(limit(rules.limit))} · with another minor: ${esc(limit(rules.minorLimit))}</span>
+            </span>
+            <span class="adm-course-item-tags">${def._edit ? '<span class="adm-pill adm-pill-edit">Edited</span>' : ''}</span>
+          </button>
+        </li>`;
+    }).join('');
+    el.innerHTML = `
+      ${this._courseViewsHtml('minors')}
+      <div class="adm-card">
+        <div class="adm-card-title">Minor settings</div>
+        <p class="adm-card-text">Correct a minor's unit total or its double counting limits, or add a note students see in the minor's header. The minor file itself does not change, and Undo all edits goes back to it. Which courses fill a category is edited per course, or in Courses in a category.</p>
+      </div>
+      ${sel ? this._minorSettingsFormHtml(sel) : ''}
+      <ul class="adm-course-list adm-minor-list">${list}</ul>`;
+  },
+
+  _minorSettingsFormHtml(code) {
+    const def = this.minorIndex.byCode[code].def;
+    const file = def._file || {};
+    const rules = minorDoubleCountRules(def);
+    const edit = def._edit;
+    const limitOptions = current => [`<option value=""${current == null ? ' selected' : ''}>No limit</option>`]
+      .concat(Array.from({ length: 11 }, (_, n) => `<option value="${n}"${current === n ? ' selected' : ''}>${n}</option>`)).join('');
+    const fileSays = (field, fmt) => (field in file ? `<span class="adm-field-was">The minor file says: ${esc(fmt(file[field]))}</span>` : '');
+    const units = v => (v == null ? 'no total' : `${v} units`);
+    const lim = v => (v == null ? 'no limit' : String(v));
+    const status = this._courseAdmin.minorStatus;
+    return `
+      <div class="adm-card adm-minor-form" id="ms-form" data-minor="${esc(code)}">
+        <div class="adm-card-row">
+          <div>
+            <div class="adm-card-title">${esc(def.name || code)} minor</div>
+            ${edit && edit.updated_at
+              ? `<p class="adm-cell-sub">Last edited ${esc(this._admWhen(edit.updated_at))}${edit.updated_by_email ? ' by ' + esc(edit.updated_by_email) : ''}</p>`
+              : '<p class="adm-cell-sub">Showing the minor file. Nothing has been changed yet.</p>'}
+          </div>
+          <button type="button" class="adm-btn" onclick="App.openMinorRequirements('${code}')">See the minor</button>
+        </div>
+        <div class="adm-form-grid adm-minor-grid">
+          <label class="adm-field">Total units<input class="adm-search" id="ms-units" inputmode="numeric" value="${def.total_units == null ? '' : esc(String(def.total_units))}" placeholder="No total" />${fileSays('total_units', units)}</label>
+          <label class="adm-field">Courses that may also count toward the major<select class="adm-select" id="ms-major">${limitOptions(rules.limit)}</select>${fileSays('max_with_major', lim)}</label>
+          <label class="adm-field">Courses that may also count toward another minor<select class="adm-select" id="ms-minors">${limitOptions(rules.minorLimit)}</select>${fileSays('max_with_other_minors', lim)}</label>
+          <label class="adm-field adm-field-full">Note for students, shown in the minor's header as a note from CMU-Q<textarea class="adm-search adm-textarea" id="ms-note" rows="3" maxlength="1000">${esc(def.admin_note || '')}</textarea></label>
+        </div>
+        <div class="adm-actions">
+          <button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" id="ms-save" onclick="App._saveMinorSettings('${code}')">Save changes</button>
+          <button type="button" class="adm-btn" onclick="App._closeMinorSettings()">Close</button>
+          <span class="adm-actions-spacer"></span>
+          ${edit ? `<button type="button" class="adm-btn" onclick="App._revertMinorSettings('${code}')" title="Go back to what the minor file says">Undo all edits</button>` : ''}
+          <div class="adm-form-notice" id="ms-notice" role="alert" hidden></div>
+        </div>
+        ${status ? `<div class="adm-saved-line" role="status">${esc(status)}</div>` : ''}
+      </div>`;
+  },
+
+  _minorNotice(msg) {
+    const box = document.getElementById('ms-notice');
+    if (box) {
+      box.textContent = msg || '';
+      box.hidden = !msg;
+    } else if (msg) {
+      showToast(msg);
+    }
+  },
+
+  async _saveMinorSettings(code) {
+    if (this._minorSaving) return;
+    const m = this.minorIndex && this.minorIndex.byCode[code];
+    if (!m) return;
+    const def = m.def;
+    const rules = minorDoubleCountRules(def);
+    const val = id => { const e = document.getElementById(id); return e ? String(e.value == null ? '' : e.value) : ''; };
+    const unitsRaw = val('ms-units').trim();
+    if (unitsRaw && !/^\d{1,3}$/.test(unitsRaw)) {
+      this._minorNotice('Total units must be a whole number, or empty when the minor states no total.');
+      return;
+    }
+    const next = {
+      total_units: unitsRaw === '' ? null : Number(unitsRaw),
+      max_with_major: val('ms-major') === '' ? null : Number(val('ms-major')),
+      max_with_other_minors: val('ms-minors') === '' ? null : Number(val('ms-minors')),
+      admin_note: val('ms-note').trim(),
+    };
+    const now = {
+      total_units: def.total_units == null ? null : def.total_units,
+      max_with_major: rules.limit,
+      max_with_other_minors: rules.minorLimit,
+      admin_note: def.admin_note || '',
+    };
+    const body = {};
+    for (const k of MINOR_SETTING_FIELDS) if (next[k] !== now[k]) body[k] = next[k];
+    if (!Object.keys(body).length) {
+      this._minorNotice('There is nothing to save yet. Change a setting first.');
+      return;
+    }
+    this._minorSaving = true;
+    const r = await apiEditMinor(code, body);
+    this._minorSaving = false;
+    if (!r.ok) {
+      this._minorNotice((r.data && r.data.message) || r.error || 'Could not save the minor settings. Try again.');
+      return;
+    }
+    await this._reloadCatalog();
+    this._courseAdmin.minorStatus = 'Saved. Students see the change the next time they open CountsFor.';
+    this._renderMinorSettings();
+  },
+
+  async _revertMinorSettings(code) {
+    const m = this.minorIndex && this.minorIndex.byCode[code];
+    const name = m ? m.def.name : getMinorLabel(code);
+    if (!confirm(`Undo every change to the ${name} minor settings? It will show exactly what the minor file says.`)) return;
+    const r = await apiRevertMinor(code);
+    if (!r.ok) {
+      this._minorNotice((r.data && r.data.message) || 'Could not undo the edits.');
+      return;
+    }
+    await this._reloadCatalog();
+    this._courseAdmin.minorStatus = 'Edits removed. The minor shows what its file says.';
+    this._renderMinorSettings();
   },
 
   // ── Overview ──────────────────────────────────────────────
@@ -5545,18 +6362,21 @@ const App = {
     const el = document.getElementById('admContent');
     if (!el) return;
     const s = this._adminConsole;
-    const filters = [['', 'Everything'], ['course.', 'Courses'], ['user.', 'User changes'], ['flag.', 'Flag reviews'], ['directory.', 'Faculty access']];
+    const filters = [['', 'Everything'], ['course.', 'Courses'], ['minor.', 'Minors'], ['user.', 'User changes'], ['flag.', 'Flag reviews'], ['directory.', 'Faculty access']];
     const rows = s.activityItems.map(e => `
       <li class="adm-log-row">
         <div class="adm-log-text"><strong>${esc(e.actor_name || e.actor_email)}</strong> ${this._describeAdminEvent(e)}</div>
-        <div class="adm-log-meta" title="${esc(this._admDate(e.created_at))}">${esc(this._admWhen(e.created_at))}</div>
+        <div class="adm-log-side">
+          ${this._adminEventOpenHtml(e)}
+          <div class="adm-log-meta" title="${esc(this._admDate(e.created_at))}">${esc(this._admWhen(e.created_at))}</div>
+        </div>
       </li>`).join('');
     el.innerHTML = `
       <div class="adm-toolbar">
         ${filters.map(([id, label]) => `<button type="button" class="adm-chip ${s.activityAction === id ? 'is-active' : ''}" onclick="App._adminConsole.activityAction='${id}';App._loadAdminActivity(true);">${label}</button>`).join('')}
         <span class="adm-toolbar-count">${s.activityTotal} event${s.activityTotal === 1 ? '' : 's'}</span>
       </div>
-      ${rows ? `<ul class="adm-log">${rows}</ul>` : '<div class="empty-state"><div class="empty-text">Nothing recorded yet. Course edits, role changes, flag reviews and directory edits will show up here.</div></div>'}
+      ${rows ? `<ul class="adm-log">${rows}</ul>` : '<div class="empty-state"><div class="empty-text">Nothing recorded yet. Course and minor edits, role changes, flag reviews and directory edits will show up here.</div></div>'}
       ${s.activityItems.length < s.activityTotal ? `<div class="adm-more"><button type="button" class="adm-btn" onclick="App._adminConsole.activityPage++;App._loadAdminActivity(false);">Show older</button></div>` : ''}`;
   },
 
@@ -5587,22 +6407,119 @@ const App = {
         return `removed ${who} from the directory`;
       case 'directory.revoke':
         return `revoked the elevated access of ${who}`;
-      case 'course.add':
-        return `added the course ${who}${d.name ? ' ' + esc(d.name) : ''}`;
+      case 'course.add': {
+        const reqs = this._admRequirementChanges(d.requirements);
+        return `added the course ${who}${d.name ? ' ' + esc(d.name) : ''}${reqs.length ? '. ' + esc(reqs.join('. ')) : ''}`;
+      }
       case 'course.update': {
-        const labels = { course_code: 'number', course_name: 'name', department: 'department', units: 'units', description: 'description', prerequisites: 'prerequisites', offered_qatar: 'Qatar offering', offered_pitts: 'Pittsburgh offering', offered: 'semesters' };
-        const list = (d.fields || []).map(f => labels[f] || f).join(', ');
-        return `edited ${who}${list ? ': ' + esc(list) : ''}${d.renumbered_from ? ' (was ' + esc(d.renumbered_from) + ')' : ''}`;
+        const parts = d.changes
+          ? Object.entries(d.changes).map(([f, ch]) => this._admFieldChange(f, ch))
+          : (d.fields || []).filter(f => f !== 'counts for' && f !== 'minors').map(f => this.COURSE_FIELD_LOG_LABELS[f] || f);
+        parts.push(...this._admRequirementChanges(d.requirements));
+        if (!d.requirements && (d.fields || []).includes('counts for')) parts.push('what it counts for');
+        if (!d.requirements && (d.fields || []).includes('minors')) parts.push('its minor categories');
+        return `edited ${who}${parts.length ? ': ' + esc(parts.join('. ')) : ''}${d.renumbered_from ? ' (was ' + esc(d.renumbered_from) + ')' : ''}`;
       }
       case 'course.archive':
         return `archived ${who}`;
       case 'course.restore':
         return `restored ${who}`;
-      case 'course.revert':
-        return `undid all edits to ${who}`;
+      case 'course.revert': {
+        const dropped = this._admDroppedText(d.before);
+        if (d.reason) return `saved ${who} back to the catalog version${dropped ? ' (it had ' + esc(dropped) + ')' : ''}`;
+        return `undid all edits to ${who}${dropped ? ' (dropped ' + esc(dropped) + ')' : ''}`;
+      }
+      case 'course.migrate': {
+        const reqs = this._admRequirementChanges(d.after || {});
+        return `moved the saved categories of ${who} to the 2026-27 names${d.deleted ? ', which left no edit' : ''}${reqs.length ? ': ' + esc(reqs.join('. ')) : ''}`;
+      }
+      case 'minor.update': {
+        const name = `<strong>${esc(getMinorLabel(e.target) || e.target || '')} minor</strong>`;
+        const parts = Object.entries(d.changes || {}).map(([f, ch]) => this._admMinorChange(f, ch));
+        return `changed the settings of the ${name}${parts.length ? ': ' + esc(parts.join('. ')) : ''}`;
+      }
+      case 'minor.revert': {
+        const name = `<strong>${esc(getMinorLabel(e.target) || e.target || '')} minor</strong>`;
+        const dropped = Object.keys(d.before || {}).map(f => this.MINOR_FIELD_LOG_LABELS[f] || f).join(', ');
+        return `${d.reason ? 'set the settings of the ' + name + ' back to the minor file' : 'undid all edits to the settings of the ' + name}${dropped ? ' (' + esc(dropped) + ')' : ''}`;
+      }
       default:
         return `${esc(e.action)} ${who}`;
     }
+  },
+
+  COURSE_FIELD_LOG_LABELS: { course_code: 'number', course_name: 'name', department: 'department', units: 'units', description: 'description', prerequisites: 'prerequisites', offered_qatar: 'Qatar offering', offered_pitts: 'Pittsburgh offering', offered: 'semesters' },
+  MINOR_FIELD_LOG_LABELS: { total_units: 'total units', max_with_major: 'courses shared with the major', max_with_other_minors: 'courses shared with another minor', admin_note: 'note for students' },
+
+  /** "units: Schedule of Classes value to 10" (null is the Schedule of Classes value). */
+  _admFieldChange(field, ch) {
+    const label = this.COURSE_FIELD_LOG_LABELS[field] || field;
+    if (field === 'description' || field === 'prerequisites') {
+      return (ch && ch.to != null) ? `${label} changed` : `${label} back to the Schedule of Classes text`;
+    }
+    const show = v => {
+      if (v == null) return 'Schedule of Classes value';
+      if (typeof v === 'boolean') return v ? 'yes' : 'no';
+      if (Array.isArray(v)) return v.length ? v.join(', ') : 'none';
+      return String(v);
+    };
+    return `${label}: ${show(ch && ch.from)} to ${show(ch && ch.to)}`;
+  },
+
+  _admMinorChange(field, ch) {
+    const label = this.MINOR_FIELD_LOG_LABELS[field] || field;
+    if (field === 'admin_note') return (ch && ch.to) ? `${label}: ${ch.to}` : `${label} removed`;
+    const show = v => (v == null ? (field === 'total_units' ? 'no total' : 'no limit') : String(v));
+    return `${label}: ${show(ch && ch.from)} to ${show(ch && ch.to)}`;
+  },
+
+  /** Each changed program or minor of an audit event, in words: "Computer Science: added A; removed B". */
+  _admRequirementChanges(reqs) {
+    const out = [];
+    for (const [key, value] of this._orderedEdits(reqs)) {
+      const minor = key.startsWith(MINOR_EDIT_PREFIX);
+      const code = minor ? key.slice(MINOR_EDIT_PREFIX.length) : key;
+      const m = minor && this.minorIndex ? this.minorIndex.byCode[code] : null;
+      const name = minor ? `${getMinorLabel(code)} minor` : (getProgramLabel(key) || key);
+      const label = p => (minor ? (m ? this._minorCategoryLabel(m, p) : p) : this._courseReqDisplayLabel(p));
+      if (value == null) {
+        out.push(`${name}: back to the ${minor ? 'minor file' : 'catalog'}`);
+      } else if (Array.isArray(value)) {
+        out.push(`${name}: whole list of ${value.length} categor${value.length === 1 ? 'y' : 'ies'}`);
+      } else {
+        const bits = [];
+        const added = (value.add || []).map(r => (typeof r === 'string' ? r : r && r.requirement)).filter(Boolean);
+        if (added.length) bits.push('added ' + added.map(label).join(', '));
+        if ((value.remove || []).length) bits.push('removed ' + value.remove.map(label).join(', '));
+        out.push(`${name}: ${bits.join('; ') || 'no change'}`);
+      }
+    }
+    return out;
+  },
+
+  /** What a revert dropped, from its "before": "units, name, Computer Science categories, the archive". */
+  _admDroppedText(before) {
+    if (!before) return '';
+    const parts = Object.keys(before.fields || {}).map(f => this.COURSE_FIELD_LOG_LABELS[f] || f);
+    for (const [key] of this._orderedEdits(before.requirements)) {
+      parts.push(key.startsWith(MINOR_EDIT_PREFIX)
+        ? `${getMinorLabel(key.slice(MINOR_EDIT_PREFIX.length))} minor categories`
+        : `${getProgramLabel(key) || key} categories`);
+    }
+    if (before.archived) parts.push('the archive');
+    return parts.join(', ');
+  },
+
+  /** An Open button for a course or minor event, when its target is a plain code. */
+  _adminEventOpenHtml(e) {
+    const target = String(e.target || '');
+    if (String(e.action).startsWith('course.') && /^\d{2}-\d{3}$/.test(target)) {
+      return `<button type="button" class="adm-btn adm-btn-small" onclick="App._editCourseInAdmin('${target}')" aria-label="Open ${target} in the course editor">Open</button>`;
+    }
+    if (String(e.action).startsWith('minor.') && /^[a-z0-9_]+$/.test(target)) {
+      return `<button type="button" class="adm-btn adm-btn-small" onclick="App._openMinorSettings('${target}')" aria-label="Open the ${esc(getMinorLabel(target) || target)} minor settings">Open</button>`;
+    }
+    return '';
   },
 
   // ══════════════════════════════════════════════════════════
@@ -6138,7 +7055,19 @@ const App = {
     const lines = [];
     for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${esc(note)}</div>`);
     if (node.missing && node.missing.length) {
-      lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${esc(joinWithAnd(node.missing))}.</div>`);
+      const archivedCodes = new Set();
+      for (const c of this._archivedCourses || []) {
+        archivedCodes.add(normalizeCourseCode(c.course_code));
+        if (c._catalog && c._catalog.course_code) archivedCodes.add(normalizeCourseCode(c._catalog.course_code));
+      }
+      const archived = node.missing.filter(code => archivedCodes.has(code));
+      const missing = node.missing.filter(code => !archivedCodes.has(code));
+      if (archived.length) lines.push(`<div class="mn-node-note">Archived on the admin page: ${esc(joinWithAnd(archived))}.</div>`);
+      if (missing.length) lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${esc(joinWithAnd(missing))}.</div>`);
+    }
+    if (canManageUsers(this.authedUser)) {
+      if ((node.adminAdded || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Added on the admin page: ${esc(joinWithAnd(node.adminAdded))}.</div>`);
+      if ((node.adminRemoved || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Removed on the admin page: ${esc(joinWithAnd(node.adminRemoved))}.</div>`);
     }
     if (!(node.children || []).length) {
       if (!(node.courses || []).length) {
@@ -6381,6 +7310,9 @@ const App = {
       else if (isMinorBlockedForMajor(code, p.primary)) actionHtml = `<span class="mn-pill">Not open to ${esc(p.primary)} majors</span>`;
       else actionHtml = `<button type="button" class="mn-add-btn" data-action="minor-add" data-minor="${esc(code)}">Add to my minors</button>`;
     }
+    if (mode === 'browse' && canManageUsers(this.authedUser) && /^[a-z0-9_]+$/.test(code)) {
+      actionHtml += `<button type="button" class="mn-add-btn mn-admin-btn" onclick="App._openMinorSettings('${code}')">Edit minor settings</button>`;
+    }
 
     const meta = [];
     if (def.title) meta.push(`<span>${esc(def.title)}</span>`);
@@ -6413,6 +7345,13 @@ const App = {
       warnHtml = minorDoubleCountWarnings(check, def, majorCode)
         .map(w => `<div class="mn-warn" role="note">${this._iconWarn()}<span>${esc(w)}</span></div>`).join('');
     }
+
+    // Set on the admin page (applyMinorOverrides): a note from CMU-Q, and a limit that replaces the quoted rule.
+    let adminHtml = '';
+    if (dc.edited) {
+      adminHtml += `<div class="mn-dc-rule mn-dc-edited">${ruleText ? 'CMU-Q updated this limit, so it replaces the rule quoted above.' : 'CMU-Q set this limit.'}</div>`;
+    }
+    if (def.admin_note) adminHtml += `<div class="mn-admin-note" role="note"><span class="mn-dc-label">Note from CMU-Q</span> ${esc(def.admin_note)}</div>`;
 
     const group = (title, items) => (items && items.length
       ? `<div class="mn-about-group"><div class="mn-about-title">${title}</div><ul>${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>`
@@ -6448,6 +7387,7 @@ const App = {
           ${version}
           ${progressHtml}
           ${dcHtml}
+          ${adminHtml}
           ${warnHtml}
           ${aboutHtml}
         </header>
