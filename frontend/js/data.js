@@ -116,6 +116,8 @@ setRule('IS', 'Information systems concentration', { type: 'pick', n: 1, label: 
 setRule('IS', 'IS Concentrations', { type: 'pick', n: 1, label: 'Choose 1' });
 setRule('IS', 'Data Science', { type: 'min_units', units: 36, label: 'At least 36 units' });
 setRule('IS', 'Information Security & Privacy', { type: 'min_units', units: 36, label: 'At least 36 units' });
+// New 2026-27 CMU-Q concentration; the catalog lists no courses yet (an admin adds them).
+setRule('IS', 'Emerging Technology Management', { type: 'min_units', units: 36, label: 'At least 36 units' });
 setRule('IS', 'Digitalization', { type: 'min_units', units: 36, label: 'At least 36 units' });
 setRule('IS', 'Data Science Technical Core', { type: 'pick', n: 1, label: 'Choose 1 or more' });
 setRule('IS', 'Data Science Applications', { type: 'pick', n: 1, label: 'Choose 1 or more' });
@@ -284,10 +286,11 @@ setRule('AI', 'Laboratory Requirement', { type: 'pick', n: 1, label: 'Choose 1' 
 setRule('AI', 'Humanities and Arts', { type: 'min_units', units: 63, label: 'At least 63 units' });
 setRule('AI', 'A. First Year Writing Requirement', { type: 'min_units', units: 9, label: '9 units (1 course or 2 minis)' });
 setRule('AI', 'B. Breadth Requirement', { type: 'take_all', units: 27, label: 'One from each category' });
+// Category 1A replaces Category 1 for AI majors and comes first, as on the SCS page.
+setRule('AI', 'Category 1A: Cognitive Studies', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 setRule('AI', 'Category 2: Economic, Political and Social Institutions', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 setRule('AI', 'Category 3: Cultural Analysis', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 setRule('AI', 'C. Humanities and Arts Electives', { type: 'min_units', n: 3, units: 27, label: '3 courses (at least 27 units)' });
-setRule('AI', 'Category 1A: Cognitive Studies', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 
 // ── Rows the app keeps but never lists ───────────────────────
 // qatar_only is set by backend/scraper/apply_mapping_overlays.py from
