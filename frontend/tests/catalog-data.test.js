@@ -1,7 +1,7 @@
 // Checks on the served catalog, data/courses.json, against js/data.js: every
 // requirement path uses a known root and catalog bucket names, every bucket
 // has a rule chip, LABEL_OVERRIDES and FULFILLMENT_RULES have no stale keys,
-// and rows kept from an earlier requirement carry a reason.
+// and every row has the same plain shape (no earlier requirement flag).
 //
 // Node only: it reads the 30 MB catalog with fs, so scripts/run-data-tests.js
 // loads it with require() and tests/test.html does not include it. It runs
@@ -59,7 +59,7 @@ test('catalog: bucket names have no dash punctuation, stray spaces or trailing c
   assertEqual([...bad], []);
 });
 
-test('catalog: every bucket gets a rule chip (its own, or an earlier-catalog parent)', () => {
+test('catalog: every bucket gets a rule chip (its own, or one from a parent bucket)', () => {
   const missing = new Set();
   const seen = new Set();
   for (const { prog, row } of rows()) {
@@ -90,20 +90,15 @@ test('catalog: LABEL_OVERRIDES and FULFILLMENT_RULES have no stale keys', () => 
   }
 });
 
-test('catalog: earlier rows carry a short plain reason; current rows carry none', () => {
+test('catalog: every row is requirement, type and major (a rule row adds source: rule); no earlier flag', () => {
+  // Courses from the older CMU-Q audits count like the rest (decision of
+  // 2026-11-10): no row carries "earlier" or "earlier_reason".
   const bad = [];
-  let earlier = 0;
   for (const { code, prog, row } of rows()) {
-    if (row.earlier) {
-      earlier++;
-      const why = row.earlier_reason;
-      if (row.earlier !== true || typeof why !== 'string' || !why || why.length > 80 || DASH_RE.test(why) || SPACED_HYPHEN_RE.test(why)) {
-        bad.push(`${prog} ${code}: ${JSON.stringify(why)}`);
-      }
-    } else if ('earlier' in row || 'earlier_reason' in row) {
-      bad.push(`${prog} ${code}: flag fields on a current row`);
-    }
+    const keys = Object.keys(row).sort().join(',');
+    const plain = keys === 'major,requirement,type';
+    const rule = keys === 'major,requirement,source,type' && row.source === 'rule';
+    if (!plain && !rule) bad.push(`${prog} ${code}: ${keys}`);
   }
   assertEqual(bad.slice(0, 10), []);
-  assertTrue(earlier > 0, 'some rows are kept from an earlier requirement');
 });

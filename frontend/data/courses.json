@@ -21,9 +21,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -32,16 +30,12 @@
           {
             "requirement": "BS in Biological Sciences---Mathematics, Physics and Computer Science---Programming for Scientists",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "renumbered as 02-120"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "renumbered as 02-120"
+            "major": "BS"
           }
         ]
       },
@@ -973,9 +967,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -1028,16 +1020,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -1098,9 +1086,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -1877,9 +1863,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -2194,9 +2178,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -2588,9 +2570,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -2770,16 +2750,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -3052,9 +3028,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -3185,9 +3159,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -3327,9 +3299,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -3554,9 +3524,7 @@
           {
             "requirement": "GenEd---Science and Engineering---Laboratory Requirement",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -3576,9 +3544,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -3591,13 +3557,6 @@
             "requirement": "GenEd---Science and Engineering",
             "type": true,
             "major": "AI"
-          },
-          {
-            "requirement": "GenEd---Science and Engineering---Laboratory Requirement",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
           }
         ]
       },
@@ -3841,9 +3800,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -4115,9 +4072,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Undergraduate Colloquium for Sophomores",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -5062,9 +5017,7 @@
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Genetics and Molecular Biology Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -5553,9 +5506,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -5859,16 +5810,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Honors Biochemistry",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -6227,9 +6174,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 02-250"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -6244,25 +6189,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Introduction to Computational Biology",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 02-250"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---A. Life Sciences",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 02-250"
+            "major": "BS"
           }
         ]
       },
@@ -6302,9 +6234,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Introduction to Computational Biology",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -6351,9 +6281,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Introduction to Computational Biology",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -6400,9 +6328,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "renumbered as 03-133"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -6569,9 +6495,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Undergraduate Colloquium for Sophomores",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -6798,23 +6722,17 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Cell and Developmental Biology Track---And any TWO (2) of the following",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Genetics and Molecular Biology Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -6862,16 +6780,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Genetics and Molecular Biology Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -8311,9 +8225,7 @@
           {
             "requirement": "GenEd---Science and Engineering---Laboratory Requirement",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 02-262"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -8346,13 +8258,6 @@
             "requirement": "GenEd---Science and Engineering",
             "type": true,
             "major": "AI"
-          },
-          {
-            "requirement": "GenEd---Science and Engineering---Laboratory Requirement",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 02-262"
           }
         ]
       },
@@ -8772,9 +8677,7 @@
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Neuroscience Track---And TWO (2) or THREE (3) of the following for a total of FIVE (5) courses",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Neuroscience Track---At least TWO (2) of the following",
@@ -9006,9 +8909,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -9368,9 +9269,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Undergraduate Colloquium for Sophomores",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -9470,9 +9369,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Undergraduate Colloquium for Sophomores",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -9926,9 +9823,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -10153,16 +10048,12 @@
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Biochemistry Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Options---Biophysics---Required Biology Electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -14078,16 +13969,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 02-512"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Options---Computational Biology---Recommended Biology Electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ]
       },
@@ -14130,30 +14017,22 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Departmental Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Biochemistry Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Options---Biophysics---Recommended Biology Electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Neuroscience Track---And TWO (2) or THREE (3) of the following for a total of FIVE (5) courses",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -17731,9 +17610,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Computer Science Core",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -22738,9 +22615,7 @@
           {
             "requirement": "BS in Biological Sciences---Chemistry---Organic Chemistry I",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---B. Physical Sciences",
@@ -22948,9 +22823,7 @@
           {
             "requirement": "BS in Biological Sciences---Chemistry---Organic Chemistry II",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -23152,9 +23025,7 @@
           {
             "requirement": "BS in Biological Sciences---Chemistry---Techniques in Quantitative Analysis",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---B. Physical Sciences",
@@ -23607,9 +23478,7 @@
           {
             "requirement": "BS in Biological Sciences---Chemistry---Techniques for Organic Synthesis and Analysis",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -23983,9 +23852,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -24002,16 +23869,7 @@
             "major": "BA"
           }
         ],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [
         {
@@ -24977,9 +24835,7 @@
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Genetics and Molecular Biology Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -25183,16 +25039,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Interdisciplinary Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Biochemistry Track---And any THREE (3) of the following",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -25239,9 +25091,7 @@
           {
             "requirement": "BS in Biological Sciences---Options---Computational Biology---Recommended Biology Electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -25518,9 +25368,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---One Artificial Intelligence elective",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "CS"
           },
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
@@ -27070,9 +26918,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -27080,9 +26926,7 @@
           {
             "requirement": "GenEd---University Core---Scientific Reasoning",
             "type": true,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -27111,9 +26955,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -27433,9 +27275,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -29125,9 +28965,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -32296,9 +32134,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -32620,9 +32456,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -35158,9 +34992,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -35207,9 +35039,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -37145,9 +36975,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -37672,9 +37500,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -37695,9 +37521,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -37726,9 +37550,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -37743,9 +37565,7 @@
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---D. STEM Course",
@@ -37776,9 +37596,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -37978,9 +37796,7 @@
           {
             "requirement": "BS in Biological Sciences---Options---Computational Biology---Required Biology Electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -43504,9 +43320,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---One Artificial Intelligence elective",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
@@ -44095,9 +43909,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 07-300"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -44574,9 +44386,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---One Logics/Languages elective",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
@@ -47417,9 +47227,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---One Logics/Languages elective",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
@@ -48593,9 +48401,7 @@
           {
             "requirement": "BS in Biological Sciences---Options---Computational Biology---Recommended Biology Electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -49787,9 +49593,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---One Domains elective",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "renumbered as 15-362"
+            "major": "CS"
           },
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
@@ -50616,9 +50420,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -53850,23 +53652,12 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
         "BA": [],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [],
       "offerings": []
@@ -55798,9 +55589,7 @@
           {
             "requirement": "BS in Computer Science---Computer Science---Computer Science Core",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 15-213"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -58863,23 +58652,12 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
         "BA": [],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [],
       "offerings": []
@@ -59273,9 +59051,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -59285,15 +59061,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---B. Science and Society Course",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -59520,9 +59287,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -59532,15 +59297,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---B. Science and Society Course",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -59589,23 +59345,12 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
         "BA": [],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [],
       "offerings": []
@@ -60489,9 +60234,7 @@
           {
             "requirement": "BS in Biological Sciences---Mathematics, Physics and Computer Science---Differential and Integral Calculus",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           }
         ]
       },
@@ -63292,16 +63035,12 @@
           {
             "requirement": "BS in Biological Sciences---Mathematics, Physics and Computer Science---Integration and Approximation",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ]
       },
@@ -65627,9 +65366,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Interdisciplinary Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
@@ -66772,9 +66509,7 @@
           {
             "requirement": "BS in Biological Sciences---Options---Computational Biology---Any ONE of the following courses",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
@@ -69962,18 +69697,14 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Quantitative Analysis and Research Methods",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
           {
             "requirement": "BS in Business Administration---Business Foundations---Mathematics---Optimization for Business",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -70025,16 +69756,12 @@
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Biochemistry Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Options---Biophysics---Required Biology Electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
@@ -71483,16 +71210,12 @@
           {
             "requirement": "BS in Biological Sciences---Core Areas of Study---Biochemistry Track---TWO (2) required biology electives",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Options---Computational Biology---Any ONE of the following courses",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---C. Mathematics, Statistics, and Computer Science",
@@ -78691,9 +78414,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 09-291"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -78704,16 +78425,7 @@
           }
         ],
         "BA": [],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 09-291"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [
         {
@@ -81666,9 +81378,7 @@
           {
             "requirement": "BS in Biological Sciences---Mathematics, Physics and Computer Science---Physics I for Science Students",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "renumbered as 33-121"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -81714,9 +81424,7 @@
           {
             "requirement": "BS in Biological Sciences---Mathematics, Physics and Computer Science---Physics II for Biological Sciences and Chemistry Students",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           }
         ],
         "AI": [
@@ -85529,9 +85237,7 @@
           {
             "requirement": "BS in Biological Sciences---Mathematics, Physics and Computer Science---Physics I for Science Students",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---B. Physical Sciences",
@@ -85787,9 +85493,7 @@
           {
             "requirement": "BS in Biological Sciences---Mathematics, Physics and Computer Science---Physics II for Biological Sciences and Chemistry Students",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Technical Breadth Requirements---B. Physical Sciences",
@@ -88095,9 +87799,7 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Interdisciplinary Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BS"
           }
         ]
       },
@@ -88141,9 +87843,7 @@
           {
             "requirement": "GenEd---Foundations---Data Analysis",
             "type": true,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -89162,9 +88862,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Quantitative Analysis and Research Methods",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [],
@@ -90523,9 +90221,7 @@
           {
             "requirement": "BS in Computer Science---Mathematics---Plus one of the following Probability choices",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           }
         ],
         "IS": [
@@ -91003,9 +90699,7 @@
           {
             "requirement": "BS in Computer Science---Mathematics---Plus one of the following Probability choices",
             "type": false,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -91408,16 +91102,12 @@
           {
             "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Interdisciplinary Electives Group",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           },
           {
             "requirement": "BS in Biological Sciences---Options---Computational Biology---Any ONE of the following courses",
             "type": false,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BS"
           }
         ]
       },
@@ -93296,9 +92986,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -93308,15 +92996,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---A. First-Year Courses---First-Year Seminar",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -93449,9 +93128,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -93461,15 +93138,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---A. First-Year Courses---First-Year Seminar",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -94328,9 +93996,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -94340,15 +94006,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---C. ENGAGE Courses",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -94618,9 +94275,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -94630,15 +94285,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -94677,9 +94323,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -94689,15 +94333,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---C. ENGAGE Courses",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -94975,9 +94610,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -94987,15 +94620,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---C. ENGAGE Courses",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -95172,23 +94796,12 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
         "BA": [],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [],
       "offerings": []
@@ -95214,9 +94827,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -95226,15 +94837,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---B. Science and Society Course",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -95437,9 +95039,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -95449,15 +95049,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---C. ENGAGE Courses",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -95687,9 +95278,7 @@
           {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -95699,15 +95288,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---C. ENGAGE Courses",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -108185,9 +107765,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Professional Communications",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -108312,9 +107890,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Orthogonal Topics",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           },
           {
             "requirement": "GenEd---Foundations---Computational Thinking",
@@ -110907,9 +110483,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Enabling Methods, Techniques and Tools",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -110974,9 +110548,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Enabling Methods, Techniques and Tools",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -111196,9 +110768,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Enabling Methods, Techniques and Tools",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -111285,9 +110855,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Orthogonal Topics",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -111384,9 +110952,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Quantitative Analysis and Research Methods",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -112791,9 +112357,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Core",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -114430,9 +113994,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Summative Course",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -115023,9 +114585,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Innovation and Entrepreneurship",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -123432,9 +122992,7 @@
           {
             "requirement": "GenEd---Foundations---Data Analysis",
             "type": true,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -123890,9 +123448,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Quantitative Analysis and Research Methods",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -124267,9 +123823,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -124346,9 +123900,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -124376,9 +123928,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -124457,9 +124007,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -124497,9 +124045,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -124636,9 +124182,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Business Foundations---Mathematics---Optimization for Business",
@@ -125254,9 +124798,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -126318,9 +125860,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Orthogonal Topics",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -128187,9 +127727,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Orthogonal Topics",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           },
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Professional Communications",
@@ -128380,9 +127918,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -128398,15 +127934,6 @@
             "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
             "type": true,
             "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
           }
         ]
       },
@@ -131507,9 +131034,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Orthogonal Topics",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           },
           {
             "requirement": "BS in Information Systems---Information systems concentration---Approved minors---Business Administration---Electives",
@@ -132610,9 +132135,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Business Core---Management Game",
@@ -132889,9 +132412,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Entrepreneurship---Choose 2 remaining courses from",
@@ -132983,9 +132504,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -133015,9 +132534,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -133065,9 +132582,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Entrepreneurship---Required",
@@ -133390,9 +132905,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Entrepreneurship---Required",
@@ -133526,9 +133039,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -133584,9 +133095,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -133617,9 +133126,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -133651,9 +133158,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Accounting---Choose 3 remaining courses from",
@@ -133742,9 +133247,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -133778,9 +133281,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Accounting---Required",
@@ -133870,9 +133371,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -133903,9 +133402,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Accounting---Choose 3 remaining courses from",
@@ -133946,9 +133443,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Accounting---Choose 3 remaining courses from",
@@ -134034,9 +133529,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134075,9 +133568,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": [
@@ -134118,9 +133609,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134147,9 +133636,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134176,9 +133663,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134209,9 +133694,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Strategic Management---Required",
@@ -134221,9 +133704,7 @@
           {
             "requirement": "BS in Business Administration---Concentration---Strategic Management---Choose 3 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134356,9 +133837,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Entrepreneurship---Choose 2 remaining courses from",
@@ -134442,9 +133921,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134480,16 +133957,12 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Strategic Management---Choose 3 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134517,9 +133990,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134560,9 +134031,7 @@
           {
             "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Digitalization---Enabling Methods, Techniques and Tools",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           },
           {
             "requirement": "BS in Information Systems---Information systems concentration---Approved minors---Business Administration---Electives",
@@ -134574,9 +134043,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Entrepreneurship---Choose 2 remaining courses from",
@@ -134706,9 +134173,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Operations Management---Choose 2 remaining courses from",
@@ -134774,9 +134239,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134806,9 +134269,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134841,9 +134302,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -134873,9 +134332,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Product Management---Required",
@@ -134986,16 +134443,12 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Operations Management---Choose 2 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -135037,9 +134490,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Business Analytics and Technologies---Choose 3 remaining courses from",
@@ -135148,9 +134599,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -135301,9 +134750,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Business Analytics and Technologies---Choose 3 remaining courses from",
@@ -135376,9 +134823,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Business Analytics and Technologies---Choose 3 remaining courses from",
@@ -135486,9 +134931,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Operations Management---Choose 2 remaining courses from",
@@ -135552,9 +134995,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -135608,23 +135049,17 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Strategic Management---Required",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "honors or older alternative"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Strategic Management---Choose 3 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -135661,9 +135096,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Business Analytics and Technologies---Required, choose 1 from",
@@ -135829,9 +135262,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -135927,9 +135358,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Business Analytics and Technologies---Choose 3 remaining courses from",
@@ -136076,9 +135505,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Operations Management---Required",
@@ -136139,16 +135566,12 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Operations Management---Choose 2 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136177,9 +135600,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Operations Management---Choose 2 remaining courses from",
@@ -136214,16 +135635,12 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Operations Management---Choose 2 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136250,9 +135667,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136284,9 +135699,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136323,9 +135736,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Marketing Management---Required",
@@ -136445,9 +135856,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Marketing Management---Choose 3 remaining courses from",
@@ -136515,9 +135924,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Marketing Management---Choose 3 remaining courses from",
@@ -136602,9 +136009,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Finance---Choose 2 remaining courses from",
@@ -136641,9 +136046,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Marketing Management---Choose 3 remaining courses from",
@@ -136725,9 +136128,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136755,9 +136156,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136784,9 +136183,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136813,16 +136210,12 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Finance---Choose 2 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136850,9 +136243,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -136915,9 +136306,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Finance---Required",
@@ -137106,9 +136495,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Finance---Choose 2 remaining courses from",
@@ -137297,9 +136684,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -137335,9 +136720,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Finance---Required",
@@ -137522,9 +136905,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Entrepreneurship---Choose 2 remaining courses from",
@@ -137586,9 +136967,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Finance---Choose 2 remaining courses from",
@@ -137674,9 +137053,7 @@
           {
             "requirement": "BS in Business Administration---Business Electives",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Accounting---Choose 3 remaining courses from",
@@ -145080,16 +144457,12 @@
           {
             "requirement": "BS in Business Administration---Concentration---Finance---Choose 2 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           },
           {
             "requirement": "BS in Business Administration---Concentration---Global Economics and Business---Choose 2 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": [
@@ -146036,9 +145409,7 @@
           {
             "requirement": "BS in Business Administration---Concentration---Global Economics and Business---Choose 2 remaining courses from",
             "type": false,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": []
@@ -157674,9 +157045,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -157705,13 +157074,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -158686,9 +158048,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -158712,13 +158072,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -167458,9 +166811,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -167484,13 +166835,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -178130,9 +177474,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -178167,13 +177509,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -180138,9 +179473,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "cross-listed with 66-213"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
@@ -181882,9 +181215,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -181913,13 +181244,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -182100,9 +181424,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -182137,13 +181459,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -183888,9 +183203,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -183914,13 +183227,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -184170,9 +183476,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -184196,13 +183500,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -185368,9 +184665,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -185394,13 +184689,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -186910,9 +186198,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -186941,13 +186227,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -188183,9 +187462,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -188209,13 +187486,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -200716,9 +199986,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
@@ -200729,16 +199997,7 @@
             "major": "BA"
           }
         ],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [
         {
@@ -204110,9 +203369,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -204141,13 +203398,6 @@
           }
         ],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -213673,9 +212923,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -213687,13 +212935,6 @@
         "BA": [],
         "BS": [],
         "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 2: Economic, Political and Social Institutions",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
@@ -215608,9 +214849,7 @@
           {
             "requirement": "GenEd---University Core---Scientific Reasoning",
             "type": true,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": [
@@ -216622,9 +215861,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "renumbered as 85-100"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -217644,9 +216881,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Professional Communications",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [
@@ -217763,9 +216998,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "the listed course is now 85-450"
+            "major": "BS"
           },
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
@@ -218134,16 +217367,12 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Science and Engineering",
@@ -218173,13 +217402,6 @@
         ],
         "AI": [
           {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          },
-          {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
             "major": "AI"
@@ -218188,13 +217410,6 @@
             "requirement": "GenEd---Science and Engineering---Laboratory Requirement",
             "type": true,
             "major": "AI"
-          },
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1A: Cognitive Studies",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
           }
         ]
       },
@@ -218378,9 +217593,7 @@
           {
             "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "CS"
           },
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
@@ -224079,9 +223292,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Professional Communications",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [],
@@ -224128,9 +223339,7 @@
           {
             "requirement": "BS in Information Systems---Information Systems Breadth---Professional Communications",
             "type": false,
-            "major": "IS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "IS"
           }
         ],
         "BA": [],
@@ -234598,23 +233807,12 @@
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
         "BA": [],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [],
       "offerings": []
@@ -234637,23 +233835,12 @@
           {
             "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
             "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "CS"
           }
         ],
         "IS": [],
         "BA": [],
-        "BS": [],
-        "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          }
-        ]
+        "BS": []
       },
       "soc_sections": [],
       "offerings": []
@@ -235595,9 +234782,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -235728,9 +234913,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -235957,9 +235140,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -236090,9 +235271,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -236315,9 +235494,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -236348,9 +235525,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -236577,9 +235752,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -236806,9 +235979,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -237035,9 +236206,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -237168,9 +236337,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -237325,9 +236492,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },
@@ -237407,9 +236572,7 @@
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
             "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
+            "major": "BS"
           }
         ]
       },

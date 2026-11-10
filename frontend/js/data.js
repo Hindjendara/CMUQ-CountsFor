@@ -242,7 +242,7 @@ setRule('BS', 'And any TWO (2) or THREE (3) of the following for a total of FIVE
 setRule('BS', 'And TWO (2) or THREE (3) of the following for a total of FIVE (5) courses', { type: 'pick', n: 2, label: 'Choose 2 or 3 (no more than 9 units at the 100 level)' });
 setRule('BS', 'A maximum of one elective can be (with advisor approval)', { type: 'max_courses', n: 1, label: 'Up to 1, with advisor approval' });
 setRule('BS', 'A maximum of one elective can be', { type: 'max_courses', n: 1, label: 'Up to 1' });
-setRule('BS', 'Options', { type: 'optional', label: 'Earlier catalog only' });
+setRule('BS', 'Options', { type: 'optional', label: 'Optional' });
 setRule('BS', 'Technical Breadth Requirements', { type: 'take_all', label: "4 courses; met by this degree's required courses" });
 setRule('BS', 'A. Life Sciences', { type: 'min_units', units: 9, label: 'At least 9 units, not 03-xxx (02-250 for this degree)' });
 setRule('BS', 'B. Physical Sciences', { type: 'min_units', units: 9, label: 'At least 9 units (09-105, 09-106, 33-121, 33-122 for this degree)' });
@@ -343,9 +343,6 @@ function buildRequirementTree(courses, majorCode) {
         type: req.type, // true = gened, false = core
         prerequisites: course.prerequisites,
         offered: course.offered || [],
-        // Listed in an earlier version of the requirement, not in the 2026-27 catalog.
-        earlier: !!req.earlier,
-        earlierReason: req.earlier_reason || '',
       });
       node.isGenEd = req.type;
     }
@@ -372,10 +369,6 @@ function normalizeTree(node, majorCode, depth) {
   // Array sort is stable, so buckets without a rule keep their first-seen order.
   childArray.sort((a, b) => ruleOrder(majorCode, a.rawLabel) - ruleOrder(majorCode, b.rawLabel));
   node.children = childArray;
-  // Current courses first, then the ones kept from an earlier requirement.
-  if (node.courses && node.courses.length) {
-    node.courses.sort((a, b) => (a.earlier ? 1 : 0) - (b.earlier ? 1 : 0));
-  }
   return node;
 }
 
@@ -614,8 +607,6 @@ function getCourseMappings(course) {
         fullPath: req.requirement,
         isGenEd: req.type,
         parts: parts,
-        earlier: !!req.earlier,
-        earlierReason: req.earlier_reason || '',
       };
     });
   }
