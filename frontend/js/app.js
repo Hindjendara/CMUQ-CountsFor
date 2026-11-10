@@ -4784,6 +4784,18 @@ const App = {
     return m && course ? minorFileCategories(m.def, course) : [];
   },
 
+  /** The codes of a list that are archived on the admin page, by their number now or their catalog number. */
+  _archivedCodesIn(codes) {
+    const list = this._archivedCourses || [];
+    if (!codes || !codes.length || !list.length) return [];
+    const archived = new Set();
+    for (const c of list) {
+      archived.add(normalizeCourseCode(c.course_code));
+      if (c._catalog && c._catalog.course_code) archived.add(normalizeCourseCode(c._catalog.course_code));
+    }
+    return codes.filter(code => archived.has(normalizeCourseCode(code)));
+  },
+
   /** A course's categories in a minor after its saved edit: the file's, minus removals, plus additions. */
   _courseMinorDraft(course, code) {
     const base = this._courseMinorBase(course, code);
@@ -7052,19 +7064,15 @@ const App = {
 
   /** Notes, codes missing from the catalog and empty states inside a minor category. */
   _minorNodeInfoHtml(node) {
+    // A listed code archived on the admin page is named as archived, not as missing from the catalog.
+    const archived = this._archivedCodesIn(node.missing);
+    if (archived.length) node = Object.assign({}, node, { missing: node.missing.filter(code => !archived.includes(code)) });
     const lines = [];
     for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${esc(note)}</div>`);
     if (node.missing && node.missing.length) {
-      const archivedCodes = new Set();
-      for (const c of this._archivedCourses || []) {
-        archivedCodes.add(normalizeCourseCode(c.course_code));
-        if (c._catalog && c._catalog.course_code) archivedCodes.add(normalizeCourseCode(c._catalog.course_code));
-      }
-      const archived = node.missing.filter(code => archivedCodes.has(code));
-      const missing = node.missing.filter(code => !archivedCodes.has(code));
-      if (archived.length) lines.push(`<div class="mn-node-note">Archived on the admin page: ${esc(joinWithAnd(archived))}.</div>`);
-      if (missing.length) lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${esc(joinWithAnd(missing))}.</div>`);
+      lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${esc(joinWithAnd(node.missing))}.</div>`);
     }
+    if (archived.length) lines.push(`<div class="mn-node-note">Archived on the admin page: ${esc(joinWithAnd(archived))}.</div>`);
     if (canManageUsers(this.authedUser)) {
       if ((node.adminAdded || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Added on the admin page: ${esc(joinWithAnd(node.adminAdded))}.</div>`);
       if ((node.adminRemoved || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Removed on the admin page: ${esc(joinWithAnd(node.adminRemoved))}.</div>`);

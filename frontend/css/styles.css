@@ -1243,15 +1243,6 @@ body.is-resizing-panels * {
   color: var(--minor-accent-text); margin-right: 4px;
 }
 .mn-dc-rule { margin-top: 3px; font-size: 11.5px; color: var(--text-tertiary); }
-.mn-dc-edited { margin-top: 4px; padding: 0 10px; color: var(--minor-accent-text); }
-.mn-admin-note {
-  margin-top: 8px; padding: 8px 10px;
-  border-radius: 8px; border-left: 3px solid var(--minor-accent);
-  background: var(--bg-secondary); color: var(--text-primary);
-  font-size: 12.5px; line-height: 1.45; white-space: pre-line;
-}
-.mn-node-admin { color: var(--major-ba-text); }
-.mn-admin-btn { background: var(--bg-card); color: var(--minor-accent-text); }
 .mn-warn {
   display: flex; align-items: flex-start; gap: 8px;
   margin-top: 8px; padding: 8px 10px;
@@ -4438,6 +4429,17 @@ body.view-split .directory-fab { display: none; }
 .adm-minor-item.is-active { background: var(--bg-tree-hover); box-shadow: inset 3px 0 0 var(--cmu-red); }
 .adm-minor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 14px 0 6px; }
 .adm-minor-grid .adm-select { width: 100%; }
+
+/* What admins set, as shown on the minors themselves (after the .mn-* rules it adjusts). */
+.mn-dc-edited { margin-top: 4px; padding: 0 10px; color: var(--minor-accent-text); }
+.mn-admin-note {
+  margin-top: 8px; padding: 8px 10px;
+  border-radius: 8px; border-left: 3px solid var(--minor-accent);
+  background: var(--bg-secondary); color: var(--text-primary);
+  font-size: 12.5px; line-height: 1.45; white-space: pre-line;
+}
+.mn-node-admin { color: var(--major-ba-text); }
+.mn-admin-btn { background: var(--bg-card); color: var(--minor-accent-text); }
 
 @media (max-width: 760px) {
   .adm-cat-pick, .adm-minor-grid { grid-template-columns: 1fr; }
