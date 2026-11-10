@@ -339,7 +339,7 @@ The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The p
 | `backend/scraper/migrate_psychology_numbers.py` | The one-time migration that applied the renumbering list to `courses.json` by course on 2026-11-10 (14.6). Dry run by default, `--apply` writes; a second run changes nothing. |
 | `backend/scraper/validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json` (a course under a retired old Psychology number counts as its new number). Warns about same-title pairs that may be renumberings. |
 | `backend/scraper/scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand (14.8). |
-| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py`, `scripts/bump_cf_build.py` and `frontend/data/minors.json` (263 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
+| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py`, `scripts/bump_cf_build.py` and `frontend/data/minors.json` (270 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
 
 ---
 
@@ -524,7 +524,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to the data files (`data/courses.json`, `data/minors.json`, and `data/requirement_buckets.json` for the admin course editor). Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-10`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-10b`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
@@ -1150,7 +1150,7 @@ Locally, from the repo root:
 
 ```bash
 source .venv/bin/activate
-python -m pytest backend/scraper/tests -q            # 263 tests
+python -m pytest backend/scraper/tests -q            # 270 tests
 python backend/scraper/update_data.py --no-scrape    # rebuild frontend/data/courses.json from backend/data/soc.json
 python backend/scraper/update_data.py                # full run: scrape, rebuild, check, publish (30 to 90 minutes)
 git diff --stat
@@ -2033,13 +2033,13 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 10, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge and the release integration)
+### 16.2 Results on November 10, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration and the review fixes)
 
 | Suite | Result |
 |---|---|
 | `python -m pytest backend/tests` | **222 passed, 6 failed** (the known failures below) |
-| `python -m pytest backend/scraper/tests` | 263 passed |
-| `node scripts/run-data-tests.js` | 228 passed (profile 51/51, data 82/82, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 34/34, admin editor 13/13, catalog data 9/9) |
+| `python -m pytest backend/scraper/tests` | 270 passed |
+| `node scripts/run-data-tests.js` | 232 passed (profile 51/51, data 83/83, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 37/37, admin editor 13/13, catalog data 9/9) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
