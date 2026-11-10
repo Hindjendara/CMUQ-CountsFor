@@ -96,6 +96,7 @@ const MINOR_LIST = [
   { code: 'history',            label: 'History' },
   { code: 'math',               label: 'Mathematical Sciences' },
   { code: 'neuroscience',       label: 'Neuroscience' },
+  { code: 'product',            label: 'Product Management' },
   { code: 'writing',            label: 'Professional Writing' },
   { code: 'psychology',         label: 'Psychology' },
   { code: 'sociology',          label: 'Sociology' },
@@ -104,13 +105,14 @@ const MINOR_LIST = [
 ];
 
 // Majors that may not declare a minor (blocked_majors in minors.json): the
-// minor in their own field, and for BA also the two other Tepper minors.
+// minor in their own field, and for BA also the three other Tepper minors.
 const MINOR_BLOCKED_MAJORS = {
   biology: ['BS'],
   business: ['BA'],
   business_analytics: ['BA'],
   cs: ['CS'],
   finance: ['BA'],
+  product: ['BA'],
 };
 
 /** { list, blocked } from a parsed minors.json, in the shape of the two constants above. */
@@ -350,8 +352,8 @@ function loadProfile() {
     }
   }
   if (!secondaries.length && secondary) secondaries = [secondary];
-  // Drop minors the app no longer offers (product, November 2026) or that the
-  // major may not take, so the rest of the profile still loads.
+  // Drop minors the app does not offer or that the major may not take, so the
+  // rest of the profile still loads.
   if (role === 'student') {
     const kept = cleanProfileMinors(primary, secondaries);
     if (kept.length !== secondaries.length) {

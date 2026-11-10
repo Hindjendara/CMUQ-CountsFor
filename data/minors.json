@@ -1,13 +1,12 @@
 {
   "schema_version": 1,
-  "note": "Minor requirements for the app, built from the official minor files in backend/data/minors/ (one file per minor). Each minor is a tree of categories. A category lists its courses by code (courses), matches them by number (select), or holds sub categories (children). One course fills one category. Old Psychology numbers in the files are shown as their current numbers. Codes that are in no catalog stay listed and simply match no course. Double counting limits are the audit file's; overlap with general education never uses up a limit.",
+  "note": "Minor requirements for the app, built from the official minor files in backend/data/minors/ (one file per minor) and, for Product Management, which has no official file, from its 2026-27 CMU catalog page archived in backend/data/sources/catalog-2026-27/minors/ (its source_file). Each minor is a tree of categories. A category lists its courses by code (courses), matches them by number (select), or holds sub categories (children). One course fills one category. Old Psychology numbers in the files are shown as their current numbers. Codes that are in no catalog stay listed and simply match no course. Double counting limits are the audit file's (the catalog page's for Product Management); overlap with general education never uses up a limit.",
   "minors": {
     "arabic": {
       "name": "Arabic Studies",
       "title": "Minor in Arabic Studies",
       "source_file": "cmu_minor_arabic_studies.json",
       "version": "EY2022+ Doha - Minor in Arabic Studies",
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": 54,
       "double_count": {
@@ -60,14 +59,14 @@
             "82-214", "82-215", "82-216", "82-280", "82-282", "82-283", "82-286", "82-300",
             "82-313", "82-314", "82-358", "82-383", "82-411", "82-412", "82-449", "82-480",
             "82-505", "82-511", "82-512", "84-275", "84-310", "84-322", "84-323", "84-326",
-            "84-362", "84-389", "85-170", "85-375", "85-421", "88-412", "88-432"
+            "84-362", "84-389", "85-170", "85-409", "85-421", "88-412", "88-432"
           ],
           "select": null,
           "children": [],
           "notes": [
             "List B, courses taught in English.",
             "This list gives examples and is not complete. Ask the OLR and your minor advisor for the current interdisciplinary electives. You may suggest other courses to the minor advisor for approval as substitutes.",
-            "Old numbers in the official file are shown as their current numbers: 85-219 is now 85-170."
+            "Old numbers in the official file are shown as their current numbers: 85-219 is now 85-170 and 85-375 is now 85-409."
           ]
         }
       ]
@@ -77,7 +76,6 @@
       "title": "Minor in Biological Sciences",
       "source_file": "cmu_minor_biological_sciences.json",
       "version": "EY2024 Doha Minor in Biological Sciences",
-      "campus_note": null,
       "blocked_majors": ["BS"],
       "total_units": 73,
       "double_count": {
@@ -202,7 +200,6 @@
       "title": "Minor in Business Administration",
       "source_file": "cmu_minor_business_administration.json",
       "version": "EY2020+ Doha Minor in Business Administration",
-      "campus_note": null,
       "blocked_majors": ["BA"],
       "total_units": 54,
       "double_count": {
@@ -294,7 +291,6 @@
       "title": "Minor in Business Analytics and Optimization",
       "source_file": "cmu_minor_business_analytics_optimization.json",
       "version": "Tepper - Minor In Business Analytics and Optimization - EY2020+",
-      "campus_note": "Pittsburgh version",
       "blocked_majors": ["BA"],
       "total_units": 54,
       "double_count": {
@@ -395,7 +391,6 @@
       "title": "Minor in Computational Biology",
       "source_file": "cmu_minor_computational_biology.json",
       "version": "EY2024 Doha Minor in Computational Biology",
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": 54,
       "double_count": {
@@ -497,7 +492,6 @@
       "title": "Minor in Computer Science",
       "source_file": "cmu_minor_computer_science.json",
       "version": "EY2017 Doha Minor in Computer Science",
-      "campus_note": null,
       "blocked_majors": ["CS"],
       "total_units": null,
       "double_count": {
@@ -609,7 +603,6 @@
       "title": "Minor in Economics",
       "source_file": "cmu_minor_economics.json",
       "version": "Qatar - Minor in Economics - EY2020+",
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": 54,
       "double_count": {
@@ -754,7 +747,6 @@
       "title": "Minor in Financial Management",
       "source_file": "cmu_minor_financial_management.json",
       "version": "Tepper - Minor in Financial Management - EY2023+",
-      "campus_note": "Pittsburgh version",
       "blocked_majors": ["BA"],
       "total_units": 54,
       "double_count": {
@@ -816,7 +808,6 @@
       "title": "Minor in History",
       "source_file": "cmu_minor_history.json",
       "version": "EY2023 Minor in History",
-      "campus_note": "Campus not stated",
       "blocked_majors": [],
       "total_units": 63,
       "double_count": {
@@ -877,7 +868,6 @@
       "title": "Minor in Mathematical Sciences",
       "source_file": "cmu_minor_mathematical_sciences.json",
       "version": "EY2019 Doha - Minor in Mathematics",
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": 56,
       "double_count": {
@@ -953,7 +943,6 @@
       "title": "Minor in Neuroscience",
       "source_file": "cmu_minor_neuroscience.json",
       "version": "EY2022+ Doha Minor in Neuroscience",
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": 63,
       "double_count": {
@@ -1018,14 +1007,104 @@
           "courses": [
             "03-133", "03-351", "03-360", "02-319", "03-365", "03-366", "85-110", "85-130",
             "85-190", "85-213", "85-310", "85-370", "85-406", "85-414", "85-413", "85-420",
-            "85-435", "85-472"
+            "85-472"
           ],
           "select": null,
           "children": [],
           "notes": [
             "At least 27 units from the listed biology and psychology courses.",
-            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110 and 85-221 is now 85-130."
+            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-221 is now 85-130 and 85-435 is now 85-420."
           ]
+        }
+      ]
+    },
+    "product": {
+      "name": "Product Management",
+      "title": "Minor in Product Management",
+      "source_file": "backend/data/sources/catalog-2026-27/minors/product-management-minor.html",
+      "version": "2026-2027 Catalog",
+      "blocked_majors": ["BA"],
+      "total_units": null,
+      "double_count": {
+        "text": "While there are no double counting restrictions between the minor and the student's home college general education requirements, only one minor course may double-count with any other major or minor requirements. The Minor in Operations and Supply Chain Management allows an additional double-count for a total of 2 courses that may double-count with any other major or minor requirements.",
+        "max_with_major": 1,
+        "max_with_other_minors": 1,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "Up to 1 course may also count toward your major or another minor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [],
+      "categories": [
+        {
+          "id": "required",
+          "name": "Required",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "marketing_i",
+              "name": "Marketing I",
+              "rule": {"type": "required", "n": null, "units": null},
+              "courses": ["70-381"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "high_tech_strategy",
+              "name": "Strategy for High-Tech Products and Services",
+              "rule": {"type": "required", "n": null, "units": null},
+              "courses": ["70-387"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "intro_product_management",
+              "name": "Introduction to Product Management",
+              "rule": {"type": "required", "n": null, "units": null},
+              "courses": ["70-452"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "microeconomics",
+              "name": "Principles of Microeconomics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["73-102", "73-104"],
+              "select": null,
+              "children": [],
+              "notes": [
+                "If a student successfully passes the 73-102 waiver, this requirement is waived and the student must take an additional 9 units of minor coursework."
+              ]
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "design_thinking",
+          "name": "Course in Design Thinking",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["70-389", "05-391", "05-410"],
+          "select": null,
+          "children": [],
+          "notes": []
+        },
+        {
+          "id": "marketing",
+          "name": "Marketing Course",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["70-385", "70-481", "70-482", "70-483"],
+          "select": null,
+          "children": [],
+          "notes": []
         }
       ]
     },
@@ -1034,7 +1113,6 @@
       "title": "Minor in Professional Writing",
       "source_file": "cmu_minor_professional_writing.json",
       "version": "EY2024 Doha Minor in Professional Writing",
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": 54,
       "double_count": {
@@ -1139,7 +1217,6 @@
       "title": "Minor in Psychology",
       "source_file": "cmu_minor_psychology.json",
       "version": "EY23-25 Doha Minor Psychology",
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": 72,
       "double_count": {
@@ -1166,12 +1243,12 @@
           "id": "survey",
           "name": "Survey Courses",
           "rule": {"type": "pick", "n": 2, "units": null},
-          "courses": ["85-110", "85-130", "85-150", "85-170", "85-190", "85-251"],
+          "courses": ["85-110", "85-130", "85-150", "85-170", "85-190", "85-151"],
           "select": null,
           "children": [],
           "notes": [
             "Any 2 survey courses.",
-            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-219 is now 85-170, 85-221 is now 85-130 and 85-241 is now 85-150."
+            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-219 is now 85-170, 85-221 is now 85-130, 85-241 is now 85-150 and 85-251 is now 85-151."
           ]
         },
         {
@@ -1221,15 +1298,17 @@
             "min_number": 350,
             "max_number": 499,
             "exclude": [
-              "85-480", "85-482", "85-484", "85-505", "85-506", "85-507", "85-508", "85-509",
-              "85-510"
+              "85-590", "85-503", "85-530", "85-505", "85-506", "85-507", "85-508", "85-509",
+              "85-510", "85-350", "85-370"
             ],
             "exclude_ranges": [],
             "min_units_per_course": null
           },
           "children": [],
           "notes": [
-            "Any 2 psychology courses numbered 85-350 to 85-499, except a few listed exclusions."
+            "Any 2 psychology courses numbered 85-350 to 85-499, except a few listed exclusions.",
+            "The official file uses the course numbers from before Fall 2025. 85-350 and 85-370 are research methods courses now, and their old numbers (85-340 and 85-314) were below this range, so they do not count here.",
+            "Old numbers in the official file are shown as their current numbers: 85-480 is now 85-590, 85-482 is now 85-503 and 85-484 is now 85-530."
           ]
         },
         {
@@ -1257,7 +1336,6 @@
       "title": "Minor in Sociology",
       "source_file": "cmu_minor_sociology.json",
       "version": "EY2023 Pittsburgh - Minor in Sociology",
-      "campus_note": "Pittsburgh version",
       "blocked_majors": [],
       "total_units": 54,
       "double_count": {
@@ -1310,14 +1388,13 @@
               "courses": [
                 "70-342", "70-385", "76-241", "79-244", "79-261", "79-292", "79-308", "79-320",
                 "79-323", "79-331", "79-343", "79-377", "80-224", "80-245", "80-246", "80-256",
-                "80-305", "80-335", "80-348", "84-369", "85-150", "85-350", "85-352", "85-358",
-                "85-452", "85-454", "85-446", "88-230", "88-231", "88-285", "88-290"
+                "80-305", "80-335", "80-348", "84-369", "85-150", "85-450", "85-352", "85-451",
+                "85-452", "85-454", "85-457", "88-230", "88-231", "88-285", "88-290"
               ],
               "select": null,
               "children": [],
               "notes": [
-                "The official file lists 85-350 here as Psychology of Prejudice. In the Schedule of Classes 85-350 is now Research Methods in Social Psychology, and Psychology of Prejudice is 85-450. The code is kept as the file lists it. Confirm with your advisor.",
-                "Old numbers in the official file are shown as their current numbers: 85-241 is now 85-150, 85-377 is now 85-452 and 85-442 is now 85-454."
+                "Old numbers in the official file are shown as their current numbers: 85-241 is now 85-150, 85-350 is now 85-450, 85-358 is now 85-451, 85-377 is now 85-452, 85-442 is now 85-454 and 85-446 is now 85-457."
               ]
             },
             {
@@ -1346,7 +1423,6 @@
       "title": "Student-defined Minor",
       "source_file": null,
       "version": null,
-      "campus_note": null,
       "blocked_majors": [],
       "total_units": null,
       "double_count": {
@@ -1371,7 +1447,6 @@
       "title": "Minor in Tech Entrepreneurship",
       "source_file": "cmu_minor_tech_entrepreneurship.json",
       "version": "EY2023 Minor in Tech Entrepreneurship",
-      "campus_note": "Campus not stated",
       "blocked_majors": [],
       "total_units": 63,
       "double_count": {

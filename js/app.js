@@ -28,7 +28,8 @@ const App = {
   selectedCourse: null,
   treeSearchQuery: '',
   locationFilter: 'all', // 'all' | 'qatar' | 'pittsburgh'
-  activeSemester: 'F26',
+  activeSemester: null,  // a semester code or 'all'; null until the catalog loads (_resolveSemesters)
+  _semesters: { codes: [], defaultCode: null }, // catalogSemesters() of the loaded catalog
   modalityFilter: 'all', // 'all' | 'in_person' | 'remote' | 'hybrid'
   theme: loadStore('cf_theme', 'light'),
   expandedNodes: new Set(),
@@ -249,17 +250,26 @@ const App = {
         return null;
       }),
     ]);
-    // Public route, so guests get admin course edits too.
+    // Public routes, so guests get admin course edits and minor settings too.
     let overrides = [];
-    const r = await apiGetCourseOverrides();
+    let minorOverrides = [];
+    const [r, mr] = await Promise.all([apiGetCourseOverrides(), apiGetMinorOverrides()]);
     if (r.ok && r.data) overrides = r.data.items || [];
     else console.warn('[CountsFor] Course edits unavailable; showing the scraped catalog.', r.error);
-    this._buildCatalog(courses, overrides, minorsData);
+    if (mr.ok && mr.data) minorOverrides = mr.data.items || [];
+    else if (minorsData) console.warn('[CountsFor] Minor settings unavailable; showing the minor file as it is.', mr.error);
+    this._buildCatalog(courses, overrides, minorsData, minorOverrides);
   },
 
   /** The synchronous half of _prepareCatalog: edits, index, annotations, trees. */
-  _buildCatalog(courses, overrides, minorsData) {
+  _buildCatalog(courses, overrides, minorsData, minorOverrides) {
+    // The categories of the scraped catalog, before admin edits: the course
+    // editor's pick list (with data/requirement_buckets.json once loaded).
+    this._scrapedCourses = courses;
+    this._catalogReqPaths = knownRequirementPaths(courses, this._requirementBuckets);
     if (minorsData) {
+      // Admin minor settings apply to a copy; the fetched file stays as it is.
+      minorsData = applyMinorOverrides(minorsData, minorOverrides || []);
       this.minorsData = minorsData;
       this._minorsLoadError = null;
       applyMinorsCatalog(minorsData);
@@ -304,19 +314,25 @@ const App = {
 
     try {
       await this._prepareCatalog();
+      this._resolveSemesters();
 
       // Auto-expand first level of the default major
       this.autoExpandFirstLevel(this.activeMajor);
 
       // The navbar is rendered before the catalog finishes loading, so the semester
-      // picker was built from an empty course list. Refresh it now that we know which
-      // semesters actually have offerings.
+      // picker only says it is loading. Fill it now that we know which semesters
+      // actually have offerings.
       this._refreshSemesterOptions();
 
       this.renderLeftEmpty();
       this.renderTree();
     } catch (err) {
       console.error(err);
+      // Without a catalog the semester picker would keep saying it is loading.
+      if (!this.activeSemester) {
+        this._resolveSemesters();
+        this._refreshSemesterOptions();
+      }
       // Look #leftBody up again: renderLeftEmpty() may have re-rendered the shell.
       const failBody = document.getElementById('leftBody');
       if (failBody) failBody.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Failed to load data: ${esc(err.message)}</div></div>`;
@@ -887,7 +903,7 @@ const App = {
               <div class="navbar-semester">
                 <label class="sr-only" for="semesterSelect">Semester</label>
                 <select id="semesterSelect" class="semester-select" onchange="App.setSemester(this.value)">
-                  ${availableSemesterOptions(this.courses, this.activeSemester).map(s => `<option value="${s.code}" ${this.activeSemester===s.code?'selected':''}>${esc(s.label)}</option>`).join('')}
+                  ${this._semesterOptionsHtml()}
                 </select>
               </div>
               <div class="navbar-location-toggle">
@@ -1138,11 +1154,10 @@ const App = {
           this.downloadRequirementExcel(actionBtn.dataset.treeMajor, actionBtn.dataset.treePath);
           return;
         }
-        if (action === 'course-status') this.cycleCourseStatus(code, actionBtn.dataset.statusKey);
-        if (action === 'course-status-set') this.setCourseStatus(code, actionBtn.dataset.status || '');
-        if (action === 'minor-browse') this.browseMinor(actionBtn.dataset.minor);
-        if (action === 'minor-add') this.addStudentMinor(actionBtn.dataset.minor);
-        if (action === 'minor-remove') this.removeStudentMinor(actionBtn.dataset.minor);
+        // Adding or removing a minor draws the tree again: the focus moves to the
+        // Minors tab dropdown or to "Add a minor" instead of being lost.
+        if (action === 'minor-add') { this.addStudentMinor(actionBtn.dataset.minor); this._focusById('mnBrowsePick'); }
+        if (action === 'minor-remove') { this.removeStudentMinor(actionBtn.dataset.minor); this._focusById('mnMinorAdd'); }
         if (action === 'wishlist') this.toggleWishlist(code);
         if (action === 'flag')     this.openFlagModal(code);
         if (action === 'plan-toggle-section') {
@@ -1203,20 +1218,33 @@ const App = {
   },
 
   /**
-   * Rebuild the semester <select> in place from the loaded catalog. Done as a
-   * targeted DOM update rather than a full navbar re-render so open panels and
-   * focus are left alone.
+   * Take the semester list from the loaded catalog (catalogSemesters in
+   * js/data.js) and settle the semester on screen: the one already shown if
+   * the catalog still has it, else the saved choice or the default
+   * (resolveSemesterChoice).
+   */
+  _resolveSemesters() {
+    this._semesters = catalogSemesters(this.courses);
+    const current = this.activeSemester;
+    if (current === 'all' || this._semesters.codes.includes(current)) return;
+    this.activeSemester = resolveSemesterChoice(this._semesters, loadStore(SEMESTER_STORE_KEY, null));
+  },
+
+  /** The semester picker's options; a placeholder until the catalog has loaded. */
+  _semesterOptionsHtml() {
+    if (!this.activeSemester) return '<option value="" selected disabled>Loading semesters…</option>';
+    return semesterOptions(this._semesters.codes, this.activeSemester)
+      .map(s => `<option value="${esc(s.code)}" ${this.activeSemester === s.code ? 'selected' : ''}>${esc(s.label)}</option>`)
+      .join('');
+  },
+
+  /**
+   * Rebuild the semester <select> in place. Done as a targeted DOM update
+   * rather than a full navbar re-render so open panels and focus are left alone.
    */
   _refreshSemesterOptions() {
     const sel = document.getElementById('semesterSelect');
-    if (!sel) return;
-    const opts = availableSemesterOptions(this.courses, this.activeSemester);
-    if (this.activeSemester !== 'all' && !opts.some(s => s.code === this.activeSemester) && opts.length) {
-      this.activeSemester = opts[1]?.code || opts[0].code;
-    }
-    sel.innerHTML = opts
-      .map(s => `<option value="${s.code}" ${this.activeSemester === s.code ? 'selected' : ''}>${esc(s.label)}</option>`)
-      .join('');
+    if (sel) sel.innerHTML = this._semesterOptionsHtml();
   },
 
   _campusFilterLabel() {
@@ -1280,6 +1308,7 @@ const App = {
 
   setSemester(code) {
     this.activeSemester = code;
+    saveStore(SEMESTER_STORE_KEY, { code, defaultCode: this._semesters.defaultCode });
     this._refreshFilters();
     if (this._homeView === 'home') this._loadPopularCourses();
     if (this._homeView === 'plan') {
@@ -1838,8 +1867,13 @@ const App = {
     return (p && p !== 'AS') ? p : 'CS';
   },
 
+  /** Lookups are counted per semester: the one shown, or the default under "All semesters". */
+  _popularSemester() {
+    return isSemesterCode(this.activeSemester) ? this.activeSemester : this._semesters.defaultCode;
+  },
+
   _localSearchStoreKey() {
-    return 'cf_search_counts_' + this._popularProgram() + '_' + this.activeSemester;
+    return 'cf_search_counts_' + this._popularProgram() + '_' + (this._popularSemester() || 'all');
   },
 
   _bumpLocalSearchCount(courseCode) {
@@ -1873,7 +1907,7 @@ const App = {
     this._bumpLocalSearchCount(code);
 
     if (isStudent(this.profile) && this.authMode === 'authed') {
-      apiRecordCourseSearch(code, this.activeSemester).catch(() => {});
+      apiRecordCourseSearch(code, this._popularSemester()).catch(() => {});
     }
 
     if (this._homeView === 'home') {
@@ -1888,7 +1922,7 @@ const App = {
     if (!listEl || !cardEl) return;
 
     const program = this._popularProgram();
-    const semester = this.activeSemester;
+    const semester = this._popularSemester();
     const limit = 5;
 
     // Sync pass: refresh from local/static immediately (semester or program
@@ -1905,12 +1939,13 @@ const App = {
       cardEl.hidden = true;
     }
 
-    // Async pass: upgrade in place when real peer data arrives.
-    if (semester === 'all') return;
+    // Async pass: upgrade in place when real peer data arrives (once the
+    // catalog has said which semester that is).
+    if (!semester) return;
     const r = await apiGetPopularCourses(program, semester, limit);
     if (!r.ok || !r.data || !Array.isArray(r.data.items) || !r.data.items.length) return;
     // Stale-response guards: user may have switched semester or left home.
-    if (this.activeSemester !== semester) return;
+    if (this._popularSemester() !== semester) return;
     const list = document.getElementById('homePopularList');
     if (!list) return;
     const rows = this._popularRowsHtml(r.data.items);
@@ -1931,7 +1966,7 @@ const App = {
     if (vm === 'focused-single') {
       browseSub = studentMinors.length ? `${p} and minor requirements` : `${p} requirement tree`;
     } else {
-      browseSub = `CS · IS · BA · BS and minor requirements`;
+      browseSub = `${MAJOR_ORDER.join(' · ')} and minor requirements`;
     }
 
     const browseMajor = (vm === 'cross-program') ? this.activeMajor : (p || this.activeMajor);
@@ -2147,7 +2182,7 @@ const App = {
     const planCount = (store.plans || []).length;
     const active = this._ensureActivePlan(false);
     const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedSections(this.activeSemester, active.id) : 0;
+    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
     const units = this._planUnitsTotal(planned);
     const countChip = planCount > 0 ? `<span class="nav-plan-count">${planCount}</span>` : '';
     const label = planCount > 1
@@ -2168,7 +2203,7 @@ const App = {
     const planCount = (store.plans || []).length;
     const active = this._ensureActivePlan(false);
     const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedSections(this.activeSemester, active.id) : 0;
+    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
     const units = this._planUnitsTotal(planned);
     const existing = btn.querySelector('.nav-plan-count');
     const label = btn.querySelector('.nav-plan-label');
@@ -2243,7 +2278,7 @@ const App = {
     const profile = this.profile;
     const facultyView = isFaculty(profile);
     const mappings = getCourseMappings(course);
-    const sections = filterOfferings(getCourseOfferings(course), this._filterParams());
+    const offeringGroups = this._visibleOfferingGroups(course);
     const semLabel = semesterLabel(this.activeSemester);
     const isDoubleCounter = !!course._doubleCounter;
 
@@ -2275,20 +2310,28 @@ const App = {
       <div class="cc-kv"><span class="cc-k">Prereq</span><span class="cc-v">${prereq ? esc(prereq) : '<em>None</em>'}</span></div>
     `;
 
-    // Schedule rows for active semester + campus + modality
-    let filtered = sections.slice();
-    const groupedSections = groupOfferingsBySection(filtered);
+    // Schedule for the active semester + campus + modality: each lecture with
+    // the sections listed under it, as in the Schedule of Classes. Whole
+    // offerings show until at least four lines do; the rest sit behind "more".
+    if (this._schedOpenFor !== course.course_code) this._schedOpenFor = null;
+    let inlineCount = 0;
     let schedHtml = '';
-    if (filtered.length === 0) {
+    if (offeringGroups.length === 0) {
       const campus = this.locationFilter === 'qatar' ? 'Qatar' : this.locationFilter === 'pittsburgh' ? 'Pittsburgh' : 'this filter';
       const mod = this.modalityFilter !== 'all' ? (' · ' + (MODALITY_OPTIONS.find(m => m.id === this.modalityFilter) || {}).label) : '';
       schedHtml = `<div class="cc-empty">No matching sections for ${esc(semLabel)}${mod ? esc(mod) : ''}${this.locationFilter !== 'all' ? ' · ' + esc(campus) : ''}</div>`;
     } else {
-      const inline = groupedSections.slice(0, 4).map(g => this._renderSchedRowGroup(g, course.course_code)).join('');
-      const extraCount = groupedSections.length - 4;
+      for (let lines = 0; inlineCount < offeringGroups.length && lines < 4; inlineCount++) {
+        lines += offeringGroupParts(offeringGroups[inlineCount]).length;
+      }
+      const planned = this._plannedIdSet();
+      const inline = offeringGroups.slice(0, inlineCount).map(g => this._renderSchedBlock(g, course.course_code, planned)).join('');
+      const extraGroups = offeringGroups.slice(inlineCount);
+      const extraCount = this._schedLineCount(extraGroups);
+      const open = extraCount > 0 && this._schedOpenFor === course.course_code;
       const more = extraCount > 0
-        ? `<button class="cc-more" onclick="App.expandScheduleV2(event)" id="cc-sched-more" data-expanded="0">+${extraCount} more sections</button>
-           <div id="cc-sched-extra" style="display:none;margin-top:6px"></div>`
+        ? `<button class="cc-more" onclick="App.expandScheduleV2(event)" id="cc-sched-more" data-expanded="${open ? 1 : 0}">${open ? 'Hide extra sections' : `+${extraCount} more sections`}</button>
+           <div id="cc-sched-extra" style="display:${open ? 'block' : 'none'};margin-top:6px">${open ? extraGroups.map(g => this._renderSchedBlock(g, course.course_code, planned)).join('') : ''}</div>`
         : '';
       schedHtml = inline + more;
     }
@@ -2306,9 +2349,8 @@ const App = {
         const typeCls = m.isGenEd ? 'gened' : 'req';
         const safePath = m.fullPath.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         return `
-          <div class="cc-cf-item${m.earlier ? ' is-earlier' : ''}" data-nav-major="${majorCode}" data-nav-path="${safePath}" title="${esc(formatRequirementPath(m.fullPath))}">
+          <div class="cc-cf-item" data-nav-major="${majorCode}" data-nav-path="${safePath}" title="${esc(formatRequirementPath(m.fullPath))}">
             <span class="cc-cf-item-label">${esc(m.shortLabel)}</span>
-            ${m.earlier ? this._earlierTagHtml(m.earlierReason, 'cc-cf-item-earlier') : ''}
             <span class="cc-cf-item-type cc-cf-item-type-${typeCls}">${typeLabel}</span>
           </div>`;
       }).join('');
@@ -2325,7 +2367,6 @@ const App = {
       ? `<div class="cc-cf-grid">${cfCols.join('')}</div>`
       : '<div class="cc-empty">This course does not count toward any tracked major requirements.</div>';
     const minorsHtml = this._courseCardMinorsHtml(course);
-    const statusHtml = this._statusTrackingOn() ? this._courseCardStatusHtml(course) : '';
 
     // Top-right card actions (role-gated)
     const cardActions = this._renderCardActions(course);
@@ -2350,7 +2391,6 @@ const App = {
           </div>
           ${cardActions}
         </div>
-        ${statusHtml}
         ${wishlistNoteHtml}
 
         <div class="cc-cols">
@@ -2360,7 +2400,7 @@ const App = {
           </div>
           <div class="cc-section">
             <div class="cc-h4">${esc(semLabel.toUpperCase())}</div>
-            ${this._renderOfferingPredictionHtml(course, this.activeSemester ? this.activeSemester[0] : 'F')}
+            ${this._renderOfferingPredictionHtml(course, this.activeSemester)}
             ${schedHtml}
           </div>
         </div>
@@ -2384,11 +2424,55 @@ const App = {
     if (explBtn) explBtn.style.display = this.layoutMode === 'focused' ? 'flex' : 'none';
 
     this._bindWishlistNoteInputs(el);
-    this._schedSections = groupedSections;
+    this._schedSections = offeringGroups;
+    this._schedInlineCount = inlineCount;
     this._syncDirectoryFabLayout();
   },
 
-  _renderSchedRowGroup(group, courseCode) {
+  /** Lines an offering group takes on the course card: its lecture and each of its sections. */
+  _schedLineCount(groups) {
+    return (groups || []).reduce((n, g) => n + offeringGroupParts(g).length, 0);
+  },
+
+  /**
+   * One offering on the course card, as the Schedule of Classes lists it: the
+   * lecture line, then the line of each of its sections. When a lecture has
+   * sections, "+ Plan" sits on each section line and plans that section with
+   * the lecture; a lecture or a section alone has its own. Under All semesters
+   * the block names its semester.
+   */
+  _renderSchedBlock(group, courseCode, plannedIds) {
+    const planned = plannedIds || this._plannedIdSet();
+    const term = this.activeSemester === 'all' && group.semester_code
+      ? `<div class="cc-sched-term">${esc(semesterLabel(group.semester_code))}</div>`
+      : '';
+    const lines = [];
+    if (group.lecture) {
+      lines.push(this._renderSchedRowGroup(group.lecture, courseCode, { group, planned, plan: !group.sections.length }));
+    }
+    for (const part of group.sections) {
+      lines.push(this._renderSchedRowGroup(part, courseCode, { group, planned, plan: true, sub: !!group.lecture }));
+    }
+    return `<div class="cc-sched-block">${term}${lines.join('')}</div>`;
+  },
+
+  /** The "+ Plan" / "✓ Planned" button of one line of an offering group. */
+  _schedPlanBtnHtml(courseCode, group, part, planned) {
+    const isIn = m => planned.has(this._planItemForMeeting(courseCode, m).id);
+    const choice = offeringGroupChoice(group, part.section, isIn);
+    const meetings = choice.parts.flatMap(p => p.meetings);
+    const allIn = meetings.length > 0 && meetings.every(isIn);
+    const names = choice.parts.map(p => planSectionLabel(p.section)).join(' and ');
+    const replaces = choice.others.filter(p => p.meetings.some(isIn)).map(p => planSectionLabel(p.section));
+    let title = `Add ${names} (all meeting times) to your schedule plan`;
+    if (allIn) title = `Remove ${names} from your schedule plan`;
+    else if (replaces.length) title = `Plan ${names} instead of ${replaces.join(' and ')}`;
+    else if (meetings.some(isIn)) title = `Add the missing meeting times of ${names} to your schedule plan`;
+    const sem = group.semester_code || this.activeSemester;
+    return `<button type="button" class="cc-plan-btn ${allIn ? 'is-planned' : ''}" data-action="plan-toggle-section" data-course-code="${esc(courseCode)}" data-semester-code="${esc(sem)}" data-section="${esc(part.section || '')}" data-campus="${esc(part.campus || '')}" title="${esc(title)}" aria-label="${esc(title)}">${allIn ? '✓ Planned' : '+ Plan'}</button>`;
+  },
+
+  _renderSchedRowGroup(group, courseCode, opts = {}) {
     const dmCls = (dm) => {
       const d = (dm || '').toLowerCase();
       if (d.includes('remote')) return 'cc-dm-remote';
@@ -2403,12 +2487,10 @@ const App = {
       return `<span class="cc-sched-meeting">${esc(time)}</span>`;
     }).join('');
     let planBtn = '';
-    if (canUseSchedulePlan(this.profile) && courseCode) {
-      const inPlan = this._isSectionGroupInPlan(courseCode, group);
-      const sem = group.semester_code || this.activeSemester;
-      planBtn = `<button type="button" class="cc-plan-btn ${inPlan ? 'is-planned' : ''}" data-action="plan-toggle-section" data-course-code="${esc(courseCode)}" data-semester-code="${esc(sem)}" data-section="${esc(group.section || '')}" data-campus="${esc(group.campus || '')}" title="${inPlan ? 'Remove section from schedule plan' : 'Add this section (all meeting times) to your schedule plan'}" aria-label="${inPlan ? 'Remove section from schedule plan' : 'Add section to schedule plan'}">${inPlan ? '✓ Planned' : '+ Plan'}</button>`;
+    if (opts.plan && opts.group && canUseSchedulePlan(this.profile) && courseCode) {
+      planBtn = this._schedPlanBtnHtml(courseCode, opts.group, group, opts.planned);
     }
-    return `<div class="cc-kv cc-kv-sched cc-kv-sched-group"><span class="cc-k">Sec ${esc(group.section)}</span><span class="cc-v"><span class="cc-sched-meetings">${meetingsHtml}</span> ${campusBadge} ${dm} ${planBtn}</span></div>`;
+    return `<div class="cc-kv cc-kv-sched cc-kv-sched-group${opts.sub ? ' cc-sched-sub' : ''}"><span class="cc-k">${esc(planSectionLabel(group.section))}</span><span class="cc-v"><span class="cc-sched-meetings">${meetingsHtml}</span> ${campusBadge} ${dm} ${planBtn}</span></div>`;
   },
 
   expandScheduleV2(e) {
@@ -2417,15 +2499,19 @@ const App = {
     const extra = document.getElementById('cc-sched-extra');
     if (!btn || !extra) return;
     const expanded = btn.dataset.expanded === '1';
-    const sections = (this._schedSections || []).slice(4);
+    const code = this.selectedCourse ? this.selectedCourse.course_code : '';
+    const groups = (this._schedSections || []).slice(this._schedInlineCount || 0);
+    // Kept open when the card redraws (after "+ Plan"), until another course opens.
+    this._schedOpenFor = expanded ? null : code;
     if (!expanded) {
       extra.style.display = 'block';
-      extra.innerHTML = sections.map(g => this._renderSchedRowGroup(g, this.selectedCourse ? this.selectedCourse.course_code : '')).join('');
+      const planned = this._plannedIdSet();
+      extra.innerHTML = groups.map(g => this._renderSchedBlock(g, code, planned)).join('');
       btn.textContent = 'Hide extra sections';
       btn.dataset.expanded = '1';
     } else {
       extra.style.display = 'none';
-      btn.textContent = '+' + sections.length + ' more sections';
+      btn.textContent = '+' + this._schedLineCount(groups) + ' more sections';
       btn.dataset.expanded = '0';
     }
   },
@@ -2526,13 +2612,12 @@ const App = {
   renderTree() {
     const rightBody = document.getElementById('rightBody');
     if (!rightBody) return;
-    this._renderProgress = null;
     if (this.activeMajor === MINORS_TAB) {
       rightBody.innerHTML = this._renderMinorsBrowse();
       return;
     }
     const p = this.profile;
-    const studentTree = this._statusTrackingOn() && p.primary === this.activeMajor;
+    const studentTree = this._isStudentView() && p.primary === this.activeMajor;
     const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
     let html = studentTree ? this._studentProgramsBarHtml() : '';
     const sections = this.treeSections[this.activeMajor];
@@ -2559,10 +2644,9 @@ const App = {
       if (studentTree && getProfileMinors(p).length) html += filterHint;
     } else {
       html += filterHint;
-      const ctx = this._statusTrackingOn() ? { statuses: this._getCourseStatuses() } : null;
       // degree + gened both render as a flat list of cards — no separate section headers
       for (const node of [...sections.degree, ...sections.gened]) {
-        html += this.renderTreeNode(node, this.activeMajor, 0, ctx);
+        html += this.renderTreeNode(node, this.activeMajor, 0, null);
       }
     }
     if (studentTree) {
@@ -2572,15 +2656,14 @@ const App = {
   },
 
   /**
-   * One node of a major or minor tree. ctx is null for a plain tree; for a
-   * student it carries their statuses, and for a minor tree also the minor and
-   * its progress ({ minor, progress }), which add status chips and controls.
+   * One node of a major or minor tree. ctx is null for a major tree and
+   * { minor } for a minor tree (its course rows then name the student's major).
    */
   renderTreeNode(node, major, depth, ctx) {
     const hasChildren = node.children && node.children.length > 0;
     const hasCourses = node.courses && node.courses.length > 0;
     const isMinorNode = !!node.isMinor;
-    const minorInfo = isMinorNode ? this._minorNodeInfoHtml(node, ctx) : '';
+    const minorInfo = isMinorNode ? this._minorNodeInfoHtml(node) : '';
     const isExpandable = hasChildren || hasCourses || !!minorInfo;
     const expanded = this.isExpanded(major, node.path);
     const isHighlighted = this.highlightedPath === node.path
@@ -2598,7 +2681,6 @@ const App = {
     const ruleHtml = (node.rule && node.rule.label)
       ? `<span class="tr-rule"${node.rule.note ? ` title="${esc(node.rule.note)}"` : ''}>${esc(node.rule.label)}</span>`
       : '';
-    const statusHtml = this._nodeStatusHtml(node, ctx);
     const countHtml = (!expanded && filteredTotalCourses > 0 && (hasChildren || hasCourses))
       ? `<span class="tr-count">${filteredTotalCourses} course${filteredTotalCourses === 1 ? '' : 's'}</span>`
       : '';
@@ -2606,14 +2688,13 @@ const App = {
     const downloadBtn = filteredTotalCourses > 0
       ? this._renderReqDownloadBtn(major, safePath)
       : '';
-    const leafCtx = ctx ? Object.assign({}, ctx, { nodePath: node.path }) : null;
     const renderInner = () => {
       let inner = minorInfo;
       if (hasChildren) {
         for (const child of node.children) inner += this.renderTreeNode(child, major, depth + 1, ctx);
       }
       if (hasCourses) {
-        for (const c of filteredCourses) inner += this._renderLeafCourse(c, major, leafCtx);
+        for (const c of filteredCourses) inner += this._renderLeafCourse(c, major, ctx);
       }
       return inner;
     };
@@ -2627,7 +2708,7 @@ const App = {
           <span class="tr-arrow ${expanded ? 'expanded' : ''}">▶</span>
           <span class="tr-accent" style="background:${accent}"></span>
           <span class="tr-card-title">${esc(node.label)}</span>
-          <span class="tr-card-meta">${ruleHtml}${statusHtml}${countHtml}${downloadBtn}</span>
+          <span class="tr-card-meta">${ruleHtml}${countHtml}${downloadBtn}</span>
         </div>`;
       const body = (isExpandable && expanded) ? `<div class="tr-card-body">${renderInner()}</div>` : '';
       return `<div class="tr-card ${openCls}${isMinorNode ? ' tr-card-minor' : ''}" style="--tr-accent:${accent}">${cardHead}${body}</div>`;
@@ -2640,7 +2721,6 @@ const App = {
     html += `<span class="tr-arrow ${expanded ? 'expanded' : ''} ${!isExpandable ? 'leaf' : ''}">▶</span>`;
     html += `<span class="tr-sub-label">${esc(node.label)}</span>`;
     html += ruleHtml;
-    html += statusHtml;
     html += countHtml;
     html += downloadBtn;
     html += `</div>`;
@@ -2716,18 +2796,16 @@ const App = {
   },
 
   /**
-   * One course row. In a student's tree it starts with the status control; in
-   * a minor tree it says where a marked course is counted and whether it also
-   * counts for the student's major; in the major tree it names the student's
-   * minors the course also counts for.
+   * One course row. For a student, a minor tree row says when the course also
+   * counts for their major, and a major tree row names their minors the course
+   * also counts for.
    */
   _renderLeafCourse(c, major, ctx) {
     const fullCourse = lookupCourse(this.courseIndex, c.code) || c;
     const isActive = this.selectedCourse && this.selectedCourse.course_code === c.code;
     const vm = computeViewMode(this.profile);
     const p = this.profile;
-    const statusOn = this._statusTrackingOn();
-    const status = statusOn ? this._courseStatusOf(c.code) : '';
+    const student = this._isStudentView();
     const inMinor = !!(ctx && ctx.minor);
 
     let mpChip = '';
@@ -2741,49 +2819,28 @@ const App = {
 
     const notes = [];
     if (inMinor) {
-      if (status && ctx.progress) {
-        const usedAt = ctx.progress.assigned.get(c.code);
-        if (usedAt && usedAt !== ctx.nodePath) {
-          notes.push(`<span class="tr-leaf-used">Counted in ${esc(this._minorNodeLabel(ctx.minor, usedAt))}</span>`);
-        } else if (!usedAt) {
-          notes.push('<span class="tr-leaf-used">Not counted, requirement already met</span>');
-        }
-      }
-      if (statusOn && p.primary) {
+      if (student && p.primary) {
         const kind = majorCountKind(fullCourse, p.primary);
         if (kind) {
           notes.push(`<span class="tr-dc-tag tr-dc-tag-major tr-dc-tag-${esc(p.primary.toLowerCase())}">Also counts for ${esc(p.primary)}${kind === 'gened' ? ' Gen Ed' : ''}</span>`);
         }
       }
-    } else if (statusOn) {
+    } else if (student) {
       for (const mc of getProfileMinors(p)) {
         if (courseCountsForMinor(fullCourse, mc, this.minorIndex)) {
           notes.push(`<span class="tr-dc-tag tr-dc-tag-minor">Also counts for ${esc(getMinorLabel(mc))} minor</span>`);
         }
       }
     }
-    const statusBtn = statusOn
-      ? this._courseStatusButtonHtml(c.code, status, `${major}|${(ctx && ctx.nodePath) || ''}|${c.code}`)
-      : '';
 
     return `
-      <div class="tr-leaf ${isActive ? 'active' : ''}${c.earlier ? ' is-earlier' : ''}${status ? ' tr-leaf-' + status : ''}" data-course-code="${esc(c.code)}">
-        ${statusBtn}
+      <div class="tr-leaf ${isActive ? 'active' : ''}" data-course-code="${esc(c.code)}">
         <span class="tr-leaf-code">${esc(c.code)}</span>
         <span class="tr-leaf-name">${esc(c.name)}${notes.length ? `<span class="tr-leaf-notes">${notes.join('')}</span>` : ''}</span>
-        ${c.earlier ? this._earlierTagHtml(c.earlierReason, 'tr-earlier-tag') : ''}
         ${c.units ? `<span class="tr-leaf-units">${c.units}u</span>` : ''}
         ${alsoHtml}${mpChip}
         ${this._renderRowActions(fullCourse)}
       </div>`;
-  },
-
-  // A course kept on a bucket from an earlier version of the requirement (not
-  // in the 2026-27 catalog). Plain text, with the reason in the tooltip.
-  _earlierTagHtml(reason, cls) {
-    const why = reason ? ` (${reason})` : '';
-    const title = `Earlier requirement${why}: listed in an earlier version of this requirement, not in the 2026-27 catalog. Check with your advisor.`;
-    return `<span class="${cls}" title="${esc(title)}">Earlier requirement</span>`;
   },
 
   // ── Per-row inline actions (wishlist + flag) ───────────────
@@ -2804,13 +2861,17 @@ const App = {
     return `<span class="tr-leaf-actions">${acts.join('')}</span>`;
   },
 
-  // Course-card (detail view) actions — wishlist save toggle + flag link.
-  // Labeled buttons here (vs icon-only on row) since the card has space.
-  // Subtle offering-likelihood pill — appears under a semester header.
-  // Silent for 'mixed' and 'unknown' to avoid noise.
-  _renderOfferingPredictionHtml(course, season) {
-    if (typeof predictOffering !== 'function') return '';
-    const pred = predictOffering(course, season);
+  /**
+   * The forecast pill under the semester heading of the course card, from the
+   * semesters the course ran in (predictOffering); silent for 'mixed' and
+   * 'unknown' to avoid noise. It forecasts a semester the Schedule of Classes
+   * lists no section of the course in; when it lists one (any campus), the
+   * sections are the answer and no pill shows.
+   */
+  _renderOfferingPredictionHtml(course, semesterCode) {
+    if (typeof predictOffering !== 'function' || !isSemesterCode(semesterCode)) return '';
+    if (getCourseOfferings(course).some(o => o && !o.cancelled && o.semester_code === semesterCode)) return '';
+    const pred = predictOffering(course, semesterCode[0]);
     if (!pred || pred.state === 'mixed' || pred.state === 'unknown') return '';
     return `
       <div class="cc-offer-pred cc-offer-pred-${pred.state}" title="${esc(pred.reason)}">
@@ -2819,6 +2880,8 @@ const App = {
       </div>`;
   },
 
+  // Course-card (detail view) actions: wishlist save toggle and flag link.
+  // Labeled buttons here (vs icon-only on row) since the card has space.
   _renderCardActions(course) {
     const parts = [];
     if (isStudent(this.profile)) {
@@ -2830,9 +2893,10 @@ const App = {
         </button>`);
     }
     if (canUseSchedulePlan(this.profile)) {
-      const sections = filterOfferings(getCourseOfferings(course), this._filterParams());
-      const grouped = groupOfferingsBySection(sections);
-      const hasPlannedSection = grouped.some(g => this._isSectionGroupInPlan(course.course_code, g));
+      const grouped = this._visibleOfferingGroups(course);
+      const planned = this._plannedIdSet();
+      const hasPlannedSection = grouped.some(g => offeringGroupParts(g).some(p =>
+        p.meetings.some(m => planned.has(this._planItemForMeeting(course.course_code, m).id))));
       if (hasPlannedSection) {
         parts.push(`
           <button class="cc-action cc-action-plan is-planned" onclick="App._openActivePlanDetail()" aria-label="View in schedule plan">
@@ -2841,7 +2905,7 @@ const App = {
           </button>`);
       } else if (grouped.length) {
         parts.push(`
-          <button class="cc-action cc-action-plan" data-action="plan-add-first" data-course-code="${esc(course.course_code)}" aria-label="Add first section to schedule plan">
+          <button class="cc-action cc-action-plan" data-action="plan-add-first" data-course-code="${esc(course.course_code)}" aria-label="Add the first matching section, with its lecture, to schedule plan">
             ${this._iconCalendar()}
             <span>Add to plan</span>
           </button>`);
@@ -2856,8 +2920,20 @@ const App = {
     } else if (isStudent(this.profile) && this._courseHasVisibleFlag(course.course_code)) {
       parts.push(`<span class="cc-flag-badge">Faculty flagged · ${esc(this._courseFlagStatus(course.course_code))}</span>`);
     }
+    const editKey = canManageUsers(this.authedUser) ? this._courseEditKey(course) : '';
+    if (/^\d{2}-\d{3}$/.test(editKey)) {
+      parts.push(`
+        <button class="cc-action cc-action-edit" onclick="App._editCourseInAdmin('${editKey}')" title="Open this course in the admin course editor" aria-label="Edit course data">
+          ${this._iconEdit()}
+          <span>Edit course data</span>
+        </button>`);
+    }
     if (!parts.length) return '';
     return `<div class="cc-head-actions">${parts.join('')}</div>`;
+  },
+
+  _iconEdit() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M10.8 2.6l2.6 2.6L6 12.6 2.8 13.2 3.4 10z"/></svg>';
   },
 
   _iconBookmarkOutline() {
@@ -2873,14 +2949,9 @@ const App = {
     return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="3.5" width="11" height="10.5" rx="1.5"/><path d="M5 2v2M11 2v2M2.5 6.5h11"/></svg>';
   },
 
-  /**
-   * A tree row passes the semester, campus and modality filters, or is a
-   * course the student marked in progress or completed (those always show).
-   */
+  /** A tree row passes the semester, campus and modality filters. */
   _leafPassesTreeFilter(c) {
-    const code = c.code || c.course_code;
-    if (this._statusTrackingOn() && this._courseStatusOf(code)) return true;
-    const full = lookupCourse(this.courseIndex, code) || c;
+    const full = lookupCourse(this.courseIndex, c.code || c.course_code) || c;
     return this.coursePassesTreeFilter(full);
   },
 
@@ -3431,7 +3502,7 @@ const App = {
   _normalizePlanItem(item) {
     const base = {
       course_code: item.course_code,
-      semester_code: item.semester_code || (this.activeSemester !== 'all' ? this.activeSemester : ''),
+      semester_code: item.semester_code || (isSemesterCode(this.activeSemester) ? this.activeSemester : ''),
       section: item.section || '',
       campus: item.campus || '',
       days_times: item.days_times || 'TBA',
@@ -3460,59 +3531,63 @@ const App = {
     return items.filter(i => i.semester_code === code);
   },
 
-  _isOfferingInPlan(courseCode, offering) {
-    const id = planOfferingKey(courseCode, offering);
-    return this._getPlanItems().some(i => i.id === id);
+  /** The plan item for one meeting of a section; its id is the saved plan key. */
+  _planItemForMeeting(courseCode, m, semesterCode) {
+    return this._normalizePlanItem({
+      course_code: courseCode,
+      semester_code: m.semester_code || semesterCode,
+      section: m.section,
+      campus: m.campus,
+      days_times: offeringDaysTimes(m),
+      modality: m.modality || m.delivery_mode || '',
+    });
   },
 
-  _sectionMeetingsForPlan(courseCode, semesterCode, section, campus) {
+  /** Ids of the meetings in the active plan. */
+  _plannedIdSet() {
+    return new Set(this._getPlanItems().map(i => i.id));
+  },
+
+  /** A course's offering groups (each lecture with its sections), before any filter. */
+  _offeringGroups(courseCode) {
     const course = lookupCourse(this.courseIndex, courseCode);
-    if (!course) return [];
-    return getCourseOfferings(course).filter(o =>
-      (o.semester_code || this.activeSemester) === semesterCode
-      && (o.section || '') === (section || '')
-      && (o.campus || '') === (campus || '')
-    );
+    return course ? linkOfferingGroups(getCourseOfferings(course)) : [];
   },
 
-  _isSectionGroupInPlan(courseCode, group) {
-    const meetings = (group && group.meetings) || [];
-    if (!meetings.length) return false;
-    return meetings.some(m => this._isOfferingInPlan(courseCode, m));
+  /** The course's offering groups that match the semester, campus and modality filters. */
+  _visibleOfferingGroups(course) {
+    return filterOfferingGroups(linkOfferingGroups(getCourseOfferings(course)), this._filterParams());
   },
 
-  _countPlannedSections(semesterCode, planId) {
+  /** Courses in the plan for a semester (a lecture and its section are one course). */
+  _countPlannedCourses(semesterCode, planId) {
     const items = this._getPlanItemsForSemester(semesterCode, planId);
-    return new Set(items.map(i => planSectionKey(i.course_code, i))).size;
+    return new Set(items.map(i => i.course_code)).size;
   },
 
   _planSummary(plan, semesterCode) {
     const items = this._getPlanItemsForSemester(semesterCode || this.activeSemester, plan.id);
     const allItems = plan.items || [];
-    const sectionCount = new Set(allItems.map(i => planSectionKey(i.course_code, i))).size;
-    const filteredSections = this._countPlannedSections(semesterCode || this.activeSemester, plan.id);
+    const courseCount = new Set(allItems.map(i => i.course_code)).size;
+    const filteredCourses = this._countPlannedCourses(semesterCode || this.activeSemester, plan.id);
     const units = this._planUnitsTotal(items.length ? items : allItems);
-    const courseCount = new Set((items.length ? items : allItems).map(i => i.course_code)).size;
-    const conflicts = countPlanConflictPairs(items.length ? items : allItems);
-    return { sectionCount, filteredSections, units, courseCount, conflicts, itemCount: allItems.length };
+    const conflicts = countPlanConflictPairs(items.length ? items : allItems, this._planOfferingKeyOf());
+    return { courseCount, filteredCourses, units, conflicts, itemCount: allItems.length };
   },
 
+  /** Planned meetings as one entry per offering: a lecture and its planned section together. */
   _groupPlanItems(items) {
-    const map = new Map();
-    for (const item of items || []) {
-      const key = planSectionKey(item.course_code, item);
-      if (!map.has(key)) {
-        map.set(key, {
-          course_code: item.course_code,
-          semester_code: item.semester_code,
-          section: item.section,
-          campus: item.campus,
-          meetings: [],
-        });
-      }
-      map.get(key).meetings.push(item);
-    }
-    return [...map.values()];
+    return groupPlanItemsByOffering(items, code => this._offeringGroups(code));
+  },
+
+  /**
+   * The offering of a planned meeting, for the conflict check: the meetings of
+   * a lecture and its section (or of one section) never conflict with each
+   * other, whatever their times (planConflictPairs()).
+   */
+  _planOfferingKeyOf() {
+    const offeringOf = planItemOfferingGroups(code => this._offeringGroups(code));
+    return item => offeringOf(item).key;
   },
 
   _planUnitsTotal(items) {
@@ -3543,69 +3618,74 @@ const App = {
     this._ensureActivePlan(true);
     const course = lookupCourse(this.courseIndex, courseCode);
     if (!course) return;
-    const sections = filterOfferings(getCourseOfferings(course), this._filterParams());
-    const grouped = groupOfferingsBySection(sections);
-    if (!grouped.length) {
+    const group = this._visibleOfferingGroups(course)[0];
+    if (!group) {
       showToast('No sections match your current filters.');
       return;
     }
-    const g = grouped[0];
-    this.togglePlanSection(courseCode, g.semester_code || this.activeSemester, g.section, g.campus, { forceAdd: true });
+    // The first matching offering: its lecture with its first section (or with
+    // the section of it already in the plan), or a section that stands alone.
+    const head = offeringGroupParts(group)[0];
+    this.togglePlanSection(courseCode, group.semester_code || this.activeSemester, head.section, head.campus, { forceAdd: true });
     const ta = document.getElementById('typeahead');
     if (ta) ta.classList.remove('visible');
   },
 
+  /**
+   * "+ Plan" / "✓ Planned" on a course card line. Planning a section plans
+   * every meeting of it and of its lecture (they meet at different times of
+   * the week) and replaces another section of the same lecture. When all of
+   * that is planned, the click takes the whole offering out. A plan holding
+   * only part of it (saved before lectures and sections were linked) gets the
+   * missing part added. opts.forceAdd never removes.
+   */
   togglePlanSection(courseCode, semesterCode, section, campus, opts) {
     if (!canUseSchedulePlan(this.profile)) {
       showToast('Schedule planning is not available for this account.');
       return;
     }
     this._ensureActivePlan(true);
-    const meetings = this._sectionMeetingsForPlan(courseCode, semesterCode, section, campus);
-    if (!meetings.length) return;
+    const found = findOfferingGroup(this._offeringGroups(courseCode), semesterCode, section, campus);
+    if (!found) return;
     let list = this._getPlanItems();
-    const ids = meetings.map(m => planOfferingKey(courseCode, m));
-    const anyIn = ids.some(id => list.some(i => i.id === id));
-    const allIn = ids.every(id => list.some(i => i.id === id));
-    if (allIn && (!opts || !opts.forceAdd)) {
-      list = list.filter(i => !ids.includes(i.id));
+    const ids = new Set(list.map(i => i.id));
+    const itemFor = m => this._planItemForMeeting(courseCode, m, semesterCode);
+    const isIn = m => ids.has(itemFor(m).id);
+    const choice = offeringGroupChoice(found.group, section, isIn);
+    const meetings = choice.parts.flatMap(p => p.meetings);
+    if (!meetings.length) return;
+    const allIn = meetings.every(isIn);
+    if (allIn && !(opts && opts.forceAdd)) {
+      const groupIds = new Set(offeringGroupParts(found.group).flatMap(p => p.meetings).map(m => itemFor(m).id));
+      list = list.filter(i => !groupIds.has(i.id));
       this._savePlanItems(list);
       showToast('Removed from schedule plan');
-    } else if (anyIn && !allIn) {
+    } else if (allIn) {
+      showToast('Already in your schedule plan');
+    } else {
+      const otherIds = new Set(choice.others.flatMap(p => p.meetings).map(m => itemFor(m).id));
+      const switched = list.some(i => otherIds.has(i.id));
+      const partial = meetings.some(isIn);
+      list = list.filter(i => !otherIds.has(i.id));
       for (const m of meetings) {
-        const normalized = this._normalizePlanItem({
-          course_code: courseCode,
-          semester_code: m.semester_code || semesterCode,
-          section: m.section,
-          campus: m.campus,
-          days_times: offeringDaysTimes(m),
-          modality: m.modality || m.delivery_mode || '',
-        });
-        if (!list.some(i => i.id === normalized.id)) list.push(normalized);
+        const item = itemFor(m);
+        if (!list.some(i => i.id === item.id)) list.push(item);
       }
       this._savePlanItems(list);
-      showToast('Added remaining meeting times to your schedule plan');
-    } else if (!anyIn || (opts && opts.forceAdd)) {
-      for (const m of meetings) {
-        const normalized = this._normalizePlanItem({
-          course_code: courseCode,
-          semester_code: m.semester_code || semesterCode,
-          section: m.section,
-          campus: m.campus,
-          days_times: offeringDaysTimes(m),
-          modality: m.modality || m.delivery_mode || '',
-        });
-        if (!list.some(i => i.id === normalized.id)) list.push(normalized);
-      }
-      this._savePlanItems(list);
-      showToast('Added to your schedule plan');
+      const chosen = choice.parts[choice.parts.length - 1];
+      if (switched) showToast(`Switched to ${planSectionLabel(chosen.section)} in your schedule plan`);
+      else if (partial) showToast('Added remaining meeting times to your schedule plan');
+      else showToast('Added to your schedule plan');
     }
     this._refreshPlanSurfaces(courseCode);
   },
 
+  /** Plan list "Remove": the whole offering (lecture and section) of that entry. */
   removePlanSection(courseCode, semesterCode, section, campus) {
-    const key = planSectionKey(courseCode, { semester_code: semesterCode, section, campus });
-    const list = this._getPlanItems().filter(i => planSectionKey(i.course_code, i) !== key);
+    const groups = this._offeringGroups(courseCode);
+    const key = planItemOfferingGroup({ course_code: courseCode, semester_code: semesterCode, section, campus }, groups).key;
+    const list = this._getPlanItems().filter(i =>
+      i.course_code !== courseCode || planItemOfferingGroup(i, groups).key !== key);
     this._savePlanItems(list);
     showToast('Removed from schedule plan');
     this._refreshPlanSurfaces(courseCode);
@@ -3677,11 +3757,11 @@ const App = {
         const inset = totalCols > 1 ? 1 : 2;
         const colors = courseColor[item.course_code];
         const c = lookupCourse(this.courseIndex, item.course_code);
-        const title = `${item.course_code} · Sec ${item.section}\n${parsed.raw}`;
+        const title = `${item.course_code} · ${planSectionLabel(item.section)}\n${parsed.raw}`;
         return `
           <button type="button" class="plan-block" style="top:${top}%;height:${height}%;left:calc(${leftPct}% + ${inset}px);width:calc(${widthPct}% - ${inset * 2}px);background:${colors.bg};border-color:${colors.border};color:${colors.text}" title="${esc(title)}" onclick="App.selectCourseFromTree('${esc(item.course_code)}')">
             <span class="plan-block-code">${esc(item.course_code)}</span>
-            <span class="plan-block-sec">Sec ${esc(item.section)}</span>
+            <span class="plan-block-sec">${esc(planSectionLabel(item.section))}</span>
             <span class="plan-block-time">${esc(formatPlanMinutes(parsed.startMin))} to ${esc(formatPlanMinutes(parsed.endMin))}</span>
           </button>`;
       }).join('');
@@ -3704,7 +3784,7 @@ const App = {
                 <button type="button" class="plan-tba-main" onclick="App.selectCourseFromTree('${esc(item.course_code)}')">
                   <span class="plan-tba-code">${esc(item.course_code)}</span>
                   <span class="plan-tba-name">${esc(c ? c.course_name : '')}</span>
-                  <span class="plan-tba-meta">Sec ${esc(item.section)}${days ? ' · ' + esc(days) : ''}${item.campus ? ' · ' + esc(item.campus) : ''}</span>
+                  <span class="plan-tba-meta">${esc(planSectionLabel(item.section))}${days ? ' · ' + esc(days) : ''}${item.campus ? ' · ' + esc(item.campus) : ''}</span>
                 </button>
                 <button type="button" class="plan-tba-remove" data-action="plan-remove" data-plan-id="${esc(item.id)}" aria-label="Remove from plan">Remove</button>
               </div>`;
@@ -3736,6 +3816,8 @@ const App = {
 
   _renderPlanList(items, conflicts) {
     if (!items.length) return '';
+    // One entry per offering: a lecture and the section planned with it
+    // show together ("Lec 2 + Sec W"), each with its own meeting times.
     const groups = this._groupPlanItems(items);
     return `
       <section class="plan-list" aria-label="Planned courses">
@@ -3743,18 +3825,24 @@ const App = {
         <div class="plan-list-rows">
           ${groups.map(group => {
             const c = lookupCourse(this.courseIndex, group.course_code);
-            const times = group.meetings.map(m => formatDaysTimesForDisplay(m.days_times)).join(' · ');
+            const label = group.parts.map(p => planSectionLabel(p.section)).join(' + ');
+            const timesOf = part => part.meetings.map(m => formatDaysTimesForDisplay(m.days_times)).join(' · ');
             const groupConflict = group.meetings.some(m => conflicts.has(m.id));
+            const tail = `${group.campus ? ' · ' + esc(group.campus) : ''}${c && c.units ? ' · ' + c.units + 'u' : ''}${groupConflict ? ' · Time conflict' : ''}`;
+            const metaHtml = group.parts.length === 1
+              ? `<span class="plan-list-meta">${esc(label)} · ${esc(timesOf(group.parts[0]))}${tail}</span>`
+              : `<span class="plan-list-meta">${esc(label)}${tail}</span>`
+                + group.parts.map(p => `<span class="plan-list-meta">${esc(planSectionLabel(p.section))}: ${esc(timesOf(p))}</span>`).join('');
             return `
               <div class="plan-list-row ${groupConflict ? 'is-conflict' : ''}">
                 <button type="button" class="plan-list-main" onclick="App.selectCourseFromTree('${esc(group.course_code)}')">
                   <span class="plan-list-code">${esc(group.course_code)}</span>
                   <span class="plan-list-body">
                     <span class="plan-list-name">${esc(c ? c.course_name : '')}</span>
-                    <span class="plan-list-meta">Sec ${esc(group.section)} · ${esc(times)}${group.campus ? ' · ' + esc(group.campus) : ''}${c && c.units ? ' · ' + c.units + 'u' : ''}${groupConflict ? ' · Time conflict' : ''}</span>
+                    ${metaHtml}
                   </span>
                 </button>
-                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.section)}" data-campus="${esc(group.campus)}" aria-label="Remove section from plan">Remove</button>
+                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.parts[0].section)}" data-campus="${esc(group.campus)}" aria-label="Remove ${esc(label)} from plan">Remove</button>
               </div>`;
           }).join('')}
         </div>
@@ -3785,9 +3873,9 @@ const App = {
         <article class="plan-card ${isActive ? 'is-active' : ''}">
           <button type="button" class="plan-card-main" data-action="plan-open" data-plan-id="${esc(plan.id)}">
             <span class="plan-card-name">${esc(plan.name)}</span>
-            <span class="plan-card-meta">${sum.sectionCount} section${sum.sectionCount === 1 ? '' : 's'} · ${sum.units || 0} units${sum.conflicts ? ' · ' + sum.conflicts + ' conflict' + (sum.conflicts === 1 ? '' : 's') : ''}</span>
-            ${this.activeSemester !== 'all' && sum.filteredSections !== sum.sectionCount
-              ? `<span class="plan-card-meta plan-card-meta-sub">${sum.filteredSections} in ${esc(semLabel)}</span>` : ''}
+            <span class="plan-card-meta">${sum.courseCount} course${sum.courseCount === 1 ? '' : 's'} · ${sum.units || 0} units${sum.conflicts ? ' · ' + sum.conflicts + ' conflict' + (sum.conflicts === 1 ? '' : 's') : ''}</span>
+            ${this.activeSemester !== 'all' && sum.filteredCourses !== sum.courseCount
+              ? `<span class="plan-card-meta plan-card-meta-sub">${sum.filteredCourses} in ${esc(semLabel)}</span>` : ''}
             ${sharedFrom}
             ${updated ? `<span class="plan-card-meta plan-card-meta-sub">Updated ${esc(updated)}</span>` : ''}
           </button>
@@ -3842,12 +3930,12 @@ const App = {
     if (!el) return;
 
     const items = this._getPlanItemsForSemester(this.activeSemester, planId);
-    const conflicts = findPlanConflicts(items);
+    const offeringOf = this._planOfferingKeyOf();
+    const conflicts = findPlanConflicts(items, offeringOf);
     const units = this._planUnitsTotal(items);
-    const sectionCount = this._countPlannedSections(this.activeSemester, planId);
-    const courseCount = new Set(items.map(i => i.course_code)).size;
+    const courseCount = this._countPlannedCourses(this.activeSemester, planId);
     const semLabel = semesterLabel(this.activeSemester);
-    const conflictPairs = countPlanConflictPairs(items);
+    const conflictPairs = countPlanConflictPairs(items, offeringOf);
     const conflictNote = conflictPairs
       ? `<span class="plan-stat plan-stat-warn">${conflictPairs} time conflict${conflictPairs === 1 ? '' : 's'}</span>`
       : '';
@@ -3869,7 +3957,6 @@ const App = {
             <button type="button" class="plan-share-btn" data-action="plan-share" data-plan-id="${esc(plan.id)}">Share schedule</button>
           </div>
           <div class="plan-stats">
-            <span class="plan-stat">${sectionCount} section${sectionCount === 1 ? '' : 's'}</span>
             <span class="plan-stat">${courseCount} course${courseCount === 1 ? '' : 's'}</span>
             <span class="plan-stat">${units || 0} units</span>
             ${conflictNote}
@@ -4415,7 +4502,10 @@ const App = {
     if (!el) return;
     el.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
     const tab = this._adminConsole.tab;
-    if (tab === 'courses') return this._renderAdminCourses();
+    if (tab === 'courses') {
+      await this._ensureRequirementBuckets();
+      return this._renderAdminCourses();
+    }
     if (tab === 'overview') return this._loadAdminOverview();
     if (tab === 'users') return this._loadUserAdmin();
     if (tab === 'access') return this._loadAdminAccess();
@@ -4483,7 +4573,12 @@ const App = {
   },
 
   // ── Courses (catalog edits) ───────────────────────────────
+  // What a course counts for is saved per program and per minor as a change to
+  // the catalog ({ add, remove }, README 12.2), so everything an admin did not
+  // touch keeps following the catalog and the daily updates.
   _courseAdmin: { view: 'list', q: '', filter: 'all', key: null, draft: null },
+
+  COURSE_VIEWS: [['list', 'Courses'], ['category', 'Courses in a category'], ['minors', 'Minor settings']],
 
   _courseEditKey(course) {
     // Edits to a scraped course stay keyed by its catalog number, even after renumbering.
@@ -4493,7 +4588,7 @@ const App = {
 
   _courseIsEdited(c) {
     const e = c._edit;
-    return !!(e && !c._added && (Object.keys(e.fields || {}).length || e.requirements));
+    return !!(e && !c._added && (Object.keys(e.fields || {}).length || Object.keys(e.requirements || {}).length));
   },
 
   // Raw segments joined with ›. Used for datalist values, which
@@ -4514,18 +4609,71 @@ const App = {
       || (c.course_name || '').toLowerCase().includes(q);
   },
 
+  /** Load data/requirement_buckets.json once for the pick lists. Optional: without it the catalog rows are the list. */
+  async _ensureRequirementBuckets() {
+    if (this._bucketsRequested) return;
+    this._bucketsRequested = true;
+    const buckets = await fetchRequirementBuckets();
+    if (!buckets) return;
+    this._requirementBuckets = buckets;
+    this._catalogReqPaths = knownRequirementPaths(this._scrapedCourses || [], buckets);
+  },
+
+  /** The 2026-27 categories of a program (the scraped catalog, before edits), sorted. */
+  _catalogPathsOf(prog) {
+    const known = (this._catalogReqPaths && this._catalogReqPaths[prog]) || new Map();
+    return [...known.keys()].sort();
+  },
+
+  _isCatalogPath(prog, path) {
+    return !!(this._catalogReqPaths && this._catalogReqPaths[prog] && this._catalogReqPaths[prog].has(path));
+  },
+
+  _isGenEdPath(path) {
+    return String(path || '').split('---')[0] === 'GenEd';
+  },
+
+  /** "Statistics › Introductory Statistics" for a category path of a minor. */
+  _minorCategoryLabel(m, path) {
+    const names = [];
+    let cats = (m && m.def && m.def.categories) || [];
+    for (const id of String(path || '').split('---').filter(Boolean)) {
+      const cat = cats.find(c => c && c.id === id);
+      names.push(cat ? (cat.name || id) : id);
+      cats = (cat && cat.children) || [];
+    }
+    return names.join(' › ');
+  },
+
+  _courseViewsHtml(active) {
+    return `<div class="adm-seg adm-course-views" role="tablist" aria-label="Course tools">${this.COURSE_VIEWS.map(([id, label]) => `
+      <button type="button" class="adm-seg-btn ${active === id ? 'is-active' : ''}" role="tab" aria-selected="${active === id ? 'true' : 'false'}" onclick="App._setCourseView('${id}')">${label}</button>`).join('')}</div>`;
+  },
+
+  _setCourseView(view) {
+    const st = this._courseAdmin;
+    st.view = view;
+    st.draft = null;
+    st.saved = null;
+    this._renderAdminCourses();
+  },
+
   _renderAdminCourses() {
     const st = this._courseAdmin;
     if (st.view === 'edit' || st.view === 'add') return this._renderCourseEditor();
     if (st.view === 'saved') return this._renderCourseSaved();
+    if (st.view === 'category') return this._renderCategoryView();
+    if (st.view === 'minors') return this._renderMinorSettings();
     const el = document.getElementById('admContent');
     if (!el) return;
     const all = this.courses || [];
     const archived = this._archivedCourses || [];
     const editedCount = all.filter(c => this._courseIsEdited(c)).length;
     const addedCount = all.filter(c => c._added).length;
+    const checkCount = all.filter(c => this._courseEditProblems(c).length).length;
     const chip = (id, label, n) => `<button type="button" class="adm-chip ${st.filter === id ? 'is-active' : ''}" onclick="App._setCourseFilter('${id}')">${label}${n != null ? ` <span class="adm-chip-n">${n}</span>` : ''}</button>`;
     el.innerHTML = `
+      ${this._courseViewsHtml('list')}
       <div class="adm-card adm-card-row">
         <div>
           <div class="adm-card-title">Course catalog</div>
@@ -4541,6 +4689,7 @@ const App = {
         ${chip('all', 'All courses')}
         ${chip('edited', 'Edited', editedCount)}
         ${chip('added', 'Added here', addedCount)}
+        ${chip('check', 'Check these', checkCount)}
         ${chip('archived', 'Archived', archived.length)}
         <span class="adm-toolbar-count" id="admCourseCount"></span>
       </div>
@@ -4558,6 +4707,78 @@ const App = {
     this._renderCourseResults();
   },
 
+  /**
+   * The [key, value] pairs of a stored requirements edit in a steady order:
+   * the programs as in MAJOR_ORDER, then any other program, then the minors by
+   * name. (The API returns the keys sorted, which would put AI first.)
+   */
+  _orderedEdits(reqs) {
+    const rank = key => {
+      if (key.startsWith(MINOR_EDIT_PREFIX)) return [2, getMinorLabel(key.slice(MINOR_EDIT_PREFIX.length)) || key];
+      const i = MAJOR_ORDER.indexOf(key);
+      return i >= 0 ? [0, i] : [1, key];
+    };
+    return Object.entries(reqs || {}).sort(([a], [b]) => {
+      const x = rank(a);
+      const y = rank(b);
+      return x[0] - y[0] || (typeof x[1] === 'number' ? x[1] - y[1] : String(x[1]).localeCompare(String(y[1])));
+    });
+  },
+
+  /** One line of what was changed, e.g. "Units · Computer Science: 1 added, 1 removed · Psychology minor: 1 added". */
+  _courseEditSummary(c) {
+    const e = c && c._edit;
+    if (!e) return '';
+    const labels = { course_code: 'Number', course_name: 'Name', department: 'Department', units: 'Units', description: 'Description', prerequisites: 'Prerequisites', offered_qatar: 'Qatar offering', offered_pitts: 'Pittsburgh offering', offered: 'Semesters' };
+    const parts = c._added ? [] : Object.keys(e.fields || {}).map(f => labels[f] || f);
+    for (const [key, value] of this._orderedEdits(e.requirements)) {
+      const minor = key.startsWith(MINOR_EDIT_PREFIX);
+      const name = minor ? `${getMinorLabel(key.slice(MINOR_EDIT_PREFIX.length))} minor` : (getProgramLabel(key) || key);
+      if (Array.isArray(value)) {
+        parts.push(`${name}: saved before the 2026-27 names`);
+        continue;
+      }
+      const bits = [];
+      const added = ((value && value.add) || []).length;
+      const removed = ((value && value.remove) || []).length;
+      if (added) bits.push(`${added} added`);
+      if (removed) bits.push(`${removed} removed`);
+      if (bits.length) parts.push(`${name}: ${bits.join(', ')}`);
+    }
+    return parts.join(' · ');
+  },
+
+  /**
+   * Why a course's edits need a look: a category that is not in the 2026-27
+   * catalog, a minor category that is not in minors.json, or a list saved
+   * before the change to per program edits. [] when all is well.
+   */
+  _courseEditProblems(c) {
+    const e = c && c._edit;
+    if (!e || !e.requirements) return [];
+    const out = [];
+    for (const [key, value] of this._orderedEdits(e.requirements)) {
+      if (key.startsWith(MINOR_EDIT_PREFIX)) {
+        if (!this.minorIndex) continue;
+        const code = key.slice(MINOR_EDIT_PREFIX.length);
+        const m = this.minorIndex.byCode[code];
+        const leaves = new Set(m ? minorLeafCategories(m.def).map(l => l.path) : []);
+        const paths = value && !Array.isArray(value) ? [...(value.add || []), ...(value.remove || [])] : [];
+        if (!m || Array.isArray(value) || paths.some(p => !leaves.has(p))) out.push(`${getMinorLabel(code)} minor category not in the minor file`);
+        continue;
+      }
+      const name = getProgramLabel(key) || key;
+      if (Array.isArray(value)) {
+        out.push(`${name} saved before the 2026-27 names`);
+        continue;
+      }
+      if (!this._catalogReqPaths || !this._catalogReqPaths[key] || !value) continue;
+      const paths = [...(value.add || []).map(r => (typeof r === 'string' ? r : r && r.requirement)), ...(value.remove || [])].filter(Boolean);
+      if (paths.some(p => !this._isCatalogPath(key, p))) out.push(`${name} category not in the 2026-27 catalog`);
+    }
+    return out;
+  },
+
   _renderCourseResults() {
     const st = this._courseAdmin;
     const box = document.getElementById('admCourseResults');
@@ -4567,6 +4788,7 @@ const App = {
     if (st.filter === 'archived') pool = this._archivedCourses || [];
     else if (st.filter === 'edited') pool = (this.courses || []).filter(c => this._courseIsEdited(c));
     else if (st.filter === 'added') pool = (this.courses || []).filter(c => c._added);
+    else if (st.filter === 'check') pool = (this.courses || []).filter(c => this._courseEditProblems(c).length);
     else pool = this.courses || [];
     const matches = pool.filter(c => this._courseMatches(c, q))
       .sort((a, b) => (a.course_code || '').localeCompare(b.course_code || ''));
@@ -4579,15 +4801,18 @@ const App = {
       return;
     }
     if (!matches.length) {
-      box.innerHTML = '<div class="empty-state"><div class="empty-text">No courses match.</div></div>';
+      box.innerHTML = `<div class="empty-state"><div class="empty-text">${st.filter === 'check' && !q ? 'Nothing to check. Every edit uses categories of the 2026-27 catalog and the minor files.' : 'No courses match.'}</div></div>`;
       return;
     }
     const archivedView = st.filter === 'archived';
     box.innerHTML = `<ul class="adm-course-list">${matches.slice(0, LIMIT).map(c => {
       const where = [c.offered_qatar ? 'Qatar' : '', c.offered_pitts ? 'Pittsburgh' : ''].filter(Boolean).join(' · ');
+      const summary = this._courseEditSummary(c);
+      const problems = archivedView ? [] : this._courseEditProblems(c);
       const tags = [
         c._added ? '<span class="adm-pill adm-pill-new">Added here</span>' : '',
         this._courseIsEdited(c) && !archivedView ? '<span class="adm-pill adm-pill-edit">Edited</span>' : '',
+        problems.length ? '<span class="adm-pill adm-pill-warn">Check</span>' : '',
         archivedView ? '<span class="adm-pill">Archived</span>' : '',
       ].join('');
       const key = esc(this._courseEditKey(c));
@@ -4598,6 +4823,8 @@ const App = {
             <span class="adm-course-item-body">
               <span class="adm-course-item-name">${esc(c.course_name || 'Untitled')}</span>
               <span class="adm-cell-sub">${c.units ? esc(String(c.units)) + ' units' : 'Units not set'}${where ? ' · ' + esc(where) : ''}</span>
+              ${summary ? `<span class="adm-course-item-summary">${esc(summary)}</span>` : ''}
+              ${problems.length ? `<span class="adm-course-item-warn">Check: ${esc(problems.join(', '))}</span>` : ''}
             </span>
             <span class="adm-course-item-tags">${tags}</span>
           </button>
@@ -4605,27 +4832,56 @@ const App = {
     }).join('')}</ul>`;
   },
 
-  // One "counts for" row as the course editor stores it. A row kept from an
-  // earlier requirement keeps its flag, so saving other fields does not drop it.
-  _courseReqRow(r) {
-    const row = { requirement: r.requirement, type: !!r.type };
-    if (r.earlier) {
-      row.earlier = true;
-      row.earlier_reason = r.earlier_reason || '';
-    }
-    return row;
-  },
-
   _findCourseByKey(key, archived) {
     const pool = archived ? (this._archivedCourses || []) : (this.courses || []);
     return pool.find(c => this._courseEditKey(c) === key) || null;
+  },
+
+  /** The catalog's rows of one program for a course, before admin edits ([] for a course added here). */
+  _courseBaseRows(course, prog) {
+    if (!course || course._added) return [];
+    const reqs = course._catalog && 'requirements' in course._catalog ? course._catalog.requirements : course.requirements;
+    return (reqs && reqs[prog]) || [];
+  },
+
+  /** The categories of a minor that take a course by the minor file alone. */
+  _courseMinorBase(course, code) {
+    const m = this.minorIndex && this.minorIndex.byCode[code];
+    return m && course ? minorFileCategories(m.def, course) : [];
+  },
+
+  /** The codes of a list that are archived on the admin page, by their number now or their catalog number. */
+  _archivedCodesIn(codes) {
+    const list = this._archivedCourses || [];
+    if (!codes || !codes.length || !list.length) return [];
+    const archived = new Set();
+    for (const c of list) {
+      archived.add(normalizeCourseCode(c.course_code));
+      if (c._catalog && c._catalog.course_code) archived.add(normalizeCourseCode(c._catalog.course_code));
+    }
+    return codes.filter(code => archived.has(normalizeCourseCode(code)));
+  },
+
+  /** A course's categories in a minor after its saved edit: the file's, minus removals, plus additions. */
+  _courseMinorDraft(course, code) {
+    const base = this._courseMinorBase(course, code);
+    const e = course && course._minorEdits && course._minorEdits[code];
+    if (!e) return base;
+    const out = base.filter(p => !(e.remove || []).includes(p));
+    for (const p of e.add || []) if (!out.includes(p)) out.push(p);
+    return out;
   },
 
   _courseDraftFrom(course) {
     const reqs = {};
     for (const m of MAJOR_ORDER) {
       reqs[m] = ((course && course.requirements && course.requirements[m]) || [])
-        .map(r => this._courseReqRow(r));
+        .map(r => ({ requirement: r.requirement, type: this._isGenEdPath(r.requirement) }));
+    }
+    const minors = {};
+    for (const mc of (course && this.minorIndex ? this.minorIndex.order : [])) {
+      const paths = this._courseMinorDraft(course, mc);
+      if (paths.length) minors[mc] = paths;
     }
     return {
       course_code: course ? course.course_code : '',
@@ -4638,6 +4894,7 @@ const App = {
       offered_pitts: course ? !!course.offered_pitts : false,
       offered: course && Array.isArray(course.offered) ? course.offered.join(', ') : '',
       requirements: reqs,
+      minors,
     };
   },
 
@@ -4654,6 +4911,16 @@ const App = {
     this._renderCourseEditor();
     const top = document.getElementById('admContent');
     if (top) top.scrollIntoView({ block: 'start' });
+  },
+
+  /** Open a course in the admin course editor, from its course card or the activity log. */
+  async _editCourseInAdmin(key) {
+    if (!canManageUsers(this.authedUser)) return;
+    const archived = !this._findCourseByKey(key, false) && !!this._findCourseByKey(key, true);
+    this._courseAdmin.view = 'list';
+    this._courseAdmin.draft = null;
+    await this.showAdminConsole('courses');
+    this._openCourseEditor(key, archived);
   },
 
   _openCourseAdd() {
@@ -4741,34 +5008,10 @@ const App = {
     const cat = (course && course._catalog) || {};
     const was = (field, fmt) => (field in cat)
       ? `<span class="adm-field-was">Schedule of Classes says: ${esc(fmt ? fmt(cat[field]) : (cat[field] === '' || cat[field] == null ? '(blank)' : String(cat[field])))}</span>` : '';
-    const known = this._knownReqPaths || (this._knownReqPaths = knownRequirementPaths(this.courses || []));
     const edit = course && course._edit;
-
-    const reqSections = MAJOR_ORDER.map(prog => {
-      const list = d.requirements[prog] || [];
-      const options = [...known[prog].keys()].sort().map(p => `<option value="${esc(this._courseReqLabel(p))}"></option>`).join('');
-      const chips = list.map((r, i) => `
-        <li class="adm-req">
-          <span class="adm-req-tag ${r.type ? 'is-gened' : ''}">${r.type ? 'Gen Ed' : 'Core'}</span>
-          <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}</span>
-          ${r.earlier ? this._earlierTagHtml(r.earlier_reason, 'adm-req-earlier') : ''}
-          <button type="button" class="adm-req-x" onclick="App._removeCourseReq('${prog}', ${i})" aria-label="Remove this requirement">×</button>
-        </li>`).join('');
-      return `
-        <div class="adm-req-group">
-          <div class="adm-req-head">${esc(getProgramLabel(prog) || prog)} <span class="adm-cell-sub">${list.length ? list.length + ' requirement' + (list.length === 1 ? '' : 's') : 'Does not count for anything'}</span></div>
-          ${chips ? `<ul class="adm-req-list">${chips}</ul>` : ''}
-          <div class="adm-req-add">
-            <input class="adm-search" id="ce-req-${prog}" list="ce-dl-${prog}" placeholder="Pick or type a category, for example GenEd › Foundations › Data Analysis" oninput="App._onCourseReqInput('${prog}')" />
-            <datalist id="ce-dl-${prog}">${options}</datalist>
-            <select class="adm-select" id="ce-req-type-${prog}" title="Only used for a category that does not exist yet" hidden>
-              <option value="core">Core</option><option value="gened">Gen Ed</option>
-            </select>
-            <button type="button" class="adm-btn" onclick="App._addCourseReq('${prog}')">Add</button>
-          </div>
-          <div class="adm-req-hint" id="ce-req-hint-${prog}" hidden>New category. Choose whether it is Core or Gen Ed.</div>
-        </div>`;
-    }).join('');
+    const stored = (edit && edit.requirements) || {};
+    const legacy = Object.entries(stored).some(([k, v]) => !k.startsWith(MINOR_EDIT_PREFIX) && Array.isArray(v));
+    const reqSections = MAJOR_ORDER.map(prog => this._courseReqGroupHtml(prog, course, adding)).join('');
 
     const actions = adding
       ? `<button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" id="ce-save" onclick="App._saveCourse()">Add course</button>
@@ -4808,11 +5051,119 @@ const App = {
             <label class="adm-field adm-field-full">Prerequisites<input class="adm-search" id="ce-prereq" value="${esc(d.prerequisites)}" placeholder="15-112" />${was('prerequisites')}</label>
           </div>
           <div class="adm-card-title adm-section-title">What it counts for</div>
-          <p class="adm-card-text">The requirements this course fulfills in each major. ${'requirements' in cat ? 'These have been edited here.' : ''}</p>
+          <p class="adm-card-text">The categories this course counts for in each major. Only what you add or remove here is kept; everything else follows the catalog as it updates.</p>
+          ${legacy ? '<div class="adm-legacy-note" role="note">These categories were saved before the 2026-27 catalog names. Check the ones marked Not in the 2026-27 catalog, then save.</div>' : ''}
           <div class="adm-req-groups">${reqSections}</div>
+          <div class="adm-card-title adm-section-title adm-section-gap">Minors</div>
+          ${this._courseMinorSectionHtml(course, adding)}
         </fieldset>
         <div class="adm-actions adm-editor-actions">${actions}
           <div class="adm-form-notice" id="ce-notice" role="alert" hidden></div>
+        </div>
+      </div>`;
+  },
+
+  /** One program's categories in the editor: what is listed, what the admin added or removed, and the pick list. */
+  _courseReqGroupHtml(prog, course, adding) {
+    const d = this._courseAdmin.draft;
+    const list = d.requirements[prog] || [];
+    const base = adding ? [] : this._courseBaseRows(course, prog);
+    const basePaths = new Set(base.map(r => r.requirement));
+    const draftPaths = new Set(list.map(r => r.requirement));
+    const tag = path => (this._isGenEdPath(path)
+      ? '<span class="adm-req-tag is-gened">Gen Ed</span>' : '<span class="adm-req-tag">Core</span>');
+    const flag = (text, cls) => `<span class="adm-req-flag${cls ? ' ' + cls : ''}">${text}</span>`;
+    const chips = list.map((r, i) => {
+      const added = !adding && !basePaths.has(r.requirement);
+      const flags = (added ? flag('Added here', 'is-added') : '')
+        + (this._isCatalogPath(prog, r.requirement) ? '' : flag('Not in the 2026-27 catalog', 'is-warn'));
+      return `
+        <li class="adm-req${added ? ' is-added' : ''}">
+          ${tag(r.requirement)}
+          <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}${flags ? `<span class="adm-req-flags">${flags}</span>` : ''}</span>
+          <button type="button" class="adm-req-x" onclick="App._removeCourseReq('${prog}', ${i})" aria-label="Remove this category">×</button>
+        </li>`;
+    }).join('');
+    const removed = base.filter(r => !draftPaths.has(r.requirement)).map((r, i) => `
+        <li class="adm-req is-removed">
+          ${tag(r.requirement)}
+          <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}<span class="adm-req-flags">${flag('Removed here')}</span></span>
+          <button type="button" class="adm-btn adm-btn-small" onclick="App._putBackCourseReq('${prog}', ${i})">Put back</button>
+        </li>`).join('');
+    const edited = !adding && !!programEditDelta(base, list);
+    // AI's general education rows are copies of the SCS rows CS uses, so a fix may belong in both.
+    let pairHint = '';
+    const pair = { CS: 'AI', AI: 'CS' }[prog];
+    if (pair && !adding && d.requirements[pair]) {
+      const otherDraft = new Set(d.requirements[pair].map(r => r.requirement));
+      const otherBase = new Set(this._courseBaseRows(course, pair).map(r => r.requirement));
+      const changed = [...new Set([...draftPaths, ...basePaths])]
+        .filter(p => this._isGenEdPath(p) && draftPaths.has(p) !== basePaths.has(p));
+      if (changed.some(p => (otherBase.has(p) || otherDraft.has(p)) && otherDraft.has(p) !== draftPaths.has(p))) {
+        pairHint = `<div class="adm-req-hint">${esc(getProgramLabel(pair) || pair)} lists the same Gen Ed category. Change it there too if it applies.</div>`;
+      }
+    }
+    const options = this._catalogPathsOf(prog).map(p => `<option value="${esc(this._courseReqLabel(p))}"></option>`).join('');
+    return `
+        <div class="adm-req-group${edited ? ' is-edited' : ''}" data-prog="${prog}">
+          <div class="adm-req-head">
+            <span>${esc(getProgramLabel(prog) || prog)} <span class="adm-cell-sub">${list.length ? list.length + ' requirement' + (list.length === 1 ? '' : 's') : 'Does not count for anything'}</span></span>
+            ${edited ? `<span class="adm-req-head-actions"><span class="adm-pill adm-pill-edit">Edited here</span><button type="button" class="adm-btn adm-btn-small" onclick="App._resetCourseProgram('${prog}')">Reset to the catalog</button></span>` : ''}
+          </div>
+          ${chips || removed ? `<ul class="adm-req-list">${chips}${removed}</ul>` : ''}
+          <div class="adm-req-add">
+            <input class="adm-search" id="ce-req-${prog}" list="ce-dl-${prog}" placeholder="Pick or type a category, for example GenEd › Foundations › Data Analysis" oninput="App._onCourseReqInput('${prog}')" />
+            <datalist id="ce-dl-${prog}">${options}</datalist>
+            <button type="button" class="adm-btn" onclick="App._addCourseReq('${prog}')">Add</button>
+          </div>
+          <div class="adm-req-hint" id="ce-req-hint-${prog}" hidden></div>
+          ${pairHint}
+        </div>`;
+  },
+
+  /** The minor categories of a course in the editor, with a picker of every category that lists courses. */
+  _courseMinorSectionHtml(course, adding) {
+    const idx = this.minorIndex;
+    if (!idx) return '<p class="adm-card-text">Minor requirements could not be loaded, so minor categories cannot be edited now.</p>';
+    const d = this._courseAdmin.draft;
+    const items = [];
+    for (const mc of idx.order) {
+      const m = idx.byCode[mc];
+      const name = `${m.def.name || getMinorLabel(mc)} minor`;
+      const draft = (d.minors && d.minors[mc]) || [];
+      const base = adding ? [] : this._courseMinorBase(course, mc);
+      draft.forEach((pth, i) => {
+        const fromFile = base.includes(pth);
+        items.push(`
+          <li class="adm-req${fromFile ? '' : ' is-added'}">
+            <span class="adm-req-tag is-minor">Minor</span>
+            <span class="adm-req-path">${esc(name)} › ${esc(this._minorCategoryLabel(m, pth))}<span class="adm-req-flags"><span class="adm-req-flag${fromFile ? '' : ' is-added'}">${fromFile ? 'From the minor file' : 'Added here'}</span></span></span>
+            <button type="button" class="adm-req-x" onclick="App._removeCourseMinor('${mc}', ${i})" aria-label="Remove this minor category">×</button>
+          </li>`);
+      });
+      base.filter(p => !draft.includes(p)).forEach((pth, i) => {
+        items.push(`
+          <li class="adm-req is-removed">
+            <span class="adm-req-tag is-minor">Minor</span>
+            <span class="adm-req-path">${esc(name)} › ${esc(this._minorCategoryLabel(m, pth))}<span class="adm-req-flags"><span class="adm-req-flag">Removed here</span></span></span>
+            <button type="button" class="adm-btn adm-btn-small" onclick="App._putBackCourseMinor('${mc}', ${i})">Put back</button>
+          </li>`);
+      });
+    }
+    const groups = idx.order.map(mc => {
+      const m = idx.byCode[mc];
+      const opts = minorLeafCategories(m.def).map(leaf => `<option value="${esc(mc + '|' + leaf.path)}">${esc(leaf.pathLabel)}</option>`).join('');
+      return opts ? `<optgroup label="${esc((m.def.name || mc) + ' minor')}">${opts}</optgroup>` : '';
+    }).join('');
+    return `
+      <p class="adm-card-text">The minor categories this course fills. They come from the minor files; only what you add or remove here is kept.</p>
+      <div class="adm-req-group adm-minor-group">
+        ${items.length ? `<ul class="adm-req-list">${items.join('')}</ul>` : '<p class="adm-cell-sub adm-minor-none">No minor category lists this course.</p>'}
+        <div class="adm-req-add">
+          <select class="adm-select adm-minor-pick" id="ce-minor-pick" aria-label="Minor category">
+            <option value="">Choose a minor category</option>${groups}
+          </select>
+          <button type="button" class="adm-btn" onclick="App._addCourseMinor()">Add</button>
         </div>
       </div>`;
   },
@@ -4824,19 +5175,33 @@ const App = {
     return raw.split(/\s*›\s*|\s*---\s*/).map(s => s.trim()).filter(Boolean).join('---');
   },
 
-  _onCourseReqInput(prog) {
-    const path = this._reqPathFromInput(prog);
-    const known = this._knownReqPaths || {};
-    const isNew = !!path && !(known[prog] && known[prog].has(path));
-    const sel = document.getElementById('ce-req-type-' + prog);
-    const hint = document.getElementById('ce-req-hint-' + prog);
-    if (sel) {
-      sel.hidden = !isNew;
-      if (isNew) sel.value = /^gened/i.test(path) ? 'gened' : 'core';
+  /** What is wrong with a typed category: { kind: 'shape' | 'root' | 'unknown', text }, or null when it is a catalog category. */
+  _reqInputProblem(prog, path) {
+    if (!path) return null;
+    const name = getProgramLabel(prog) || prog;
+    if (path.split('---').length < 2) {
+      return { kind: 'shape', text: 'Pick a category from the list, or type its full name, for example GenEd › Foundations › Data Analysis.' };
     }
-    if (hint) hint.hidden = !isNew;
+    if (/[\u2012-\u2015]/.test(path)) return { kind: 'shape', text: 'Category names use plain hyphens, not long dashes.' };
+    if (!requirementPathRootOk(prog, path)) {
+      return { kind: 'root', text: `A ${name} category starts with GenEd or ${DEGREE_ROOTS[prog]}.` };
+    }
+    if (!this._isCatalogPath(prog, path)) {
+      return { kind: 'unknown', text: 'Not a category in the 2026-27 catalog. Check the name, or add it as a new category.' };
+    }
+    return null;
   },
 
+  _onCourseReqInput(prog) {
+    const problem = this._reqInputProblem(prog, this._reqPathFromInput(prog));
+    const hint = document.getElementById('ce-req-hint-' + prog);
+    if (hint) {
+      hint.textContent = problem ? problem.text : '';
+      hint.hidden = !problem;
+    }
+  },
+
+  /** Add the typed category. One that is not in the 2026-27 catalog is added only after a confirmation. */
   _addCourseReq(prog) {
     const path = this._reqPathFromInput(prog);
     if (!path) return;
@@ -4846,10 +5211,14 @@ const App = {
       showToast('Already listed.');
       return;
     }
-    const known = this._knownReqPaths[prog];
-    const sel = document.getElementById('ce-req-type-' + prog);
-    const type = known.has(path) ? known.get(path) : (sel ? sel.value === 'gened' : false);
-    list.push({ requirement: path, type });
+    const problem = this._reqInputProblem(prog, path);
+    if (problem && problem.kind !== 'unknown') {
+      this._onCourseReqInput(prog);
+      this._courseFormNotice(problem.text, 'ce-req-' + prog);
+      return;
+    }
+    if (problem && !confirm(`${this._courseReqLabel(path)} is not a category in the 2026-27 catalog. Add it anyway as a new category?`)) return;
+    list.push({ requirement: path, type: this._isGenEdPath(path) });
     this._renderCourseEditor();
     const next = document.getElementById('ce-req-' + prog);
     if (next) next.focus();
@@ -4858,6 +5227,81 @@ const App = {
   _removeCourseReq(prog, index) {
     this._syncCourseDraft();
     this._courseAdmin.draft.requirements[prog].splice(index, 1);
+    this._renderCourseEditor();
+  },
+
+  /** Catalog rows of a program that the draft no longer lists, in catalog order (the "Removed here" rows). */
+  _courseRemovedRows(prog) {
+    const st = this._courseAdmin;
+    const course = st.view === 'add' ? null : this._findCourseByKey(st.key, st.archived);
+    const draft = new Set((st.draft.requirements[prog] || []).map(r => r.requirement));
+    return this._courseBaseRows(course, prog).filter(r => !draft.has(r.requirement));
+  },
+
+  _putBackCourseReq(prog, index) {
+    this._syncCourseDraft();
+    const row = this._courseRemovedRows(prog)[index];
+    if (row) this._courseAdmin.draft.requirements[prog].push({ requirement: row.requirement, type: this._isGenEdPath(row.requirement) });
+    this._renderCourseEditor();
+  },
+
+  /** Every category of one program back to the catalog's (saved as no edit for that program). */
+  _resetCourseProgram(prog) {
+    this._syncCourseDraft();
+    const st = this._courseAdmin;
+    const course = st.view === 'add' ? null : this._findCourseByKey(st.key, st.archived);
+    st.draft.requirements[prog] = this._courseBaseRows(course, prog)
+      .map(r => ({ requirement: r.requirement, type: this._isGenEdPath(r.requirement) }));
+    this._renderCourseEditor();
+  },
+
+  _addCourseMinor() {
+    this._syncCourseDraft();
+    const sel = document.getElementById('ce-minor-pick');
+    const value = sel ? String(sel.value || '') : '';
+    const cut = value.indexOf('|');
+    if (cut < 1) {
+      this._courseFormNotice('Choose a minor category first.', 'ce-minor-pick');
+      return;
+    }
+    const code = value.slice(0, cut);
+    const path = value.slice(cut + 1);
+    const d = this._courseAdmin.draft;
+    if (!d.minors) d.minors = {};
+    const list = d.minors[code] || (d.minors[code] = []);
+    if (list.includes(path)) {
+      showToast('Already listed.');
+      return;
+    }
+    list.push(path);
+    this._renderCourseEditor();
+  },
+
+  _removeCourseMinor(code, index) {
+    this._syncCourseDraft();
+    const d = this._courseAdmin.draft;
+    const list = (d.minors && d.minors[code]) || [];
+    list.splice(index, 1);
+    if (!list.length && d.minors) delete d.minors[code];
+    this._renderCourseEditor();
+  },
+
+  /** Minor categories of the file that the draft no longer lists (the "Removed here" rows of one minor). */
+  _courseRemovedMinors(code) {
+    const st = this._courseAdmin;
+    const course = st.view === 'add' ? null : this._findCourseByKey(st.key, st.archived);
+    const draft = (st.draft.minors && st.draft.minors[code]) || [];
+    return this._courseMinorBase(course, code).filter(p => !draft.includes(p));
+  },
+
+  _putBackCourseMinor(code, index) {
+    this._syncCourseDraft();
+    const path = this._courseRemovedMinors(code)[index];
+    const d = this._courseAdmin.draft;
+    if (path) {
+      if (!d.minors) d.minors = {};
+      (d.minors[code] || (d.minors[code] = [])).push(path);
+    }
     this._renderCourseEditor();
   },
 
@@ -4884,26 +5328,69 @@ const App = {
     }
   },
 
-  /** A category typed into a "Pick or type" box but never added with its Add button still counts on save. */
+  /**
+   * A category typed into a "Pick or type" box but never added with its Add
+   * button: a catalog category is added on save; anything else stops the save
+   * with a notice ({ text, field }) instead of being added silently.
+   */
   _collectPendingCourseReqs() {
     const d = this._courseAdmin.draft;
-    const known = this._knownReqPaths || {};
     for (const prog of MAJOR_ORDER) {
       const path = this._reqPathFromInput(prog);
       if (!path) continue;
       const list = d.requirements[prog];
       if (list.some(r => r.requirement === path)) continue;
-      const sel = document.getElementById('ce-req-type-' + prog);
-      const type = known[prog] && known[prog].has(path) ? known[prog].get(path) : (sel ? sel.value === 'gened' : /^gened/i.test(path));
-      list.push({ requirement: path, type });
+      const problem = this._reqInputProblem(prog, path);
+      if (problem) {
+        const text = problem.kind === 'unknown'
+          ? `The category typed for ${getProgramLabel(prog) || prog} is not in the 2026-27 catalog. Press its Add button to add it as a new category, or clear the box.`
+          : problem.text;
+        return { text, field: 'ce-req-' + prog };
+      }
+      list.push({ requirement: path, type: this._isGenEdPath(path) });
     }
+    return null;
+  },
+
+  /**
+   * The "requirements" of a save: for each program and minor, the change from
+   * the catalog ({ add, remove }), sent only when it differs from what is
+   * stored; null puts a program or minor back to the catalog. A list stored
+   * before 2026-11-10 always differs, so saving turns it into a change.
+   */
+  _courseRequirementsPatch(course, d, adding) {
+    const out = {};
+    const stored = (!adding && course && course._edit && course._edit.requirements) || {};
+    const put = (key, delta) => {
+      const had = Object.prototype.hasOwnProperty.call(stored, key);
+      if (delta) {
+        if (!had || !sameRequirementEdit(stored[key], delta)) out[key] = delta;
+      } else if (had) {
+        out[key] = null;
+      }
+    };
+    for (const prog of MAJOR_ORDER) {
+      put(prog, programEditDelta(adding ? [] : this._courseBaseRows(course, prog), d.requirements[prog] || []));
+    }
+    for (const mc of (this.minorIndex ? this.minorIndex.order : [])) {
+      const draft = (d.minors && d.minors[mc]) || [];
+      const base = adding ? [] : this._courseMinorBase(course, mc);
+      const add = draft.filter(p => !base.includes(p));
+      const remove = base.filter(p => !draft.includes(p));
+      put(MINOR_EDIT_PREFIX + mc, add.length || remove.length ? { add, remove } : null);
+    }
+    return out;
   },
 
   async _saveCourse() {
     if (this._courseSaving) return;
     this._syncCourseDraft();
-    this._collectPendingCourseReqs();
+    const pending = this._collectPendingCourseReqs();
     this._courseFormNotice('');
+    if (pending) {
+      this._courseFormNotice(pending.text, pending.field);
+      return;
+    }
     const st = this._courseAdmin;
     const d = st.draft;
     const adding = st.view === 'add';
@@ -4929,8 +5416,7 @@ const App = {
       this._courseFormNotice('Semesters must be codes like F26 or S27, separated by commas.', 'ce-offered');
       return;
     }
-    const reqs = {};
-    for (const m of MAJOR_ORDER) reqs[m] = d.requirements[m].map(r => this._courseReqRow(r));
+    const reqPatch = this._courseRequirementsPatch(course, d, adding);
 
     let r;
     let changes = [];
@@ -4947,7 +5433,7 @@ const App = {
         offered_qatar: d.offered_qatar,
         offered_pitts: d.offered_pitts,
         offered,
-        requirements: reqs,
+        requirements: reqPatch,
       });
     } else {
       const before = this._courseDraftFrom(course);
@@ -4960,7 +5446,7 @@ const App = {
       if (d.offered_qatar !== before.offered_qatar) body.offered_qatar = d.offered_qatar;
       if (d.offered_pitts !== before.offered_pitts) body.offered_pitts = d.offered_pitts;
       if (offered.join(',') !== this._parseOffered(before.offered).join(',')) body.offered = offered;
-      if (JSON.stringify(reqs) !== JSON.stringify(before.requirements)) body.requirements = reqs;
+      if (Object.keys(reqPatch).length) body.requirements = reqPatch;
       if (!Object.keys(body).length) {
         this._courseFormNotice('There is nothing to save yet. Change a field first, or press Cancel to go back.');
         return;
@@ -4969,9 +5455,11 @@ const App = {
         new_code: `Course number is now ${code}`, course_name: 'Course name', department: 'Department number',
         units: 'Units', description: 'Description', prerequisites: 'Prerequisites',
         offered_qatar: 'Campus (Qatar)', offered_pitts: 'Campus (Pittsburgh)', offered: 'Semesters offered',
-        requirements: 'What it counts for',
       };
-      changes = Object.keys(body).map(k => labels[k] || k);
+      changes = Object.keys(body).filter(k => k !== 'requirements').map(k => labels[k] || k);
+      const keys = Object.keys(reqPatch);
+      if (keys.some(k => !k.startsWith(MINOR_EDIT_PREFIX))) changes.push('What it counts for');
+      if (keys.some(k => k.startsWith(MINOR_EDIT_PREFIX))) changes.push('Minors');
       this._setCourseSaving(true, 'Saving...');
       r = await apiEditCourse(st.key, body);
     }
@@ -5048,11 +5536,418 @@ const App = {
   async _reloadCatalog() {
     try {
       await this._prepareCatalog();
-      this._knownReqPaths = null;
     } catch (err) {
       console.error(err);
       showToast('Saved, but the catalog could not be refreshed. Reload the page.');
     }
+  },
+
+  // ── Courses in a category (bulk changes) ──────────────────
+  // One program's (or minor's) category with all its courses, to add or remove
+  // several courses at once. Every course still gets its own per program edit;
+  // one POST /api/courses/overrides/batch saves them together (one event each).
+
+  /** Programs and minors of the category view: [{ id, label, minor }]; a minor's id is "minor:<code>". */
+  _categoryTargets() {
+    const out = MAJOR_ORDER.map(p => ({ id: p, label: getProgramLabel(p) || p, minor: null }));
+    for (const mc of (this.minorIndex ? this.minorIndex.order : [])) {
+      out.push({ id: 'minor:' + mc, label: `${this.minorIndex.byCode[mc].def.name || mc} minor`, minor: mc });
+    }
+    return out;
+  },
+
+  /** The categories of a program (2026-27 catalog) or of a minor (those that list courses): [{ path, label }]. */
+  _categoryPaths(target) {
+    if (String(target).startsWith('minor:')) {
+      const m = this.minorIndex && this.minorIndex.byCode[String(target).slice(6)];
+      return m ? minorLeafCategories(m.def).map(l => ({ path: l.path, label: l.pathLabel })) : [];
+    }
+    return this._catalogPathsOf(target).map(p => ({ path: p, label: this._courseReqDisplayLabel(p) }));
+  },
+
+  /** The courses in a category now ('catalog' or 'added' here) and the ones removed here: [{ course, state }]. */
+  _categoryRows(target, path) {
+    const rows = [];
+    if (String(target).startsWith('minor:')) {
+      const m = this.minorIndex && this.minorIndex.byCode[String(target).slice(6)];
+      const node = m && findTreeNode(m.tree, path);
+      if (!node) return rows;
+      const added = new Set(node.adminAdded || []);
+      for (const c of node.courses || []) {
+        const course = lookupCourse(this.courseIndex, c.code);
+        if (course) rows.push({ course, state: added.has(c.code) ? 'added' : 'catalog' });
+      }
+      for (const code of node.adminRemoved || []) {
+        const course = lookupCourse(this.courseIndex, code);
+        if (course) rows.push({ course, state: 'removed' });
+      }
+    } else {
+      for (const course of this.courses || []) {
+        const has = ((course.requirements && course.requirements[target]) || []).some(r => r.requirement === path);
+        const inBase = this._courseBaseRows(course, target).some(r => r.requirement === path);
+        if (has) rows.push({ course, state: inBase ? 'catalog' : 'added' });
+        else if (inBase) rows.push({ course, state: 'removed' });
+      }
+    }
+    return rows.sort((a, b) => String(a.course.course_code).localeCompare(String(b.course.course_code)));
+  },
+
+  _renderCategoryView() {
+    const el = document.getElementById('admContent');
+    if (!el) return;
+    const st = this._courseAdmin;
+    const targets = this._categoryTargets();
+    if (!targets.some(t => t.id === st.catTarget)) {
+      st.catTarget = targets.length ? targets[0].id : 'CS';
+      st.catPath = '';
+    }
+    const paths = this._categoryPaths(st.catTarget);
+    if (st.catPath && !paths.some(p => p.path === st.catPath)) st.catPath = '';
+    if (!st.catSelected) st.catSelected = new Set();
+    const opt = (value, label, on) => `<option value="${esc(value)}"${on ? ' selected' : ''}>${esc(label)}</option>`;
+    const majors = targets.filter(t => !t.minor);
+    const minors = targets.filter(t => t.minor);
+    const targetSelect = `<select class="adm-select" id="cv-target" onchange="App._setCategoryTarget(this.value)">
+        <optgroup label="Majors">${majors.map(t => opt(t.id, t.label, t.id === st.catTarget)).join('')}</optgroup>
+        ${minors.length ? `<optgroup label="Minors">${minors.map(t => opt(t.id, t.label, t.id === st.catTarget)).join('')}</optgroup>` : ''}
+      </select>`;
+    const pathSelect = `<select class="adm-select" id="cv-path" onchange="App._setCategoryPath(this.value)">
+        ${opt('', 'Choose a category', !st.catPath)}${paths.map(p => opt(p.path, p.label, p.path === st.catPath)).join('')}
+      </select>`;
+    let body = '<p class="adm-empty-line">Choose a category to see its courses.</p>';
+    if (st.catPath) {
+      const rows = this._categoryRows(st.catTarget, st.catPath);
+      const inNow = rows.filter(r => r.state !== 'removed').length;
+      const items = rows.map(({ course, state }) => {
+        const code = normalizeCourseCode(course.course_code);
+        const pill = state === 'added' ? '<span class="adm-pill adm-pill-new">Added here</span>'
+          : state === 'removed' ? '<span class="adm-pill adm-pill-removed">Removed here</span>' : '';
+        const action = state === 'removed'
+          ? `<button type="button" class="adm-btn adm-btn-small" onclick="App._categoryChange(['${code}'], true)">Put back</button>`
+          : `<button type="button" class="adm-btn adm-btn-small" onclick="App._categoryChange(['${code}'], false)">Remove</button>`;
+        return `
+          <li class="adm-cat-row${state === 'removed' ? ' is-removed' : ''}">
+            <label class="adm-cat-check">
+              <input type="checkbox" data-code="${esc(code)}" ${st.catSelected.has(code) ? 'checked' : ''} onchange="App._toggleCategoryRow(this.dataset.code, this.checked)" />
+              <span class="adm-course-item-code">${esc(code)}</span>
+              <span class="adm-cat-name">${esc(course.course_name || 'Untitled')}</span>
+            </label>
+            ${pill}
+            ${action}
+          </li>`;
+      }).join('');
+      body = `
+        <div class="adm-toolbar">
+          <span class="adm-toolbar-label">${inNow} course${inNow === 1 ? '' : 's'} in this category</span>
+          <button type="button" class="adm-btn adm-btn-small" onclick="App._categoryBulk(false)">Remove selected</button>
+          <button type="button" class="adm-btn adm-btn-small" onclick="App._categoryBulk(true)">Put back selected</button>
+          <span class="adm-toolbar-count" id="cv-selected">${st.catSelected.size} selected</span>
+        </div>
+        ${items ? `<ul class="adm-course-list adm-cat-list">${items}</ul>` : '<p class="adm-empty-line">No course is in this category yet.</p>'}
+        <div class="adm-cat-add">
+          <input class="adm-search" id="cv-add" placeholder="Course numbers to add, for example 15-151, 21-127" autocomplete="off" />
+          <button type="button" class="adm-btn adm-btn-resolve" onclick="App._categoryAddCodes()">Add to this category</button>
+        </div>`;
+    }
+    el.innerHTML = `
+      ${this._courseViewsHtml('category')}
+      <div class="adm-card">
+        <div class="adm-card-title">Courses in a category</div>
+        <p class="adm-card-text">See every course of one category and add or remove several at once. Each course keeps its own change, so the rest of what it counts for still follows the catalog. The changes are saved together and logged per course.</p>
+        <div class="adm-cat-pick">
+          <label class="adm-field">Program${targetSelect}</label>
+          <label class="adm-field adm-cat-path">Category${pathSelect}</label>
+        </div>
+      </div>
+      ${st.catStatus ? `<div class="adm-saved-line" role="status">${esc(st.catStatus)}</div>` : ''}
+      <div class="adm-form-notice" id="cv-notice" role="alert" hidden></div>
+      ${body}`;
+  },
+
+  _setCategoryTarget(value) {
+    const st = this._courseAdmin;
+    st.catTarget = value;
+    st.catPath = '';
+    st.catSelected = new Set();
+    st.catStatus = '';
+    this._renderCategoryView();
+  },
+
+  _setCategoryPath(value) {
+    const st = this._courseAdmin;
+    st.catPath = value;
+    st.catSelected = new Set();
+    st.catStatus = '';
+    this._renderCategoryView();
+  },
+
+  _toggleCategoryRow(code, on) {
+    const sel = this._courseAdmin.catSelected || (this._courseAdmin.catSelected = new Set());
+    if (on) sel.add(code);
+    else sel.delete(code);
+    const count = document.getElementById('cv-selected');
+    if (count) count.textContent = `${sel.size} selected`;
+  },
+
+  _categoryNotice(msg) {
+    const box = document.getElementById('cv-notice');
+    if (box) {
+      box.textContent = msg || '';
+      box.hidden = !msg;
+    } else if (msg) {
+      showToast(msg);
+    }
+  },
+
+  /** Remove (putBack false) or put back the selected courses. */
+  _categoryBulk(putBack) {
+    const st = this._courseAdmin;
+    const rows = this._categoryRows(st.catTarget, st.catPath);
+    const codes = rows
+      .filter(r => (st.catSelected || new Set()).has(normalizeCourseCode(r.course.course_code)) && (r.state === 'removed') === putBack)
+      .map(r => normalizeCourseCode(r.course.course_code));
+    if (!codes.length) {
+      this._categoryNotice(putBack ? 'Select a course marked Removed here first.' : 'Select a course in this category first.');
+      return;
+    }
+    return this._categoryChange(codes, putBack);
+  },
+
+  /** Add the typed course numbers (separated by commas or spaces) to the category. */
+  _categoryAddCodes() {
+    const st = this._courseAdmin;
+    const input = document.getElementById('cv-add');
+    const codes = [...new Set(String((input && input.value) || '').split(/[\s,;]+/).map(s => normalizeCourseCode(s)).filter(Boolean))];
+    if (!codes.length) {
+      this._categoryNotice('Type one or more course numbers, for example 15-151, 21-127.');
+      return;
+    }
+    const unknown = codes.filter(c => !/^\d{2}-\d{3}$/.test(c) || !lookupCourse(this.courseIndex, c));
+    if (unknown.length) {
+      this._categoryNotice(`${joinWithAnd(unknown)} ${unknown.length === 1 ? 'is' : 'are'} not in the catalog. Add the course on the Courses view first.`);
+      return;
+    }
+    const inNow = new Set(this._categoryRows(st.catTarget, st.catPath)
+      .filter(r => r.state !== 'removed').map(r => normalizeCourseCode(r.course.course_code)));
+    const toAdd = codes.filter(c => !inNow.has(c));
+    if (!toAdd.length) {
+      this._categoryNotice(`${joinWithAnd(codes)} ${codes.length === 1 ? 'is' : 'are'} already in this category.`);
+      return;
+    }
+    return this._categoryChange(toAdd, true);
+  },
+
+  /** One course's change for the category view: { key, value } to put in its "requirements". */
+  _categoryPatchFor(course, target, path, present) {
+    if (String(target).startsWith('minor:')) {
+      const mc = String(target).slice(6);
+      const base = course._added ? [] : this._courseMinorBase(course, mc);
+      const draft = this._courseMinorDraft(course, mc).filter(p => p !== path);
+      if (present) draft.push(path);
+      const add = draft.filter(p => !base.includes(p));
+      const remove = base.filter(p => !draft.includes(p));
+      return { key: MINOR_EDIT_PREFIX + mc, value: add.length || remove.length ? { add, remove } : null };
+    }
+    const rows = ((course.requirements && course.requirements[target]) || []).filter(r => r.requirement !== path);
+    if (present) rows.push({ requirement: path });
+    return { key: target, value: programEditDelta(this._courseBaseRows(course, target), rows) };
+  },
+
+  /** Put the courses in (present true) or take them out of the category, in one batch save. */
+  async _categoryChange(codes, present) {
+    if (this._categorySaving) return;
+    const st = this._courseAdmin;
+    const items = [];
+    for (const code of codes) {
+      const course = lookupCourse(this.courseIndex, code);
+      if (!course) continue;
+      const { key, value } = this._categoryPatchFor(course, st.catTarget, st.catPath, present);
+      const stored = (course._edit && course._edit.requirements) || {};
+      const had = Object.prototype.hasOwnProperty.call(stored, key);
+      if (value ? had && sameRequirementEdit(stored[key], value) : !had) continue;
+      items.push({ course_code: this._courseEditKey(course), requirements: { [key]: value } });
+    }
+    if (!items.length) {
+      this._categoryNotice('Nothing to change.');
+      return;
+    }
+    this._categorySaving = true;
+    const r = await apiBatchEditCourses(items);
+    this._categorySaving = false;
+    if (!r.ok) {
+      this._categoryNotice((r.data && r.data.message) || r.error || 'Could not save the changes. Try again.');
+      return;
+    }
+    await this._reloadCatalog();
+    const label = (this._categoryPaths(st.catTarget).find(p => p.path === st.catPath) || {}).label || st.catPath;
+    const n = items.length;
+    const what = `${n} course${n === 1 ? '' : 's'}`;
+    st.catSelected = new Set();
+    st.catStatus = present ? `Saved: ${what} now in ${label}.` : `Saved: ${what} removed from ${label}.`;
+    if (this._courseAdmin.view === 'category') this._renderCategoryView();
+  },
+
+  // ── Minor settings ────────────────────────────────────────
+  // Corrections to a minor's numbers in minors.json (unit total, double
+  // counting limits) and a note for students; /api/minors/overrides.
+
+  async _openMinorSettings(code) {
+    const st = this._courseAdmin;
+    st.view = 'minors';
+    st.minorCode = code || null;
+    st.minorStatus = '';
+    st.draft = null;
+    if (this._homeView === 'admin-console' && this._adminConsole.tab === 'courses' && document.getElementById('admContent')) {
+      this._renderMinorSettings();
+      return;
+    }
+    await this.showAdminConsole('courses');
+  },
+
+  _closeMinorSettings() {
+    this._courseAdmin.minorCode = null;
+    this._courseAdmin.minorStatus = '';
+    this._renderMinorSettings();
+  },
+
+  _renderMinorSettings() {
+    const el = document.getElementById('admContent');
+    if (!el) return;
+    const st = this._courseAdmin;
+    const idx = this.minorIndex;
+    if (!idx) {
+      el.innerHTML = `${this._courseViewsHtml('minors')}<div class="empty-state"><div class="empty-text">The minor requirements could not be loaded, so their settings cannot be edited now.</div></div>`;
+      return;
+    }
+    const sel = st.minorCode && idx.byCode[st.minorCode] ? st.minorCode : null;
+    const limit = v => (v == null ? 'no limit' : String(v));
+    const list = idx.order.map(code => {
+      const def = idx.byCode[code].def;
+      const rules = minorDoubleCountRules(def);
+      return `
+        <li>
+          <button type="button" class="adm-course-item adm-minor-item${code === sel ? ' is-active' : ''}" onclick="App._openMinorSettings('${code}')">
+            <span class="adm-course-item-body">
+              <span class="adm-course-item-name">${esc(def.name || code)} minor</span>
+              <span class="adm-cell-sub">${def.total_units != null ? esc(String(def.total_units)) + ' units' : 'No unit total'} · shared with the major: ${esc(limit(rules.limit))} · with another minor: ${esc(limit(rules.minorLimit))}</span>
+            </span>
+            <span class="adm-course-item-tags">${def._edit ? '<span class="adm-pill adm-pill-edit">Edited</span>' : ''}</span>
+          </button>
+        </li>`;
+    }).join('');
+    el.innerHTML = `
+      ${this._courseViewsHtml('minors')}
+      <div class="adm-card">
+        <div class="adm-card-title">Minor settings</div>
+        <p class="adm-card-text">Correct a minor's unit total or its double counting limits, or add a note students see in the minor's header. The minor file itself does not change, and Undo all edits goes back to it. Which courses fill a category is edited per course, or in Courses in a category.</p>
+      </div>
+      ${sel ? this._minorSettingsFormHtml(sel) : ''}
+      <ul class="adm-course-list adm-minor-list">${list}</ul>`;
+  },
+
+  _minorSettingsFormHtml(code) {
+    const def = this.minorIndex.byCode[code].def;
+    const file = def._file || {};
+    const rules = minorDoubleCountRules(def);
+    const edit = def._edit;
+    const limitOptions = current => [`<option value=""${current == null ? ' selected' : ''}>No limit</option>`]
+      .concat(Array.from({ length: 11 }, (_, n) => `<option value="${n}"${current === n ? ' selected' : ''}>${n}</option>`)).join('');
+    const fileSays = (field, fmt) => (field in file ? `<span class="adm-field-was">The minor file says: ${esc(fmt(file[field]))}</span>` : '');
+    const units = v => (v == null ? 'no total' : `${v} units`);
+    const lim = v => (v == null ? 'no limit' : String(v));
+    const status = this._courseAdmin.minorStatus;
+    return `
+      <div class="adm-card adm-minor-form" id="ms-form" data-minor="${esc(code)}">
+        <div class="adm-card-row">
+          <div>
+            <div class="adm-card-title">${esc(def.name || code)} minor</div>
+            ${edit && edit.updated_at
+              ? `<p class="adm-cell-sub">Last edited ${esc(this._admWhen(edit.updated_at))}${edit.updated_by_email ? ' by ' + esc(edit.updated_by_email) : ''}</p>`
+              : '<p class="adm-cell-sub">Showing the minor file. Nothing has been changed yet.</p>'}
+          </div>
+          <button type="button" class="adm-btn" onclick="App.openMinorRequirements('${code}')">See the minor</button>
+        </div>
+        <div class="adm-form-grid adm-minor-grid">
+          <label class="adm-field">Total units<input class="adm-search" id="ms-units" inputmode="numeric" value="${def.total_units == null ? '' : esc(String(def.total_units))}" placeholder="No total" />${fileSays('total_units', units)}</label>
+          <label class="adm-field">Courses that may also count toward the major<select class="adm-select" id="ms-major">${limitOptions(rules.limit)}</select>${fileSays('max_with_major', lim)}</label>
+          <label class="adm-field">Courses that may also count toward another minor<select class="adm-select" id="ms-minors">${limitOptions(rules.minorLimit)}</select>${fileSays('max_with_other_minors', lim)}</label>
+          <label class="adm-field adm-field-full">Note for students, shown in the minor's header as a note from CMU-Q<textarea class="adm-search adm-textarea" id="ms-note" rows="3" maxlength="1000">${esc(def.admin_note || '')}</textarea></label>
+        </div>
+        <div class="adm-actions">
+          <button type="button" class="adm-btn adm-btn-resolve adm-btn-primary" id="ms-save" onclick="App._saveMinorSettings('${code}')">Save changes</button>
+          <button type="button" class="adm-btn" onclick="App._closeMinorSettings()">Close</button>
+          <span class="adm-actions-spacer"></span>
+          ${edit ? `<button type="button" class="adm-btn" onclick="App._revertMinorSettings('${code}')" title="Go back to what the minor file says">Undo all edits</button>` : ''}
+          <div class="adm-form-notice" id="ms-notice" role="alert" hidden></div>
+        </div>
+        ${status ? `<div class="adm-saved-line" role="status">${esc(status)}</div>` : ''}
+      </div>`;
+  },
+
+  _minorNotice(msg) {
+    const box = document.getElementById('ms-notice');
+    if (box) {
+      box.textContent = msg || '';
+      box.hidden = !msg;
+    } else if (msg) {
+      showToast(msg);
+    }
+  },
+
+  async _saveMinorSettings(code) {
+    if (this._minorSaving) return;
+    const m = this.minorIndex && this.minorIndex.byCode[code];
+    if (!m) return;
+    const def = m.def;
+    const rules = minorDoubleCountRules(def);
+    const val = id => { const e = document.getElementById(id); return e ? String(e.value == null ? '' : e.value) : ''; };
+    const unitsRaw = val('ms-units').trim();
+    if (unitsRaw && !/^\d{1,3}$/.test(unitsRaw)) {
+      this._minorNotice('Total units must be a whole number, or empty when the minor states no total.');
+      return;
+    }
+    const next = {
+      total_units: unitsRaw === '' ? null : Number(unitsRaw),
+      max_with_major: val('ms-major') === '' ? null : Number(val('ms-major')),
+      max_with_other_minors: val('ms-minors') === '' ? null : Number(val('ms-minors')),
+      admin_note: val('ms-note').trim(),
+    };
+    const now = {
+      total_units: def.total_units == null ? null : def.total_units,
+      max_with_major: rules.limit,
+      max_with_other_minors: rules.minorLimit,
+      admin_note: def.admin_note || '',
+    };
+    const body = {};
+    for (const k of MINOR_SETTING_FIELDS) if (next[k] !== now[k]) body[k] = next[k];
+    if (!Object.keys(body).length) {
+      this._minorNotice('There is nothing to save yet. Change a setting first.');
+      return;
+    }
+    this._minorSaving = true;
+    const r = await apiEditMinor(code, body);
+    this._minorSaving = false;
+    if (!r.ok) {
+      this._minorNotice((r.data && r.data.message) || r.error || 'Could not save the minor settings. Try again.');
+      return;
+    }
+    await this._reloadCatalog();
+    this._courseAdmin.minorStatus = 'Saved. Students see the change the next time they open CountsFor.';
+    this._renderMinorSettings();
+  },
+
+  async _revertMinorSettings(code) {
+    const m = this.minorIndex && this.minorIndex.byCode[code];
+    const name = m ? m.def.name : getMinorLabel(code);
+    if (!confirm(`Undo every change to the ${name} minor settings? It will show exactly what the minor file says.`)) return;
+    const r = await apiRevertMinor(code);
+    if (!r.ok) {
+      this._minorNotice((r.data && r.data.message) || 'Could not undo the edits.');
+      return;
+    }
+    await this._reloadCatalog();
+    this._courseAdmin.minorStatus = 'Edits removed. The minor shows what its file says.';
+    this._renderMinorSettings();
   },
 
   // ── Overview ──────────────────────────────────────────────
@@ -5545,18 +6440,21 @@ const App = {
     const el = document.getElementById('admContent');
     if (!el) return;
     const s = this._adminConsole;
-    const filters = [['', 'Everything'], ['course.', 'Courses'], ['user.', 'User changes'], ['flag.', 'Flag reviews'], ['directory.', 'Faculty access']];
+    const filters = [['', 'Everything'], ['course.', 'Courses'], ['minor.', 'Minors'], ['user.', 'User changes'], ['flag.', 'Flag reviews'], ['directory.', 'Faculty access']];
     const rows = s.activityItems.map(e => `
       <li class="adm-log-row">
         <div class="adm-log-text"><strong>${esc(e.actor_name || e.actor_email)}</strong> ${this._describeAdminEvent(e)}</div>
-        <div class="adm-log-meta" title="${esc(this._admDate(e.created_at))}">${esc(this._admWhen(e.created_at))}</div>
+        <div class="adm-log-side">
+          ${this._adminEventOpenHtml(e)}
+          <div class="adm-log-meta" title="${esc(this._admDate(e.created_at))}">${esc(this._admWhen(e.created_at))}</div>
+        </div>
       </li>`).join('');
     el.innerHTML = `
       <div class="adm-toolbar">
         ${filters.map(([id, label]) => `<button type="button" class="adm-chip ${s.activityAction === id ? 'is-active' : ''}" onclick="App._adminConsole.activityAction='${id}';App._loadAdminActivity(true);">${label}</button>`).join('')}
         <span class="adm-toolbar-count">${s.activityTotal} event${s.activityTotal === 1 ? '' : 's'}</span>
       </div>
-      ${rows ? `<ul class="adm-log">${rows}</ul>` : '<div class="empty-state"><div class="empty-text">Nothing recorded yet. Course edits, role changes, flag reviews and directory edits will show up here.</div></div>'}
+      ${rows ? `<ul class="adm-log">${rows}</ul>` : '<div class="empty-state"><div class="empty-text">Nothing recorded yet. Course and minor edits, role changes, flag reviews and directory edits will show up here.</div></div>'}
       ${s.activityItems.length < s.activityTotal ? `<div class="adm-more"><button type="button" class="adm-btn" onclick="App._adminConsole.activityPage++;App._loadAdminActivity(false);">Show older</button></div>` : ''}`;
   },
 
@@ -5587,22 +6485,119 @@ const App = {
         return `removed ${who} from the directory`;
       case 'directory.revoke':
         return `revoked the elevated access of ${who}`;
-      case 'course.add':
-        return `added the course ${who}${d.name ? ' ' + esc(d.name) : ''}`;
+      case 'course.add': {
+        const reqs = this._admRequirementChanges(d.requirements);
+        return `added the course ${who}${d.name ? ' ' + esc(d.name) : ''}${reqs.length ? '. ' + esc(reqs.join('. ')) : ''}`;
+      }
       case 'course.update': {
-        const labels = { course_code: 'number', course_name: 'name', department: 'department', units: 'units', description: 'description', prerequisites: 'prerequisites', offered_qatar: 'Qatar offering', offered_pitts: 'Pittsburgh offering', offered: 'semesters' };
-        const list = (d.fields || []).map(f => labels[f] || f).join(', ');
-        return `edited ${who}${list ? ': ' + esc(list) : ''}${d.renumbered_from ? ' (was ' + esc(d.renumbered_from) + ')' : ''}`;
+        const parts = d.changes
+          ? Object.entries(d.changes).map(([f, ch]) => this._admFieldChange(f, ch))
+          : (d.fields || []).filter(f => f !== 'counts for' && f !== 'minors').map(f => this.COURSE_FIELD_LOG_LABELS[f] || f);
+        parts.push(...this._admRequirementChanges(d.requirements));
+        if (!d.requirements && (d.fields || []).includes('counts for')) parts.push('what it counts for');
+        if (!d.requirements && (d.fields || []).includes('minors')) parts.push('its minor categories');
+        return `edited ${who}${parts.length ? ': ' + esc(parts.join('. ')) : ''}${d.renumbered_from ? ' (was ' + esc(d.renumbered_from) + ')' : ''}`;
       }
       case 'course.archive':
         return `archived ${who}`;
       case 'course.restore':
         return `restored ${who}`;
-      case 'course.revert':
-        return `undid all edits to ${who}`;
+      case 'course.revert': {
+        const dropped = this._admDroppedText(d.before);
+        if (d.reason) return `saved ${who} back to the catalog version${dropped ? ' (it had ' + esc(dropped) + ')' : ''}`;
+        return `undid all edits to ${who}${dropped ? ' (dropped ' + esc(dropped) + ')' : ''}`;
+      }
+      case 'course.migrate': {
+        const reqs = this._admRequirementChanges(d.after || {});
+        return `moved the saved categories of ${who} to the 2026-27 names${d.deleted ? ', which left no edit' : ''}${reqs.length ? ': ' + esc(reqs.join('. ')) : ''}`;
+      }
+      case 'minor.update': {
+        const name = `<strong>${esc(getMinorLabel(e.target) || e.target || '')} minor</strong>`;
+        const parts = Object.entries(d.changes || {}).map(([f, ch]) => this._admMinorChange(f, ch));
+        return `changed the settings of the ${name}${parts.length ? ': ' + esc(parts.join('. ')) : ''}`;
+      }
+      case 'minor.revert': {
+        const name = `<strong>${esc(getMinorLabel(e.target) || e.target || '')} minor</strong>`;
+        const dropped = Object.keys(d.before || {}).map(f => this.MINOR_FIELD_LOG_LABELS[f] || f).join(', ');
+        return `${d.reason ? 'set the settings of the ' + name + ' back to the minor file' : 'undid all edits to the settings of the ' + name}${dropped ? ' (' + esc(dropped) + ')' : ''}`;
+      }
       default:
         return `${esc(e.action)} ${who}`;
     }
+  },
+
+  COURSE_FIELD_LOG_LABELS: { course_code: 'number', course_name: 'name', department: 'department', units: 'units', description: 'description', prerequisites: 'prerequisites', offered_qatar: 'Qatar offering', offered_pitts: 'Pittsburgh offering', offered: 'semesters' },
+  MINOR_FIELD_LOG_LABELS: { total_units: 'total units', max_with_major: 'courses shared with the major', max_with_other_minors: 'courses shared with another minor', admin_note: 'note for students' },
+
+  /** "units: Schedule of Classes value to 10" (null is the Schedule of Classes value). */
+  _admFieldChange(field, ch) {
+    const label = this.COURSE_FIELD_LOG_LABELS[field] || field;
+    if (field === 'description' || field === 'prerequisites') {
+      return (ch && ch.to != null) ? `${label} changed` : `${label} back to the Schedule of Classes text`;
+    }
+    const show = v => {
+      if (v == null) return 'Schedule of Classes value';
+      if (typeof v === 'boolean') return v ? 'yes' : 'no';
+      if (Array.isArray(v)) return v.length ? v.join(', ') : 'none';
+      return String(v);
+    };
+    return `${label}: ${show(ch && ch.from)} to ${show(ch && ch.to)}`;
+  },
+
+  _admMinorChange(field, ch) {
+    const label = this.MINOR_FIELD_LOG_LABELS[field] || field;
+    if (field === 'admin_note') return (ch && ch.to) ? `${label}: ${ch.to}` : `${label} removed`;
+    const show = v => (v == null ? (field === 'total_units' ? 'no total' : 'no limit') : String(v));
+    return `${label}: ${show(ch && ch.from)} to ${show(ch && ch.to)}`;
+  },
+
+  /** Each changed program or minor of an audit event, in words: "Computer Science: added A; removed B". */
+  _admRequirementChanges(reqs) {
+    const out = [];
+    for (const [key, value] of this._orderedEdits(reqs)) {
+      const minor = key.startsWith(MINOR_EDIT_PREFIX);
+      const code = minor ? key.slice(MINOR_EDIT_PREFIX.length) : key;
+      const m = minor && this.minorIndex ? this.minorIndex.byCode[code] : null;
+      const name = minor ? `${getMinorLabel(code)} minor` : (getProgramLabel(key) || key);
+      const label = p => (minor ? (m ? this._minorCategoryLabel(m, p) : p) : this._courseReqDisplayLabel(p));
+      if (value == null) {
+        out.push(`${name}: back to the ${minor ? 'minor file' : 'catalog'}`);
+      } else if (Array.isArray(value)) {
+        out.push(`${name}: whole list of ${value.length} categor${value.length === 1 ? 'y' : 'ies'}`);
+      } else {
+        const bits = [];
+        const added = (value.add || []).map(r => (typeof r === 'string' ? r : r && r.requirement)).filter(Boolean);
+        if (added.length) bits.push('added ' + added.map(label).join(', '));
+        if ((value.remove || []).length) bits.push('removed ' + value.remove.map(label).join(', '));
+        out.push(`${name}: ${bits.join('; ') || 'no change'}`);
+      }
+    }
+    return out;
+  },
+
+  /** What a revert dropped, from its "before": "units, name, Computer Science categories, the archive". */
+  _admDroppedText(before) {
+    if (!before) return '';
+    const parts = Object.keys(before.fields || {}).map(f => this.COURSE_FIELD_LOG_LABELS[f] || f);
+    for (const [key] of this._orderedEdits(before.requirements)) {
+      parts.push(key.startsWith(MINOR_EDIT_PREFIX)
+        ? `${getMinorLabel(key.slice(MINOR_EDIT_PREFIX.length))} minor categories`
+        : `${getProgramLabel(key) || key} categories`);
+    }
+    if (before.archived) parts.push('the archive');
+    return parts.join(', ');
+  },
+
+  /** An Open button for a course or minor event, when its target is a plain code. */
+  _adminEventOpenHtml(e) {
+    const target = String(e.target || '');
+    if (String(e.action).startsWith('course.') && /^\d{2}-\d{3}$/.test(target)) {
+      return `<button type="button" class="adm-btn adm-btn-small" onclick="App._editCourseInAdmin('${target}')" aria-label="Open ${target} in the course editor">Open</button>`;
+    }
+    if (String(e.action).startsWith('minor.') && /^[a-z0-9_]+$/.test(target)) {
+      return `<button type="button" class="adm-btn adm-btn-small" onclick="App._openMinorSettings('${target}')" aria-label="Open the ${esc(getMinorLabel(target) || target)} minor settings">Open</button>`;
+    }
+    return '';
   },
 
   // ══════════════════════════════════════════════════════════
@@ -5947,84 +6942,15 @@ const App = {
   },
 
   // ══════════════════════════════════════════════════════════
-  // MINORS: course statuses, the student's minor sections, the Minors tab
+  // MINORS: the student's minor sections, the Minors tab
   // ══════════════════════════════════════════════════════════
   // Requirements come from data/minors.json (App.minorIndex, built in
   // _prepareCatalog). A student's minors render after their major's sections
-  // in the same tree; the Minors tab browses every minor. Course statuses are
-  // a student's own and live in localStorage cf_course_status (this browser
-  // only, for guests and signed-in students alike, until the server keeps them).
+  // in the same tree; the Minors tab browses every minor.
 
-  /** Statuses, progress and the programs bar are for the student view only. */
-  _statusTrackingOn() {
+  /** The programs bar, a student's minor sections and the "Also counts for" tags are for the student view only. */
+  _isStudentView() {
     return !!(this.profile && this.profile.role === 'student');
-  },
-
-  _getCourseStatuses() {
-    if (!this._courseStatuses) this._courseStatuses = normalizeCourseStatuses(loadStore(COURSE_STATUS_KEY, {}));
-    return this._courseStatuses;
-  },
-
-  _courseStatusOf(code) {
-    return this._getCourseStatuses()[normalizeCourseCode(code)] || '';
-  },
-
-  /** status: '', 'in_progress' or 'completed'. focusKey puts the focus back on the control that was used. */
-  setCourseStatus(code, status, focusKey) {
-    const key = normalizeCourseCode(code);
-    if (!key || !this._statusTrackingOn()) return;
-    const statuses = this._getCourseStatuses();
-    if (COURSE_STATUSES.includes(status)) statuses[key] = status;
-    else delete statuses[key];
-    saveStore(COURSE_STATUS_KEY, statuses);
-    this.renderTree();
-    if (this.selectedCourse && normalizeCourseCode(this.selectedCourse.course_code) === key) {
-      this.renderCourseCard(this.selectedCourse);
-    }
-    this._focusStatusControl(focusKey);
-    showToast(`Marked ${key} as ${courseStatusLabel(status).toLowerCase()}`);
-  },
-
-  cycleCourseStatus(code, focusKey) {
-    this.setCourseStatus(code, nextCourseStatus(this._courseStatusOf(code)), focusKey);
-  },
-
-  _focusStatusControl(focusKey) {
-    if (!focusKey || typeof document === 'undefined' || !document.querySelector) return;
-    const el = document.querySelector('[data-status-key="' + String(focusKey).replace(/["\\]/g, '\\$&') + '"]');
-    if (el && el.focus) {
-      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
-    }
-  },
-
-  _statusIcon(status) {
-    if (status === 'completed') {
-      return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.7 8.3l2.2 2.2 4.4-4.7" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    }
-    if (status === 'in_progress') {
-      return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 0 0 12.5z" fill="currentColor"/></svg>';
-    }
-    return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
-  },
-
-  /** The round control at the start of a tree row: not taken, in progress, completed. */
-  _courseStatusButtonHtml(code, status, focusKey) {
-    const label = courseStatusLabel(status);
-    const next = courseStatusLabel(nextCourseStatus(status)).toLowerCase();
-    const cls = status === 'completed' ? 'done' : status === 'in_progress' ? 'ip' : 'none';
-    return `<button type="button" class="cs-btn cs-${cls}" data-action="course-status" data-course-code="${esc(code)}" data-status-key="${esc(focusKey)}" title="${label}. Click to mark it ${next}." aria-label="${esc(code)} is ${label.toLowerCase()}. Mark it ${next}">${this._statusIcon(status)}</button>`;
-  },
-
-  /** The three status buttons on a student's course card. */
-  _courseCardStatusHtml(course) {
-    const code = normalizeCourseCode(course.course_code);
-    const current = this._courseStatusOf(code);
-    const opts = [['', 'Not taken'], ['in_progress', 'In progress'], ['completed', 'Completed']];
-    return `
-      <div class="cc-status" role="group" aria-label="Your status for ${esc(code)}">
-        <span class="cc-status-label">Your status</span>
-        ${opts.map(([value, label]) => `<button type="button" class="cc-status-btn${current === value ? ' is-active' : ''}" data-action="course-status-set" data-course-code="${esc(code)}" data-status="${value}" aria-pressed="${current === value}">${label}</button>`).join('')}
-      </div>`;
   },
 
   /** The minors a course can count for, on its card (the student's own first). */
@@ -6032,7 +6958,7 @@ const App = {
     const idx = this.minorIndex;
     if (!idx || !course || isCourseHidden(course)) return '';
     const code = normalizeCourseCode(course.course_code);
-    const mine = this._statusTrackingOn() ? getProfileMinors(this.profile) : [];
+    const mine = this._isStudentView() ? getProfileMinors(this.profile) : [];
     const rows = [];
     for (const mc of idx.order) {
       const m = idx.byCode[mc];
@@ -6079,18 +7005,6 @@ const App = {
     return labels.join(' > ');
   },
 
-  /** Progress of the student through a minor, computed once per tree render. */
-  _minorProgress(code) {
-    if (!this._renderProgress) this._renderProgress = {};
-    if (!this._renderProgress[code]) {
-      const m = this.minorIndex && this.minorIndex.byCode[code];
-      this._renderProgress[code] = m
-        ? computeMinorProgress(m.tree, this._getCourseStatuses())
-        : { byPath: new Map(), assigned: new Map(), summary: { total: 0, complete: 0, inProgress: 0, remaining: 0, marked: 0, state: 'none' } };
-    }
-    return this._renderProgress[code];
-  },
-
   /** Open the first level of a minor the first time it is shown (big "any course" lists stay closed). */
   _autoExpandMinor(code) {
     if (!this._minorsExpanded) this._minorsExpanded = new Set();
@@ -6105,40 +7019,27 @@ const App = {
     for (const node of m.tree.children || []) walk(node, 0);
   },
 
-  /** Status chip of a tree node: rule based for a minor category, counts for a major category. */
-  _nodeStatusHtml(node, ctx) {
-    if (!ctx) return '';
-    if (node.isMinor) {
-      if (!ctx.progress) return '';
-      const st = ctx.progress.byPath.get(node.path);
-      const t = minorStatusText(st);
-      if (!t) return '';
-      return `<span class="mn-st mn-st-${t.cls}" title="${esc(this._minorStatusDetail(st))}">${esc(t.text)}</span>`;
-    }
-    if (!ctx.statuses) return '';
-    const n = countMarkedCourses(node, ctx.statuses);
-    const bits = [];
-    if (n.done) bits.push(`${n.done} done`);
-    if (n.inProgress) bits.push(`${n.inProgress} in progress`);
-    return bits.length ? `<span class="mn-st mn-st-count">${esc(bits.join(', '))}</span>` : '';
-  },
-
-  _minorStatusDetail(st) {
-    if (!st) return '';
-    let text = `${st.done} completed`;
-    if (st.inProgress) text += `, ${st.inProgress} in progress`;
-    const units = st.doneUnits + st.inProgressUnits;
-    if (units) text += ` (${units} units)`;
-    if (st.kind === 'group' && st.partsTotal) text += `. ${st.partsDone} of ${st.partsTotal} parts done`;
-    return text;
+  /** A minor's text as HTML: escaped, with course codes ("85-170") kept whole at a line end. */
+  _minorTextHtml(text) {
+    return esc(text).replace(/\b\d{2}-\d{3}\b/g, '<span class="mn-code">$&</span>');
   },
 
   /** Notes, codes missing from the catalog and empty states inside a minor category. */
   _minorNodeInfoHtml(node) {
+    // For admins, a listed code archived on the admin page is named as archived, not as
+    // missing from the catalog. Everyone else sees it as missing, like any code without a row.
+    const admin = canManageUsers(this.authedUser);
+    const archived = admin ? this._archivedCodesIn(node.missing) : [];
+    if (archived.length) node = Object.assign({}, node, { missing: node.missing.filter(code => !archived.includes(code)) });
     const lines = [];
-    for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${esc(note)}</div>`);
+    for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${this._minorTextHtml(note)}</div>`);
     if (node.missing && node.missing.length) {
-      lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${esc(joinWithAnd(node.missing))}.</div>`);
+      lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${this._minorTextHtml(joinWithAnd(node.missing))}.</div>`);
+    }
+    if (archived.length) lines.push(`<div class="mn-node-note mn-node-admin">Archived on the admin page: ${esc(joinWithAnd(archived))}.</div>`);
+    if (admin) {
+      if ((node.adminAdded || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Added on the admin page: ${esc(joinWithAnd(node.adminAdded))}.</div>`);
+      if ((node.adminRemoved || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Removed on the admin page: ${esc(joinWithAnd(node.adminRemoved))}.</div>`);
     }
     if (!(node.children || []).length) {
       if (!(node.courses || []).length) {
@@ -6150,47 +7051,193 @@ const App = {
     return lines.length ? `<div class="mn-node-info">${lines.join('')}</div>` : '';
   },
 
-  /** A student's major and minors, above their requirement tree. */
+  /**
+   * A student's major and minors, above their requirement tree: two labelled
+   * rows (the major dropdown; the chosen minors and the "Add a minor" dropdown).
+   */
   _studentProgramsBarHtml() {
     const p = this.profile;
     const minors = getProfileMinors(p);
     const majorOpts = STUDENT_PROGRAMS.map(m =>
       `<option value="${m}" ${p.primary === m ? 'selected' : ''}>${esc(this._programFullName(m))} (${m})</option>`).join('');
     const chips = minors.map(mc => `
-      <span class="mn-prog-chip">${esc(getMinorLabel(mc))} minor<button type="button" class="mn-prog-chip-x" data-action="minor-remove" data-minor="${esc(mc)}" title="Remove this minor" aria-label="Remove the ${esc(getMinorLabel(mc))} minor">×</button></span>`).join('');
+      <span class="mn-prog-chip">${esc(getMinorLabel(mc))}<button type="button" class="mn-prog-chip-x" data-action="minor-remove" data-minor="${esc(mc)}" title="Remove this minor" aria-label="Remove the ${esc(getMinorLabel(mc))} minor">${this._iconClose()}</button></span>`).join('');
     const addOpts = MINOR_LIST
       .filter(m => !minors.includes(m.code) && !isMinorBlockedForMajor(m.code, p.primary))
       .map(m => `<option value="${esc(m.code)}">${esc(m.label)}</option>`).join('');
     const addSelect = addOpts
-      ? `<select class="mn-prog-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" onchange="App.addStudentMinor(this.value)"><option value="">Add a minor</option>${addOpts}</select>`
+      ? `<select class="mn-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" ${this._programSelectEvents()}><option value="">Add a minor</option>${addOpts}</select>`
       : '';
-    const where = this.authMode === 'authed' ? 'in this browser' : 'on this device';
     return `
       <div class="mn-programs" role="group" aria-label="Your major and minors">
-        <div class="mn-prog-row">
-          <label class="mn-prog-field">
-            <span class="mn-prog-label">Major</span>
-            <select class="mn-prog-select" id="mnMajorPick" onchange="App.setStudentMajor(this.value)">${majorOpts}</select>
-          </label>
-          <div class="mn-prog-field mn-prog-minors">
-            <span class="mn-prog-label">Minors</span>
-            ${chips || '<span class="mn-prog-none">None yet</span>'}
-            ${addSelect}
-          </div>
+        <label class="mn-label" for="mnMajorPick">Major</label>
+        <div class="mn-prog-value">
+          <select class="mn-select" id="mnMajorPick" ${this._programSelectEvents()}>${majorOpts}</select>
         </div>
-        <p class="mn-prog-hint">Click the circle next to a course once for in progress and twice for completed. Your marks are saved ${where}.</p>
+        <span class="mn-label" id="mnMinorsLabel">Minors</span>
+        <div class="mn-prog-value" role="group" aria-labelledby="mnMinorsLabel">
+          ${chips}${addSelect || (chips ? '' : '<span class="mn-prog-none">None</span>')}
+        </div>
       </div>`;
+  },
+
+  // The programs bar dropdowns (#mnMajorPick, #mnMinorAdd) change the student's
+  // programs. On a closed dropdown an arrow key or a typed letter already moves
+  // the choice (Chrome, Edge and Firefox fire a change for each key), so a
+  // choice made that way waits: Enter, or Tab on to the next control, applies
+  // it, and Escape or a click elsewhere puts the dropdown back. A pick in the
+  // open list (mouse, touch, or Enter in the list) applies at once. The tree is
+  // then drawn again, and the focus goes back to the new dropdown, or on to the
+  // control Tab moved to.
+  _programSelectEvents() {
+    return 'onchange="App._onProgramSelectChange(this)" onkeydown="App._onProgramSelectKey(event, this)" '
+      + 'onmousedown="App._onProgramSelectPointer(this)" onblur="App._onProgramSelectBlur(this)"';
+  },
+
+  /** On a Mac an arrow key opens a closed dropdown's list instead of moving the choice. */
+  _arrowsOpenTheList() {
+    const nav = typeof navigator !== 'undefined' ? navigator : null;
+    return !!nav && /Mac|iPhone|iPad|iPod/i.test(nav.platform || nav.userAgent || '');
+  },
+
+  _onProgramSelectKey(event, el) {
+    const key = event && event.key;
+    if (key === 'Enter') {
+      if (this._programPending === el.id) {
+        if (event.preventDefault) event.preventDefault();
+        this._applyProgramPick(el.id, el.value, 'stay');
+      } else {
+        this._programEnter = el.id;  // Enter in the open list: the change it brings applies at once
+      }
+      return;
+    }
+    if (key === 'Escape') {
+      if (this._programPending === el.id) this._revertProgramSelect(el);
+      return;
+    }
+    if (key === 'Tab') {
+      this._programTab = event.shiftKey ? 'prev' : 'next';
+      return;
+    }
+    if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
+    this._programEnter = null;
+    // Alt with an arrow and F4 open the list, and so does Space unless it is part of
+    // typing (a letter typed on this dropdown in the last second); anything else may
+    // move the choice in place.
+    const now = Date.now();
+    const typing = this._programTypedOn === el.id && now - (this._programTypedAt || 0) < 1000;
+    const opens = event.altKey || key === 'F4' || (key === ' ' && !typing)
+      || (this._arrowsOpenTheList() && /^Arrow(Up|Down)$/.test(key || ''));
+    if (key && key.length === 1 && key !== ' ') {
+      this._programTypedOn = el.id;
+      this._programTypedAt = now;
+    }
+    this._programKeyNav = opens ? null : el.id;
+  },
+
+  _onProgramSelectPointer(el) {
+    this._programKeyNav = null;
+    if (this._programPending === el.id) this._revertProgramSelect(el);
+  },
+
+  _onProgramSelectChange(el) {
+    if (this._programKeyNav === el.id && this._programEnter !== el.id) {
+      this._programPending = el.id;  // a key moved the choice: wait for Enter or Tab
+      return;
+    }
+    this._applyProgramPick(el.id, el.value, 'stay');
+  },
+
+  _onProgramSelectBlur(el) {
+    const tab = this._programTab;
+    this._programTab = null;
+    this._programKeyNav = null;
+    this._programEnter = null;
+    if (this._programPending !== el.id) return;
+    if (!tab) {
+      this._revertProgramSelect(el);
+      return;
+    }
+    // Tab applies the choice once the focus has moved on, then follows it.
+    this._programPending = null;
+    const id = el.id;
+    const value = el.value;
+    setTimeout(() => this._applyProgramPick(id, value, tab), 0);
+  },
+
+  /** Put a programs bar dropdown back on the student's current choice. */
+  _revertProgramSelect(el) {
+    this._programPending = null;
+    this._programKeyNav = null;
+    el.value = el.id === 'mnMajorPick' ? ((this.profile && this.profile.primary) || '') : '';
+  },
+
+  /**
+   * Apply a programs bar choice; focus 'stay' puts the focus on the redrawn
+   * dropdown, 'next' or 'prev' on the control after or before it (where Tab
+   * went, unless that control was not drawn again).
+   */
+  _applyProgramPick(id, value, focus) {
+    this._programPending = null;
+    this._programKeyNav = null;
+    this._programEnter = null;
+    const before = typeof document !== 'undefined' ? document.activeElement : null;
+    let saved;
+    if (id === 'mnMajorPick') saved = this.setStudentMajor(value);
+    else if (id === 'mnMinorAdd' && value) saved = this.addStudentMinor(value);
+    if (focus === 'stay') {
+      if (!this._focusById(id)) this._focusById('mnMajorPick');
+    } else if (!(before && before.isConnected && before !== document.body)) {
+      this._focusBeside(id, focus === 'prev' ? -1 : 1);
+    }
+    return saved;
+  },
+
+  /** Focus the control next to (step 1) or before (step -1) a control, by tab order. */
+  _focusBeside(id, step) {
+    if (typeof document === 'undefined' || !document.querySelectorAll) return;
+    const el = document.getElementById(id) || document.getElementById('mnMajorPick');
+    if (!el) return;
+    const controls = Array.from(document.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]'))
+      .filter(c => !c.disabled && c.tabIndex >= 0 && c.offsetParent !== null);
+    const i = controls.indexOf(el);
+    const target = (i >= 0 && controls[i + step]) || el;
+    if (!target.focus) return;
+    try { target.focus({ preventScroll: true }); } catch { target.focus(); }
+  },
+
+  /** Focus a control by id, e.g. after a re-render replaced the one that was used. True when it was found. */
+  _focusById(id) {
+    if (typeof document === 'undefined' || !document.getElementById) return false;
+    const el = document.getElementById(id);
+    if (el && el.focus) {
+      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+      return true;
+    }
+    return false;
+  },
+
+  _iconClose() {
+    return '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+  },
+
+  _iconCheck() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+  },
+
+  _iconPlus() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>';
   },
 
   setStudentMajor(major) {
     const p = this.profile;
-    if (!this._statusTrackingOn() || !STUDENT_PROGRAMS.includes(major) || major === p.primary) return;
+    if (!this._isStudentView() || !STUDENT_PROGRAMS.includes(major) || major === p.primary) return;
     return this._applyStudentPrograms(major, getProfileMinors(p), `Your major is now ${this._programFullName(major)}.`);
   },
 
   addStudentMinor(code) {
     const p = this.profile;
-    if (!this._statusTrackingOn() || !code || !isKnownMinor(code)) return;
+    if (!this._isStudentView() || !code || !isKnownMinor(code)) return;
     if (isMinorBlockedForMajor(code, p.primary)) {
       showToast(`The ${getMinorLabel(code)} minor is not open to ${p.primary} majors.`);
       return;
@@ -6203,7 +7250,7 @@ const App = {
 
   removeStudentMinor(code) {
     const p = this.profile;
-    if (!this._statusTrackingOn() || !code) return;
+    if (!this._isStudentView() || !code) return;
     const minors = getProfileMinors(p);
     if (!minors.includes(code)) return;
     return this._applyStudentPrograms(p.primary, minors.filter(mc => mc !== code), `Removed the ${getMinorLabel(code)} minor.`);
@@ -6292,7 +7339,7 @@ const App = {
     const m = this.minorIndex && this.minorIndex.byCode[code];
     if (!m) return;
     const p = this.profile;
-    const inStudentTree = this._statusTrackingOn() && getProfileMinors(p).includes(code);
+    const inStudentTree = this._isStudentView() && getProfileMinors(p).includes(code);
     const tab = inStudentTree ? p.primary : MINORS_TAB;
     if (!inStudentTree) this.browseMinorCode = code;
     this._autoExpandMinor(code);
@@ -6321,7 +7368,10 @@ const App = {
     }, 100);
   },
 
-  /** The Minors tab: every minor as a button; the chosen one's full requirements below. */
+  /**
+   * The Minors tab: a dropdown of every minor (a student's own minors first,
+   * under "Your minors") and the chosen one's full requirements below.
+   */
   _renderMinorsBrowse() {
     const idx = this.minorIndex;
     if (!idx) {
@@ -6330,28 +7380,61 @@ const App = {
         : 'Loading the minor requirements.';
       return `<div class="empty-state"><div class="empty-text">${why}</div></div>`;
     }
-    const mine = this._statusTrackingOn() ? getProfileMinors(this.profile) : [];
+    const mine = this._isStudentView() ? getProfileMinors(this.profile) : [];
     const sel = (this.browseMinorCode && idx.byCode[this.browseMinorCode]) ? this.browseMinorCode : null;
-    const buttons = idx.order.map(code => {
-      const on = code === sel;
-      const yours = mine.includes(code);
-      return `<button type="button" class="mn-pick${on ? ' is-active' : ''}${yours ? ' is-mine' : ''}" data-action="minor-browse" data-minor="${esc(code)}" aria-pressed="${on}">${esc(idx.byCode[code].def.name)}${yours ? '<span class="mn-pick-mine">Yours</span>' : ''}</button>`;
-    }).join('');
-    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
+    const option = code => `<option value="${esc(code)}"${code === sel ? ' selected' : ''}>${esc(idx.byCode[code].def.name)}</option>`;
+    const yours = idx.order.filter(code => mine.includes(code));
+    const others = idx.order.filter(code => !mine.includes(code));
+    const options = yours.length
+      ? `<optgroup label="Your minors">${yours.map(option).join('')}</optgroup>`
+        + (others.length ? `<optgroup label="Other minors">${others.map(option).join('')}</optgroup>` : '')
+      : others.map(option).join('');
+    const placeholder = sel ? '' : '<option value="" selected disabled>Choose a minor</option>';
     return `
       <div class="mn-browse">
         <div class="mn-browse-head">
-          <h2 class="mn-browse-title">All minors</h2>
-          ${sel ? '' : '<p class="mn-browse-lead">Choose a minor to see its full requirements.</p>'}
-          <div class="mn-pick-list" role="group" aria-label="Minors">${buttons}</div>
+          <label class="mn-label" for="mnBrowsePick">Minor</label>
+          <select class="mn-select" id="mnBrowsePick" onchange="App._onBrowseMinorPick(this.value)">${placeholder}${options}</select>
         </div>
-        ${sel ? filterHint + this._renderMinorSection(sel, 'browse') : ''}
+        <div class="mn-browse-body" id="mnBrowseBody">${this._minorsBrowseBodyHtml(sel)}</div>
       </div>`;
   },
 
+  /** What the Minors tab shows under its dropdown: the chosen minor, or how to choose one. */
+  _minorsBrowseBodyHtml(sel) {
+    if (!sel) {
+      return `
+      <div class="empty-state">
+        <img class="empty-illustration" src="assets/img/scotty-full.png" alt="" aria-hidden="true" />
+        <div class="empty-text">Choose a minor to see its full requirements.</div>
+      </div>`;
+    }
+    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
+    return filterHint + this._renderMinorSection(sel, 'browse');
+  },
+
   /**
-   * One minor: a header (name, version, campus note, progress, the double
-   * counting limit, warnings and notes) and its categories as tree cards.
+   * The Minors tab dropdown: show the chosen minor. Only the part under the
+   * dropdown is drawn again, so the dropdown keeps the focus and its typing
+   * ("Psy" reaches Psychology) while the keys move through the minors.
+   */
+  _onBrowseMinorPick(code) {
+    const body = typeof document !== 'undefined' ? document.getElementById('mnBrowseBody') : null;
+    if (!body || this.activeMajor !== MINORS_TAB || !this.minorIndex || !this.minorIndex.byCode[code]) {
+      this.browseMinor(code);
+      this._focusById('mnBrowsePick');
+      return;
+    }
+    this.browseMinorCode = code;
+    this._autoExpandMinor(code);
+    body.innerHTML = this._minorsBrowseBodyHtml(code);
+    this._focusById('mnBrowsePick');  // already there after a pick in the list: a no-op that keeps its typing
+  },
+
+  /**
+   * One minor: a header (name, official title and units, the double counting
+   * limit, the admin's limit and note, About this minor) and its categories as
+   * tree cards. The file's version is kept in minors.json but never shown.
    * mode: 'student' in the student's own tree, 'browse' in the Minors tab.
    */
   _renderMinorSection(code, mode) {
@@ -6370,23 +7453,28 @@ const App = {
     this._autoExpandMinor(code);
     const def = m.def;
     const p = this.profile;
-    const student = this._statusTrackingOn();
+    const student = this._isStudentView();
     const mine = student && getProfileMinors(p).includes(code);
     const majorCode = student ? p.primary : null;
-    const progress = student ? this._minorProgress(code) : null;
 
     let actionHtml = '';
     if (mode === 'browse' && student) {
-      if (mine) actionHtml = '<span class="mn-pill mn-pill-mine">Your minor</span>';
-      else if (isMinorBlockedForMajor(code, p.primary)) actionHtml = `<span class="mn-pill">Not open to ${esc(p.primary)} majors</span>`;
-      else actionHtml = `<button type="button" class="mn-add-btn" data-action="minor-add" data-minor="${esc(code)}">Add to my minors</button>`;
+      if (mine) actionHtml = `<span class="mn-head-state is-mine">${this._iconCheck()}Your minor</span>`;
+      else if (isMinorBlockedForMajor(code, p.primary)) actionHtml = `<span class="mn-head-state">Not open to ${esc(p.primary)} majors</span>`;
+      else actionHtml = `<button type="button" class="mn-add-btn" data-action="minor-add" data-minor="${esc(code)}">${this._iconPlus()}Add to my minors</button>`;
+    }
+    if (mode === 'browse' && canManageUsers(this.authedUser) && /^[a-z0-9_]+$/.test(code)) {
+      actionHtml += `<button type="button" class="mn-add-btn mn-admin-btn" onclick="App._openMinorSettings('${code}')">Edit minor settings</button>`;
     }
 
+    // Under the title: the official name when it says more than the title
+    // ("Minor in Psychology" does not) and the units.
     const meta = [];
-    if (def.title) meta.push(`<span>${esc(def.title)}</span>`);
+    const name = String(def.name || '').toLowerCase();
+    const official = String(def.title || '').trim();
+    if (official && ![`minor in ${name}`, `${name} minor`].includes(official.toLowerCase())) meta.push(`<span>${esc(official)}</span>`);
     if (def.total_units != null) meta.push(`<span>${esc(String(def.total_units))} units</span>`);
-    if (def.campus_note) meta.push(`<span class="mn-pill mn-pill-campus">${esc(def.campus_note)}</span>`);
-    const version = def.version ? `<div class="mn-version">Version: ${esc(plainDataText(def.version))}</div>` : '';
+    const metaHtml = meta.length ? `<div class="mn-meta">${meta.join('<span class="mn-dot" aria-hidden="true">·</span>')}</div>` : '';
 
     const dc = def.double_count || {};
     const limitText = minorDoubleCountLimitText(def, majorCode, student ? 'your' : "a student's");
@@ -6394,28 +7482,24 @@ const App = {
     const ruleText = dc.text
       ? String(dc.text).split(' | ').map(t => plainDataText(t.trim())).filter(Boolean).map(withPeriod).join(' ')
       : '';
+    // The rule's own words: from the audit file, or from the catalog page for a
+    // minor built from one (Product Management).
+    const ruleLabel = minorSourceKind(def) === 'catalog' ? 'Catalog rule' : 'Audit rule';
     const dcHtml = `
       <div class="mn-dc">
         <div><span class="mn-dc-label">Double counting</span> ${esc(limitText)}</div>
-        ${ruleText ? `<div class="mn-dc-rule">Audit rule: ${esc(ruleText)}</div>` : ''}
+        ${ruleText ? `<div class="mn-dc-rule">${ruleLabel}: ${esc(ruleText)}</div>` : ''}
       </div>`;
 
-    let warnHtml = '';
-    if (mine) {
-      const others = getProfileMinors(p)
-        .filter(mc => mc !== code && idx.byCode[mc])
-        .map(mc => ({ name: idx.byCode[mc].def.name, assigned: this._minorProgress(mc).assigned }));
-      const check = checkMinorDoubleCounting(def, progress, {
-        majorCode,
-        majorKindOf: c => majorCountKind(lookupCourse(this.courseIndex, c), majorCode),
-        otherMinors: others,
-      });
-      warnHtml = minorDoubleCountWarnings(check, def, majorCode)
-        .map(w => `<div class="mn-warn" role="note">${this._iconWarn()}<span>${esc(w)}</span></div>`).join('');
+    // Set on the admin page (applyMinorOverrides): a note from CMU-Q, and a limit that replaces the quoted rule.
+    let adminHtml = '';
+    if (dc.edited) {
+      adminHtml += `<div class="mn-dc-rule mn-dc-edited">${ruleText ? 'CMU-Q updated this limit, so it replaces the rule quoted above.' : 'CMU-Q set this limit.'}</div>`;
     }
+    if (def.admin_note) adminHtml += `<div class="mn-admin-note" role="note"><span class="mn-dc-label">Note from CMU-Q</span> ${esc(def.admin_note)}</div>`;
 
     const group = (title, items) => (items && items.length
-      ? `<div class="mn-about-group"><div class="mn-about-title">${title}</div><ul>${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>`
+      ? `<div class="mn-about-group"><div class="mn-about-title">${title}</div><ul>${items.map(t => `<li>${this._minorTextHtml(t)}</li>`).join('')}</ul></div>`
       : '');
     const noCategories = !(m.tree.children || []).length;
     const aboutInner = (noCategories ? '' : group('Notes', def.notes))
@@ -6425,14 +7509,12 @@ const App = {
       ? `<details class="mn-about"><summary>About this minor</summary>${aboutInner}</details>`
       : '';
 
-    const progressHtml = (progress && progress.summary.total) ? this._minorProgressHtml(m, progress) : '';
-
     let body = '';
     if (noCategories) {
-      body = (def.notes || []).map(t => `<p class="mn-note">${esc(t)}</p>`).join('')
+      body = (def.notes || []).map(t => `<p class="mn-note">${this._minorTextHtml(t)}</p>`).join('')
         || '<p class="mn-note">This minor has no fixed requirements.</p>';
     } else {
-      const ctx = { minor: m, progress, statuses: student ? this._getCourseStatuses() : null };
+      const ctx = { minor: m };
       for (const node of m.tree.children) body += this.renderTreeNode(node, m.key, 0, ctx);
       if (!body) body = '<p class="mn-note">Nothing in this minor matches the filter.</p>';
     }
@@ -6441,38 +7523,18 @@ const App = {
       <section class="mn-section${mine ? ' mn-section-mine' : ''}" id="${esc(sectionId)}" data-minor="${esc(code)}" aria-label="${esc(def.name)} minor">
         <header class="mn-head">
           <div class="mn-head-row">
-            <h3 class="mn-title">${esc(def.name)} minor</h3>
+            <div class="mn-head-main">
+              <h3 class="mn-title">${esc(def.name)} minor</h3>
+              ${metaHtml}
+            </div>
             ${actionHtml}
           </div>
-          <div class="mn-meta">${meta.join('<span class="mn-dot" aria-hidden="true">·</span>')}</div>
-          ${version}
-          ${progressHtml}
           ${dcHtml}
-          ${warnHtml}
+          ${adminHtml}
           ${aboutHtml}
         </header>
         <div class="mn-body">${body}</div>
       </section>`;
-  },
-
-  /** One segment per requirement (done, in progress, left) and the summary line. */
-  _minorProgressHtml(m, progress) {
-    const s = progress.summary;
-    const segs = (m.tree.children || []).map(node => {
-      const st = progress.byPath.get(node.path);
-      if (!st || st.state === 'optional') return '';
-      const cls = st.state === 'complete' ? ' is-done' : st.state === 'in_progress' ? ' is-ip' : '';
-      const t = minorStatusText(st);
-      return `<span class="mn-bar-seg${cls}" title="${esc(node.label)}: ${esc(t ? t.text : '')}"></span>`;
-    }).join('');
-    const text = s.marked
-      ? minorSummaryText(s)
-      : `${s.total} requirement${s.total === 1 ? '' : 's'}. Mark the courses you took to see your progress.`;
-    return `
-      <div class="mn-progress">
-        <div class="mn-bar" role="img" aria-label="${esc(minorSummaryText(s))}">${segs}</div>
-        <div class="mn-progress-text">${esc(text)}</div>
-      </div>`;
   },
 
   navigateToReqNode(major, fullPath) {

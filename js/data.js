@@ -116,6 +116,8 @@ setRule('IS', 'Information systems concentration', { type: 'pick', n: 1, label: 
 setRule('IS', 'IS Concentrations', { type: 'pick', n: 1, label: 'Choose 1' });
 setRule('IS', 'Data Science', { type: 'min_units', units: 36, label: 'At least 36 units' });
 setRule('IS', 'Information Security & Privacy', { type: 'min_units', units: 36, label: 'At least 36 units' });
+// New 2026-27 CMU-Q concentration; the catalog lists no courses yet (an admin adds them).
+setRule('IS', 'Emerging Technology Management', { type: 'min_units', units: 36, label: 'At least 36 units' });
 setRule('IS', 'Digitalization', { type: 'min_units', units: 36, label: 'At least 36 units' });
 setRule('IS', 'Data Science Technical Core', { type: 'pick', n: 1, label: 'Choose 1 or more' });
 setRule('IS', 'Data Science Applications', { type: 'pick', n: 1, label: 'Choose 1 or more' });
@@ -242,7 +244,7 @@ setRule('BS', 'And any TWO (2) or THREE (3) of the following for a total of FIVE
 setRule('BS', 'And TWO (2) or THREE (3) of the following for a total of FIVE (5) courses', { type: 'pick', n: 2, label: 'Choose 2 or 3 (no more than 9 units at the 100 level)' });
 setRule('BS', 'A maximum of one elective can be (with advisor approval)', { type: 'max_courses', n: 1, label: 'Up to 1, with advisor approval' });
 setRule('BS', 'A maximum of one elective can be', { type: 'max_courses', n: 1, label: 'Up to 1' });
-setRule('BS', 'Options', { type: 'optional', label: 'Earlier catalog only' });
+setRule('BS', 'Options', { type: 'optional', label: 'Optional' });
 setRule('BS', 'Technical Breadth Requirements', { type: 'take_all', label: "4 courses; met by this degree's required courses" });
 setRule('BS', 'A. Life Sciences', { type: 'min_units', units: 9, label: 'At least 9 units, not 03-xxx (02-250 for this degree)' });
 setRule('BS', 'B. Physical Sciences', { type: 'min_units', units: 9, label: 'At least 9 units (09-105, 09-106, 33-121, 33-122 for this degree)' });
@@ -284,10 +286,11 @@ setRule('AI', 'Laboratory Requirement', { type: 'pick', n: 1, label: 'Choose 1' 
 setRule('AI', 'Humanities and Arts', { type: 'min_units', units: 63, label: 'At least 63 units' });
 setRule('AI', 'A. First Year Writing Requirement', { type: 'min_units', units: 9, label: '9 units (1 course or 2 minis)' });
 setRule('AI', 'B. Breadth Requirement', { type: 'take_all', units: 27, label: 'One from each category' });
+// Category 1A replaces Category 1 for AI majors and comes first, as on the SCS page.
+setRule('AI', 'Category 1A: Cognitive Studies', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 setRule('AI', 'Category 2: Economic, Political and Social Institutions', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 setRule('AI', 'Category 3: Cultural Analysis', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 setRule('AI', 'C. Humanities and Arts Electives', { type: 'min_units', n: 3, units: 27, label: '3 courses (at least 27 units)' });
-setRule('AI', 'Category 1A: Cognitive Studies', { type: 'pick', n: 1, units: 9, label: 'Choose 1 (at least 9 units)' });
 
 // ── Rows the app keeps but never lists ───────────────────────
 // qatar_only is set by backend/scraper/apply_mapping_overlays.py from
@@ -343,9 +346,6 @@ function buildRequirementTree(courses, majorCode) {
         type: req.type, // true = gened, false = core
         prerequisites: course.prerequisites,
         offered: course.offered || [],
-        // Listed in an earlier version of the requirement, not in the 2026-27 catalog.
-        earlier: !!req.earlier,
-        earlierReason: req.earlier_reason || '',
       });
       node.isGenEd = req.type;
     }
@@ -372,10 +372,6 @@ function normalizeTree(node, majorCode, depth) {
   // Array sort is stable, so buckets without a rule keep their first-seen order.
   childArray.sort((a, b) => ruleOrder(majorCode, a.rawLabel) - ruleOrder(majorCode, b.rawLabel));
   node.children = childArray;
-  // Current courses first, then the ones kept from an earlier requirement.
-  if (node.courses && node.courses.length) {
-    node.courses.sort((a, b) => (a.earlier ? 1 : 0) - (b.earlier ? 1 : 0));
-  }
   return node;
 }
 
@@ -442,15 +438,97 @@ function normalizeCourseCode(code) {
 // backend and are applied here, after load and before indexing.
 const COURSE_EDIT_FIELDS = ['course_name', 'department', 'units', 'description', 'prerequisites', 'offered_qatar', 'offered_pitts', 'offered'];
 
+// What a course counts for is edited per program and per minor, as a change to
+// the catalog (README 12.2): { CS: { add: [rows], remove: [paths] },
+// 'MINOR:psychology': { add: [category paths], remove: [category paths] } }.
+// A key that is absent follows the catalog, so the daily updates keep flowing
+// in. A list value is the whole-list shape saved before 2026-11-10: it still
+// replaces its own program's rows, and nothing else.
+const MINOR_EDIT_PREFIX = 'MINOR:';
+
+// The root of each program's degree paths. Gen Ed paths start with GenEd in
+// every program, and the root alone decides a row's Gen Ed flag.
+const DEGREE_ROOTS = {
+  CS: 'BS in Computer Science',
+  IS: 'BS in Information Systems',
+  BA: 'BS in Business Administration',
+  BS: 'BS in Biological Sciences',
+  AI: 'BS in Artificial Intelligence',
+  GS: 'BS in General Studies',
+};
+
 function _emptyRequirements() {
   const out = {};
   for (const m of MAJOR_ORDER) out[m] = [];
   return out;
 }
 
+/** True when a path is GenEd or the program's degree root, then at least one more part. */
+function requirementPathRootOk(prog, path) {
+  const parts = String(path || '').split('---');
+  return parts.length >= 2 && parts.every(Boolean) && (parts[0] === 'GenEd' || parts[0] === DEGREE_ROOTS[prog]);
+}
+
+/** An edit row as stored: its path, the Gen Ed flag of its root, its program. Old flags are dropped. */
+function _editRow(r, prog) {
+  const requirement = typeof r === 'string' ? r : (r && r.requirement);
+  if (!requirement) return null;
+  return { requirement, type: String(requirement).split('---')[0] === 'GenEd', major: prog || (r && r.major) || '' };
+}
+
+/**
+ * One program's rows after an admin edit. A legacy list replaces them (any old
+ * "earlier" flags on it are ignored); { add, remove } drops the removed paths,
+ * then adds the rows the base does not list yet; no edit gives a copy of the base.
+ */
+function applyProgramEdit(baseRows, edit, prog) {
+  if (Array.isArray(edit)) {
+    const out = [];
+    for (const r of edit) {
+      const row = _editRow(r, prog);
+      if (row && !out.some(x => x.requirement === row.requirement)) out.push(row);
+    }
+    return out;
+  }
+  const rows = (baseRows || []).map(r => Object.assign({}, r));
+  if (!edit || typeof edit !== 'object') return rows;
+  const remove = new Set(edit.remove || []);
+  const out = rows.filter(r => !remove.has(r.requirement));
+  for (const r of edit.add || []) {
+    const row = _editRow(r, prog);
+    if (row && !out.some(x => x.requirement === row.requirement)) out.push(row);
+  }
+  return out;
+}
+
+/** The smallest { add, remove } that turns baseRows into draftRows (by path), or null when they list the same paths. */
+function programEditDelta(baseRows, draftRows) {
+  const base = new Set((baseRows || []).map(r => r && r.requirement).filter(Boolean));
+  const draft = new Set();
+  const add = [];
+  for (const r of draftRows || []) {
+    if (!r || !r.requirement || draft.has(r.requirement)) continue;
+    draft.add(r.requirement);
+    if (!base.has(r.requirement)) add.push({ requirement: r.requirement, type: String(r.requirement).split('---')[0] === 'GenEd' });
+  }
+  const remove = [...base].filter(p => !draft.has(p));
+  return add.length || remove.length ? { add, remove } : null;
+}
+
+/** True when two stored edits of one key say the same thing (a legacy list never matches). */
+function sameRequirementEdit(a, b) {
+  if (a == null || b == null) return a == null && b == null;
+  if (Array.isArray(a) || Array.isArray(b)) return false;
+  const paths = list => (list || []).map(x => (typeof x === 'string' ? x : x && x.requirement)).filter(Boolean).sort().join('\n');
+  return paths(a.add) === paths(b.add) && paths(a.remove) === paths(b.remove);
+}
+
 /**
  * Returns { courses, archived }. Each edited course gets `_edit` (the override)
  * and `_catalog` (the scraped values it replaced) so the admin editor can show both.
+ * Program edits change only their own program's rows; minor edits go to
+ * `_minorEdits` ({ minor: { add, remove } }) for buildMinorIndex() and never
+ * into `requirements`.
  */
 function applyCourseOverrides(courses, overrides) {
   if (!overrides || !overrides.length) return { courses, archived: [] };
@@ -504,9 +582,20 @@ function applyCourseOverrides(courses, overrides) {
       if (!course._added && !(f in course._catalog)) course._catalog[f] = course[f];
       course[f] = fields[f];
     }
-    if (o.requirements) {
+    if (o.requirements && typeof o.requirements === 'object' && Object.keys(o.requirements).length) {
       if (!course._added && !('requirements' in course._catalog)) course._catalog.requirements = course.requirements;
-      course.requirements = Object.assign(_emptyRequirements(), o.requirements);
+      const next = Object.assign(_emptyRequirements(), course.requirements);
+      for (const [key, edit] of Object.entries(o.requirements)) {
+        if (key.startsWith(MINOR_EDIT_PREFIX)) {
+          if (edit && typeof edit === 'object' && !Array.isArray(edit)) {
+            (course._minorEdits || (course._minorEdits = {}))[key.slice(MINOR_EDIT_PREFIX.length)] =
+              { add: (edit.add || []).slice(), remove: (edit.remove || []).slice() };
+          }
+        } else {
+          next[key] = applyProgramEdit(next[key], edit, key);
+        }
+      }
+      course.requirements = next;
     }
     if (fields.course_code && fields.course_code !== course.course_code) {
       if (!course._added) course._catalog.course_code = course.course_code;
@@ -521,11 +610,37 @@ function applyCourseOverrides(courses, overrides) {
   return { courses: courses.filter(c => !archivedCodes.has(c)), archived };
 }
 
-/** Every requirement path used in the catalog, per program, with its Gen Ed flag. */
-function knownRequirementPaths(courses) {
+/**
+ * Every requirement category per program, with its Gen Ed flag: each bucket of
+ * data/requirement_buckets.json when it was loaded (parseRequirementBuckets(),
+ * empty buckets included, in catalog order), then the paths of the catalog rows.
+ * A heading of the bucket file (a path with buckets under it, such as
+ * "BS in Computer Science---Computer Science") is left out unless catalog rows
+ * already use it: a course goes in a bucket, not in a heading, and several
+ * headings are old bucket names (README 14.10) that must stay flagged.
+ * Pass the scraped courses, before admin edits, so an edited path is not a category.
+ */
+function knownRequirementPaths(courses, buckets) {
   const out = {};
   for (const m of MAJOR_ORDER) out[m] = new Map();
-  for (const c of courses) {
+  const used = {};
+  for (const c of courses || []) {
+    for (const [prog, list] of Object.entries(c.requirements || {})) {
+      if (!out[prog]) continue;
+      const set = used[prog] || (used[prog] = new Set());
+      for (const r of list || []) if (r && r.requirement) set.add(r.requirement);
+    }
+  }
+  for (const [prog, paths] of Object.entries(buckets || {})) {
+    if (!out[prog]) continue;
+    const all = (paths || []).filter(Boolean);
+    for (const p of all) {
+      const heading = all.some(q => q !== p && q.startsWith(p + '---'));
+      if (heading && !(used[prog] && used[prog].has(p))) continue;
+      if (!out[prog].has(p)) out[prog].set(p, String(p).split('---')[0] === 'GenEd');
+    }
+  }
+  for (const c of courses || []) {
     for (const [prog, list] of Object.entries(c.requirements || {})) {
       if (!out[prog]) continue;
       for (const r of list || []) {
@@ -534,6 +649,33 @@ function knownRequirementPaths(courses) {
     }
   }
   return out;
+}
+
+/**
+ * data/requirement_buckets.json, written by the daily pipeline when it exists:
+ * every bucket path per program in catalog order, empty buckets included
+ * ({ CS: [paths], ... }; a "programs" wrapper and { path } items are accepted
+ * too). Returns { program: [paths] }, or null when the data holds no paths.
+ */
+function parseRequirementBuckets(data) {
+  if (!data || typeof data !== 'object') return null;
+  const src = data.programs && typeof data.programs === 'object' && !Array.isArray(data.programs) ? data.programs : data;
+  const out = {};
+  let found = 0;
+  for (const prog of Object.keys(MAJOR_META)) {
+    const list = src[prog];
+    const items = Array.isArray(list) ? list : (list && typeof list === 'object' ? Object.keys(list) : []);
+    const paths = [];
+    for (const item of items) {
+      const p = typeof item === 'string' ? item : (item && (item.path || item.requirement));
+      if (typeof p === 'string' && p.includes('---') && !paths.includes(p)) paths.push(p);
+    }
+    if (paths.length) {
+      out[prog] = paths;
+      found += paths.length;
+    }
+  }
+  return found ? out : null;
 }
 
 // ── Build course index ──────────────────────────────────────
@@ -614,8 +756,6 @@ function getCourseMappings(course) {
         fullPath: req.requirement,
         isGenEd: req.type,
         parts: parts,
-        earlier: !!req.earlier,
-        earlierReason: req.earlier_reason || '',
       };
     });
   }
@@ -666,8 +806,10 @@ function getAlsoCountsFor(course, currentMajor) {
 }
 
 // ── Offering likelihood (rule-based, no ML) ──────────────────
-// Uses the `offered` history on each course (codes like "S22", "F23", "M24",
-// "N25") to estimate whether a course is likely to run in a target season.
+// Uses the semesters a course ran in (codes like "S22", "F23", "M24", "N25"):
+// its `offered` history and the semesters of its Schedule of Classes sections,
+// as the course card's Offered line lists them, to estimate whether a course
+// is likely to run in a target season.
 // Spec § 12: prefer simple, honest signal over fabricated prediction.
 
 const SEASON_NAME = { S: 'Spring', M: 'Summer', N: 'Fall mini', F: 'Fall' };
@@ -680,8 +822,9 @@ function predictOffering(course, targetSeason /* 'S' | 'M' | 'N' | 'F' */) {
   if (!course || !targetSeason || !SEASON_NAME[targetSeason]) {
     return { state: 'unknown', reason: 'No prediction available.' };
   }
-  const hist = Array.isArray(course.offered) ? course.offered : [];
-  // De-duplicate identical entries — some scraping passes wrote dupes.
+  const hist = (Array.isArray(course.offered) ? course.offered : [])
+    .concat(getCourseOfferings(course).filter(o => o && !o.cancelled).map(o => o.semester_code));
+  // Each semester once: some scraping passes wrote dupes, and a semester has many sections.
   const seen = new Set();
   const codes = hist.filter(c => {
     if (!c || seen.has(c)) return false;
@@ -709,15 +852,19 @@ function predictOffering(course, targetSeason /* 'S' | 'M' | 'N' | 'F' */) {
 }
 
 // ── Sort semesters chronologically ────────────────────────────
+// Within a year: spring, summer, fall (semester_rank in backend/semesters.py
+// uses the same order).
+const SEASON_ORDER = { S: 1, M: 2, N: 3, F: 4 };
+
+/** A number that grows with time for a semester ("F26" < "S27"); -1 for anything else. */
+function semesterRank(code) {
+  const c = normalizeSemesterCode(code);
+  return c ? Number(c.slice(1)) * 10 + SEASON_ORDER[c[0]] : -1;
+}
+
 function sortSemesters(semesters) {
   if (!semesters || !Array.isArray(semesters)) return [];
-  const seasonOrder = { 'S': 1, 'M': 2, 'N': 3, 'F': 4 };
-  return [...new Set(semesters)].sort((a, b) => {
-    const yearA = parseInt(a.substring(1));
-    const yearB = parseInt(b.substring(1));
-    if (yearA !== yearB) return yearB - yearA; // newest first
-    return (seasonOrder[b[0]] || 0) - (seasonOrder[a[0]] || 0);
-  });
+  return [...new Set(semesters)].sort((a, b) => semesterRank(b) - semesterRank(a)); // newest first
 }
 
 // ── Department code to name ──────────────────────────────────
@@ -742,14 +889,15 @@ function getDeptName(courseCode) {
   return DEPT_NAMES[prefix] || `Dept ${prefix}`;
 }
 
-// ── Semester / modality filters (Phase 3) ────────────────────
-const SEMESTER_OPTIONS = [
-  { code: 'F26', label: 'Fall 2026' },
-  { code: 'M26', label: 'Summer 2026' },
-  { code: 'S26', label: 'Spring 2026' },
-  { code: 'F25', label: 'Fall 2025' },
-  { code: 'M25', label: 'Summer 2025' },
-];
+// ── Semesters (from the Schedule of Classes) ─────────────────
+// No semester list is kept in code. The daily update scrapes every semester
+// the Schedule of Classes lists into backend/data/soc.json and
+// reconcile_offerings.py copies their sections into each course's
+// `offerings`, so the loaded catalog says which semesters exist: a new one
+// (Spring 2027, a summer) is in the semester picker the day it is scraped.
+const SEMESTER_CODE_RE = /^[FSMN]\d{2}$/;
+// The semester picked last, { code, defaultCode }: see resolveSemesterChoice.
+const SEMESTER_STORE_KEY = 'cf_semester';
 
 const MODALITY_OPTIONS = [
   { id: 'all', label: 'All' },
@@ -758,48 +906,91 @@ const MODALITY_OPTIONS = [
   { id: 'hybrid', label: 'Hybrid' },
 ];
 
+/** True for a semester code: a season letter and two year digits ("S27"). */
+function isSemesterCode(code) {
+  return typeof code === 'string' && SEMESTER_CODE_RE.test(code);
+}
+
+/** "S27", " s27 " or "Spring 2027" → "S27"; anything else → null. */
 function normalizeSemesterCode(raw) {
   if (!raw || typeof raw !== 'string') return null;
-  const code = raw.trim();
-  if (/^[FSMN]\d{2}$/i.test(code)) return code.toUpperCase();
-  const hit = SEMESTER_OPTIONS.find(s => s.label === code || s.code === code);
-  return hit ? hit.code : null;
+  const text = raw.trim();
+  if (SEMESTER_CODE_RE.test(text.toUpperCase())) return text.toUpperCase();
+  const m = text.match(/^([a-z ]+?)\s+20(\d{2})$/i);
+  if (!m) return null;
+  const season = Object.keys(SEASON_NAME).find(k => SEASON_NAME[k].toLowerCase() === m[1].toLowerCase());
+  return season ? season + m[2] : null;
+}
+
+/** "S27" → "Spring 2027"; "all" → "All semesters"; anything else as given. */
+function semesterLabel(code) {
+  if (code === 'all') return 'All semesters';
+  const c = normalizeSemesterCode(code);
+  return c ? `${SEASON_NAME[c[0]]} 20${c.slice(1)}` : (code || '');
 }
 
 /**
- * Semesters that appear in the bundled catalog's live offerings.
- * Summer (M-prefix) is included whenever the SOC scrape provides it.
+ * The semesters the catalog has sections for, newest first (summer
+ * included), and the one the app opens on: the newest fall or spring with a
+ * section in Qatar, so CMU-Q students see the next regular semester as soon
+ * as its Qatar schedule is out. Without a Qatar section it is the newest fall
+ * or spring; a summer is the default only in a catalog with no fall or spring.
+ * pick_default_semester in backend/semesters.py applies the same rule to
+ * soc.json.
+ * Returns { codes: ['S27', 'F26', ...], defaultCode: 'S27' } (null when empty).
  */
-function availableSemesterOptions(courses, alwaysInclude) {
-  const present = new Set();
-  for (const c of courses || []) {
-    for (const o of (c && Array.isArray(c.offerings) ? c.offerings : [])) {
-      const code = normalizeSemesterCode(o.semester_code || o.semesterCode || o.semester);
-      if (code) present.add(code);
+function catalogSemesters(courses) {
+  const found = new Set();
+  const inQatar = new Set();
+  for (const course of courses || []) {
+    for (const o of getCourseOfferings(course)) {
+      const code = o && !o.cancelled && normalizeSemesterCode(o.semester_code || o.semesterCode || o.semester);
+      if (!code) continue;
+      found.add(code);
+      if (o.campus === 'Qatar') inQatar.add(code);
     }
   }
-  const allOption = { code: 'all', label: 'All semesters' };
-  let terms = present.size === 0
-    ? SEMESTER_OPTIONS.slice()
-    : SEMESTER_OPTIONS.filter(s => present.has(s.code));
-  if (alwaysInclude && alwaysInclude !== 'all') {
-    const normalized = normalizeSemesterCode(alwaysInclude) || alwaysInclude;
-    if (normalized && !terms.some(s => s.code === normalized)) {
-      const hit = SEMESTER_OPTIONS.find(s => s.code === normalized);
-      if (hit) terms = [hit, ...terms];
-    }
-  }
-  return [allOption, ...terms];
+  const codes = sortSemesters([...found]);
+  const regular = codes.filter(c => c[0] === 'F' || c[0] === 'S');
+  return { codes, defaultCode: regular.find(c => inQatar.has(c)) || regular[0] || codes[0] || null };
 }
 
-function semesterLabel(code) {
-  if (code === 'all') return 'All semesters';
-  const hit = SEMESTER_OPTIONS.find(s => s.code === code);
-  if (hit) return hit.label;
-  if (!code || code.length < 3) return code || '';
-  const seasonMap = { F: 'Fall', S: 'Spring', M: 'Summer', N: 'Fall mini' };
-  const season = seasonMap[code[0]] || code[0];
-  return `${season} 20${code.slice(1)}`;
+/**
+ * Semester picker options: "All semesters", then each code newest first.
+ * alwaysInclude (the semester on screen) is listed even if codes lack it.
+ */
+function semesterOptions(codes, alwaysInclude) {
+  const list = Array.isArray(codes) ? codes.slice() : [];
+  const extra = normalizeSemesterCode(alwaysInclude);
+  if (extra && !list.includes(extra)) list.push(extra);
+  return [{ code: 'all', label: semesterLabel('all') }]
+    .concat(sortSemesters(list).map(code => ({ code, label: semesterLabel(code) })));
+}
+
+/** semesterOptions for the semesters the catalog's offerings have. */
+function availableSemesterOptions(courses, alwaysInclude) {
+  return semesterOptions(catalogSemesters(courses).codes, alwaysInclude);
+}
+
+/**
+ * The semester to show once the catalog has loaded. semesters is
+ * catalogSemesters(); saved is the stored choice, { code, defaultCode }, where
+ * defaultCode was the default when the choice was made. The choice is kept
+ * while the catalog has that semester, unless a newer default came out after
+ * it (a new semester on the Schedule of Classes): then that new default is
+ * shown. "All semesters" is always kept. Without a usable choice: the default,
+ * or 'all' for a catalog without sections.
+ */
+function resolveSemesterChoice(semesters, saved) {
+  const { codes = [], defaultCode = null } = semesters || {};
+  const choice = saved && typeof saved === 'object' ? saved : { code: saved };
+  if (choice.code === 'all') return 'all';
+  if (!isSemesterCode(choice.code) || !codes.includes(choice.code)) return defaultCode || 'all';
+  if (defaultCode && isSemesterCode(choice.defaultCode)
+      && semesterRank(defaultCode) > semesterRank(choice.defaultCode)) {
+    return defaultCode;
+  }
+  return choice.code;
 }
 
 function getCourseOfferings(course) {
@@ -807,10 +998,11 @@ function getCourseOfferings(course) {
   if (Array.isArray(course.offerings) && course.offerings.length) {
     return course.offerings;
   }
-  // Legacy soc_sections → normalized offering shape
+  // Legacy soc_sections → normalized offering shape. A section without a
+  // semester code is listed under "All semesters" only.
   return (course.soc_sections || []).map(s => ({
-    semester: s.semester || semesterLabel(s.semester_code || 'F26'),
-    semester_code: s.semester_code || 'F26',
+    semester: s.semester || semesterLabel(s.semester_code),
+    semester_code: s.semester_code || '',
     campus: s.campus || (s.location && s.location.includes('Qatar') ? 'Qatar'
       : s.location && s.location.includes('Pittsburgh') ? 'Pittsburgh' : null),
     section: s.section,
@@ -990,29 +1182,177 @@ function offeringDaysTimes(o) {
   return 'TBA';
 }
 
-function groupOfferingsBySection(offerings) {
+// ── Offering groups: a lecture with its sections ─────────────
+// The Schedule of Classes lists each lecture ("Lec 1") followed by its own
+// sections (recitations, labs: "A", "B", ...). A student takes the lecture
+// and one of its sections, which usually meet at other times of the week.
+
+/** True for a lecture of the Schedule of Classes: "Lec", "Lec 1", "Lec 12". */
+function isLectureSection(section) {
+  return /^lec/i.test(String(section == null ? '' : section).trim());
+}
+
+/** How the planner names a section: "Lec 2" for a lecture, "Sec W" for the others. */
+function planSectionLabel(section) {
+  const s = String(section == null ? '' : section).trim();
+  return isLectureSection(s) ? s : `Sec ${s}`;
+}
+
+/**
+ * A course's offerings linked the way the Schedule of Classes lists them.
+ * Pass the full offering list in its stored (Schedule of Classes) order,
+ * before any filter: within one semester and campus, a section that is not a
+ * lecture belongs to the nearest lecture listed before it. A section with no
+ * such lecture stands alone, and so does a lecture with no sections. Only the
+ * list order counts, never alphabetical order.
+ *
+ * Returns offering groups in list order, { semester_code, campus, lecture,
+ * sections }: lecture (or null) and each entry of sections are section groups,
+ * { semester_code, section, campus, modality, meetings }, so a section that
+ * meets at several times is one entry with several meetings (its rows).
+ */
+function linkOfferingGroups(offerings) {
   const groups = [];
-  const index = new Map();
+  const bySection = new Map();
+  const lastLecture = new Map();
   for (const o of offerings || []) {
-    const key = [
-      o.semester_code || '',
-      o.section || '',
-      o.campus || '',
-    ].join('::');
-    if (!index.has(key)) {
-      const g = {
-        semester_code: o.semester_code,
-        section: o.section,
-        campus: o.campus,
-        modality: o.modality || o.delivery_mode || '',
-        meetings: [],
-      };
-      index.set(key, g);
-      groups.push(g);
+    if (!o) continue;
+    const key = [o.semester_code || '', o.section || '', o.campus || ''].join('::');
+    const known = bySection.get(key);
+    if (known) {
+      known.meetings.push(o);
+      continue;
     }
-    index.get(key).meetings.push(o);
+    const part = {
+      semester_code: o.semester_code,
+      section: o.section,
+      campus: o.campus,
+      modality: o.modality || o.delivery_mode || '',
+      meetings: [o],
+    };
+    bySection.set(key, part);
+    const scope = (o.semester_code || '') + '::' + (o.campus || '');
+    if (isLectureSection(o.section)) {
+      const group = { semester_code: o.semester_code, campus: o.campus, lecture: part, sections: [] };
+      groups.push(group);
+      lastLecture.set(scope, group);
+    } else if (lastLecture.has(scope)) {
+      lastLecture.get(scope).sections.push(part);
+    } else {
+      groups.push({ semester_code: o.semester_code, campus: o.campus, lecture: null, sections: [part] });
+    }
   }
   return groups;
+}
+
+/** The section groups of an offering group: its lecture first, then its sections. */
+function offeringGroupParts(group) {
+  if (!group) return [];
+  return (group.lecture ? [group.lecture] : []).concat(group.sections || []);
+}
+
+/**
+ * The offering groups the semester, campus and modality filters show: a group
+ * shows when its semester and campus match and, for the modality filter, when
+ * any of its meetings matches. A group that shows keeps all its sections.
+ */
+function filterOfferingGroups(groups, { semesterCode, locationFilter, modalityFilter }) {
+  return (groups || []).filter(g => {
+    if (semesterCode && semesterCode !== 'all' && g.semester_code !== semesterCode) return false;
+    if (!campusFilterMatches(g.campus, locationFilter)) return false;
+    return offeringGroupParts(g).some(p => p.meetings.some(m => modalityFilterMatches(m.modality, modalityFilter)));
+  });
+}
+
+/** Key of an offering group: the planSectionKey of its lecture, or of its only section. */
+function offeringGroupKey(courseCode, group) {
+  return planSectionKey(courseCode, offeringGroupParts(group)[0]);
+}
+
+/** The offering group that holds a section, as { group, part }, or null. */
+function findOfferingGroup(groups, semesterCode, section, campus) {
+  for (const group of groups || []) {
+    if ((group.semester_code || '') !== (semesterCode || '') || (group.campus || '') !== (campus || '')) continue;
+    const part = offeringGroupParts(group).find(p => (p.section || '') === (section || ''));
+    if (part) return { group, part };
+  }
+  return null;
+}
+
+/**
+ * What planning one section of an offering group means: { parts, others }.
+ * parts is the group's lecture (if any) with the chosen section; others are
+ * the lecture's other sections, which the choice replaces (a student takes
+ * one section per lecture). Choosing the lecture of a group with sections
+ * pairs it with the section isPlanned(meeting) finds planned, else the first.
+ */
+function offeringGroupChoice(group, section, isPlanned) {
+  const sections = (group && group.sections) || [];
+  const lecture = (group && group.lecture) || null;
+  let chosen = sections.find(p => (p.section || '') === (section || '')) || null;
+  if (!chosen) {
+    if (!lecture || (lecture.section || '') !== (section || '')) return { parts: [], others: [] };
+    chosen = (isPlanned && sections.find(p => p.meetings.some(isPlanned))) || sections[0] || null;
+  }
+  return {
+    parts: (lecture ? [lecture] : []).concat(chosen ? [chosen] : []),
+    others: sections.filter(p => p !== chosen),
+  };
+}
+
+/**
+ * The offering group a planned meeting belongs to: { key, group, part }.
+ * A meeting whose section the catalog no longer lists keeps its own section
+ * key (group and part are null).
+ */
+function planItemOfferingGroup(item, groups) {
+  const found = findOfferingGroup(groups, item.semester_code, item.section, item.campus);
+  if (found) return { key: offeringGroupKey(item.course_code, found.group), group: found.group, part: found.part };
+  return { key: planSectionKey(item.course_code, item), group: null, part: null };
+}
+
+/**
+ * planItemOfferingGroup() for planned meetings of any course: returns a
+ * function item => { key, group, part }. groupsFor(code) returns a course's
+ * linkOfferingGroups(); each course is linked once.
+ */
+function planItemOfferingGroups(groupsFor) {
+  const groupsByCourse = new Map();
+  return item => {
+    if (!groupsByCourse.has(item.course_code)) groupsByCourse.set(item.course_code, groupsFor(item.course_code) || []);
+    return planItemOfferingGroup(item, groupsByCourse.get(item.course_code));
+  };
+}
+
+/**
+ * Planned meetings as one entry per offering group, so a lecture and the
+ * section planned with it are one entry ("Lec 2 + Sec W"). groupsFor(code)
+ * returns a course's linkOfferingGroups(). Entries keep the plan order:
+ * { key, course_code, semester_code, campus, parts, meetings }, where parts
+ * ({ section, meetings }) list the lecture first.
+ */
+function groupPlanItemsByOffering(items, groupsFor) {
+  const entries = new Map();
+  const offeringOf = planItemOfferingGroups(groupsFor);
+  for (const item of items || []) {
+    const ref = offeringOf(item);
+    let entry = entries.get(ref.key);
+    if (!entry) {
+      entry = { key: ref.key, course_code: item.course_code, semester_code: item.semester_code, campus: item.campus, parts: [], meetings: [] };
+      entries.set(ref.key, entry);
+    }
+    entry.meetings.push(item);
+    let part = entry.parts.find(p => p.section === item.section);
+    if (!part) {
+      const rank = ref.group ? offeringGroupParts(ref.group).indexOf(ref.part) : (isLectureSection(item.section) ? 0 : 1);
+      part = { section: item.section, rank, meetings: [] };
+      entry.parts.push(part);
+    }
+    part.meetings.push(item);
+  }
+  const out = Array.from(entries.values());
+  for (const entry of out) entry.parts.sort((a, b) => a.rank - b.rank);
+  return out;
 }
 
 function planEntriesOverlap(a, b) {
@@ -1026,27 +1366,44 @@ function planEntriesOverlap(a, b) {
   return pa.startMin < pb.endMin && pb.startMin < pa.endMin;
 }
 
-function findPlanConflicts(items) {
-  const conflicts = new Set();
-  for (let i = 0; i < items.length; i++) {
-    for (let j = i + 1; j < items.length; j++) {
-      if (planEntriesOverlap(items[i], items[j])) {
-        conflicts.add(items[i].id);
-        conflicts.add(items[j].id);
-      }
+/**
+ * The pairs of planned meetings that meet at the same time, as [a, b] in plan
+ * order. Meetings of one offering never conflict with each other: a student
+ * takes a lecture with its section, and the Schedule of Classes itself lists
+ * some lectures inside their lab's time (03-117 Lec 1 TR 1:00 PM to 1:50 PM,
+ * lab A TR 1:00 PM to 4:00 PM) and some sections with overlapping rows of their
+ * own (09-207 Pittsburgh A). offeringKeyOf(item) names an item's offering
+ * (planItemOfferingGroups()(item).key: same course, semester, campus and
+ * lecture); without it, an item's offering is its section (planSectionKey()).
+ * Meetings of different courses, or of two offerings of one course, still
+ * conflict when their times overlap.
+ */
+function planConflictPairs(items, offeringKeyOf) {
+  const list = items || [];
+  const keyOf = offeringKeyOf || (item => planSectionKey(item.course_code, item));
+  const keys = list.map(keyOf);
+  const pairs = [];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      if (keys[i] !== keys[j] && planEntriesOverlap(list[i], list[j])) pairs.push([list[i], list[j]]);
     }
+  }
+  return pairs;
+}
+
+/** Ids of the planned meetings that are in a conflict (planConflictPairs()). */
+function findPlanConflicts(items, offeringKeyOf) {
+  const conflicts = new Set();
+  for (const [a, b] of planConflictPairs(items, offeringKeyOf)) {
+    conflicts.add(a.id);
+    conflicts.add(b.id);
   }
   return conflicts;
 }
 
-function countPlanConflictPairs(items) {
-  let pairs = 0;
-  for (let i = 0; i < items.length; i++) {
-    for (let j = i + 1; j < items.length; j++) {
-      if (planEntriesOverlap(items[i], items[j])) pairs++;
-    }
-  }
-  return pairs;
+/** How many pairs of planned meetings conflict (planConflictPairs()). */
+function countPlanConflictPairs(items, offeringKeyOf) {
+  return planConflictPairs(items, offeringKeyOf).length;
 }
 
 function planBlocksTimeOverlap(a, b) {
@@ -1125,36 +1482,6 @@ function layoutPlanDayBlocks(entries) {
 // take_all, required, pick (n courses, or n parts when count is "children",
 // or n courses across its parts when count is "courses"; `units` adds a unit
 // floor), min_units or max_units.
-
-/** The statuses a student can give a course. Not taken is no entry at all. */
-const COURSE_STATUSES = ['in_progress', 'completed'];
-
-/** localStorage key of the student's course statuses: { "15-122": "completed" }. */
-const COURSE_STATUS_KEY = 'cf_course_status';
-
-/** Keep only well formed entries, with canonical course codes. */
-function normalizeCourseStatuses(raw) {
-  const out = {};
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
-  for (const [code, status] of Object.entries(raw)) {
-    const key = normalizeCourseCode(code);
-    if (key && COURSE_STATUSES.includes(status)) out[key] = status;
-  }
-  return out;
-}
-
-/** The status control cycles: not taken, in progress, completed, not taken. */
-function nextCourseStatus(status) {
-  if (status === 'in_progress') return 'completed';
-  if (status === 'completed') return '';
-  return 'in_progress';
-}
-
-function courseStatusLabel(status) {
-  if (status === 'completed') return 'Completed';
-  if (status === 'in_progress') return 'In progress';
-  return 'Not taken';
-}
 
 /** "15-122" gives { prefix: "15", number: 122 }; anything else gives null. */
 function parseCourseNumber(code) {
@@ -1252,20 +1579,99 @@ function _minorLeafCourse(course) {
   };
 }
 
+/** The categories of a minor that hold courses (no sub categories), in file order: [{ path, id, label, pathLabel }]. */
+function minorLeafCategories(def) {
+  const out = [];
+  (function walk(cats, prefix, names) {
+    for (const cat of cats || []) {
+      if (!cat || !cat.id) continue;
+      const path = prefix ? prefix + '---' + cat.id : cat.id;
+      const labels = names.concat(cat.name || cat.id);
+      if ((cat.children || []).length) walk(cat.children, path, labels);
+      else out.push({ path, id: cat.id, label: cat.name || cat.id, pathLabel: labels.join(' › ') });
+    }
+  })((def && def.categories) || [], '', []);
+  return out;
+}
+
+/** The leaf categories that accept a course by the minor file alone: they list its code, or their select rule matches it. */
+function minorFileCategories(def, course) {
+  if (!def || !course) return [];
+  const code = normalizeCourseCode(course.course_code);
+  const out = [];
+  (function walk(cats, prefix) {
+    for (const cat of cats || []) {
+      if (!cat || !cat.id) continue;
+      const path = prefix ? prefix + '---' + cat.id : cat.id;
+      if ((cat.children || []).length) {
+        walk(cat.children, path);
+        continue;
+      }
+      const listed = (cat.courses || []).some(c => normalizeCourseCode(c) === code);
+      if (listed || (cat.select && courseMatchesSelect(course, cat.select))) out.push(path);
+    }
+  })(def.categories || [], '');
+  return out;
+}
+
+/** The admin's minor category edits in the catalog: Map(minor, Map(course code, { add: Set, remove: Set })). */
+function collectMinorEdits(courses) {
+  const out = new Map();
+  for (const c of courses || []) {
+    if (!c || !c._minorEdits) continue;
+    const code = normalizeCourseCode(c.course_code);
+    for (const [minor, e] of Object.entries(c._minorEdits)) {
+      if (!out.has(minor)) out.set(minor, new Map());
+      out.get(minor).set(code, { add: new Set((e && e.add) || []), remove: new Set((e && e.remove) || []) });
+    }
+  }
+  return out;
+}
+
+/**
+ * A leaf category's courses after the admin edits (edits: Map(code, { add, remove })):
+ * removed codes leave, added codes with a catalog row that is not hidden join,
+ * sorted by code. Also returns the codes each edit actually changed.
+ */
+function _applyMinorEdits(expanded, path, edits, courseIndex) {
+  const found = new Map(expanded.courses.map(c => [normalizeCourseCode(c.course_code), c]));
+  const adminAdded = [];
+  const adminRemoved = [];
+  for (const [code, e] of edits) {
+    if (e.remove.has(path) && found.has(code)) {
+      found.delete(code);
+      adminRemoved.push(code);
+    }
+    if (e.add.has(path) && !found.has(code)) {
+      const course = lookupCourse(courseIndex, code);
+      if (course && !isCourseHidden(course)) {
+        found.set(code, course);
+        adminAdded.push(code);
+      }
+    }
+  }
+  const courses = Array.from(found.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(e => e[1]);
+  return { courses, missing: expanded.missing, adminAdded: adminAdded.sort(), adminRemoved: adminRemoved.sort() };
+}
+
 /**
  * One minor as a requirement tree with the same node shape as the major trees
  * (label, path, children, courses, rule), so the same tree components render
  * it. Paths are category ids joined by "---"; tree keys are "minor:<code>".
+ * `edits` (from collectMinorEdits) adds and removes courses in its categories
+ * that hold courses; the codes it changed are on each node as adminAdded and
+ * adminRemoved.
  */
-function buildMinorTree(minorCode, def, courses, courseIndex) {
+function buildMinorTree(minorCode, def, courses, courseIndex, edits) {
   const treeKey = 'minor:' + minorCode;
   function build(cat, parentPath, depth) {
     const path = parentPath ? parentPath + '---' + cat.id : cat.id;
     const children = (cat.children || []).map(ch => build(ch, path, depth + 1));
     const hasList = Array.isArray(cat.courses) && cat.courses.length > 0;
-    const expanded = (hasList || cat.select)
+    let expanded = (hasList || cat.select)
       ? expandMinorCategory(cat, courses, courseIndex)
       : { courses: [], missing: [] };
+    if (!children.length && edits && edits.size) expanded = _applyMinorEdits(expanded, path, edits, courseIndex);
     const listed = [];
     for (const raw of cat.courses || []) {
       const code = normalizeCourseCode(raw);
@@ -1284,6 +1690,8 @@ function buildMinorTree(minorCode, def, courses, courseIndex) {
       notes: Array.isArray(cat.notes) ? cat.notes.slice() : [],
       listed,
       missing: expanded.missing,
+      adminAdded: expanded.adminAdded || [],
+      adminRemoved: expanded.adminRemoved || [],
       hasSelect: !!cat.select,
       selectOnly: !!cat.select && !hasList,
       courses: expanded.courses.map(_minorLeafCourse),
@@ -1312,14 +1720,16 @@ function buildMinorTree(minorCode, def, courses, courseIndex) {
 /**
  * Every minor of minors.json built against the loaded catalog:
  * { order: [codes sorted by name], byCode: { code: { code, key, def, tree, eligible } } }.
- * eligible maps a course code to the paths of the categories that accept it.
+ * eligible maps a course code to the paths of the categories that accept it,
+ * after the admin's minor category edits (collectMinorEdits()).
  */
 function buildMinorIndex(data, courses, courseIndex) {
   const index = { order: [], byCode: {} };
   const minors = (data && data.minors) || {};
+  const edits = collectMinorEdits(courses);
   for (const [code, def] of Object.entries(minors)) {
     if (!def || typeof def !== 'object') continue;
-    const tree = buildMinorTree(code, def, courses, courseIndex);
+    const tree = buildMinorTree(code, def, courses, courseIndex, edits.get(code));
     const eligible = new Map();
     (function walk(node) {
       for (const c of node.courses || []) {
@@ -1333,6 +1743,43 @@ function buildMinorIndex(data, courses, courseIndex) {
   index.order = Object.keys(index.byCode).sort((a, b) =>
     String(index.byCode[a].def.name || a).localeCompare(String(index.byCode[b].def.name || b)));
   return index;
+}
+
+// ── Admin minor settings ────────────────────────────────────
+// /api/minors/overrides corrects a few numbers of minors.json (backend/minor_overrides.py).
+const MINOR_SETTING_FIELDS = ['total_units', 'max_with_major', 'max_with_other_minors', 'admin_note'];
+
+/**
+ * A copy of the minors data with each admin override applied: total_units and
+ * admin_note on the minor, the two limits in double_count (marked `edited`, so
+ * they apply on their own). An edited minor gets `_edit` (the override) and
+ * `_file` (the file values it replaced). The cached file object is not changed.
+ */
+function applyMinorOverrides(minorsData, items) {
+  if (!minorsData || !minorsData.minors || !Array.isArray(items) || !items.length) return minorsData;
+  const minors = Object.assign({}, minorsData.minors);
+  for (const o of items) {
+    const def = o && minors[o.minor_code];
+    const f = (o && o.fields) || {};
+    if (!def || typeof def !== 'object' || !MINOR_SETTING_FIELDS.some(k => k in f)) continue;
+    const fileDc = def.double_count || {};
+    const dc = Object.assign({}, fileDc);
+    const next = Object.assign({}, def, { double_count: dc, _edit: o, _file: {} });
+    if ('total_units' in f) {
+      next._file.total_units = def.total_units;
+      next.total_units = f.total_units;
+    }
+    for (const k of ['max_with_major', 'max_with_other_minors']) {
+      if (!(k in f)) continue;
+      next._file[k] = fileDc[k] === undefined ? null : fileDc[k];
+      dc[k] = f[k];
+      dc.edited = true;
+    }
+    if (dc.edited && !('max_with_other_minors' in f)) dc.max_with_other_minors = fileDc.max_with_other_minors === undefined ? fileDc.max_with_major : fileDc.max_with_other_minors;
+    if ('admin_note' in f) next.admin_note = f.admin_note;
+    minors[o.minor_code] = next;
+  }
+  return Object.assign({}, minorsData, { minors });
 }
 
 /** True when a course can count for a minor (some category lists or matches it). */
@@ -1374,280 +1821,48 @@ function minorCategoryName(def, id) {
 }
 
 /**
- * A student's progress through one minor, from their course statuses.
- *
- * One course fills one category, so every marked course is assigned to at
- * most one bottom-level category. The categories with the fewest matching
- * marked courses are filled first (then the narrower lists, then file order),
- * each with completed courses before in progress ones and only until its rule
- * is met. Then a group that counts courses or units across its parts
- * (Sociology Electives, Writing's Core Writing) takes more courses into its
- * parts until its own total is met; a max_units part never passes its cap.
- *
- * A category is "complete" when its completed courses meet its rule,
- * "in_progress" when its completed and in progress courses meet it,
- * "remaining" otherwise, and "optional" for a max_units part.
- *
- * Returns { byPath: Map(path, status), assigned: Map(code, path), summary }.
+ * The double counting rules of a minor for one major (by_major overrides the
+ * categories). The files state one limit for the major and other minors
+ * together (max_with_major, equal to max_with_other_minors in every file).
+ * Once an admin sets the limits on the admin page (applyMinorOverrides()
+ * marks double_count.edited), max_with_other_minors applies to other minors
+ * on its own: `separate` is then true when the two differ.
  */
-function computeMinorProgress(tree, statuses) {
-  const st = statuses || {};
-  const nodes = [];
-  (function walk(node) {
-    for (const ch of node.children || []) { nodes.push(ch); walk(ch); }
-  })(tree || { children: [] });
-
-  const unitsOf = new Map();
-  const isMarked = code => st[code] === 'completed' || st[code] === 'in_progress';
-  const rank = code => (st[code] === 'completed' ? 0 : 1);
-  const unitsSum = codes => codes.reduce((n, c) => n + (unitsOf.get(c) || 0), 0);
-
-  const leaves = new Map();
-  nodes.forEach((node, order) => {
-    if ((node.children || []).length) return;
-    const cands = [];
-    for (const c of node.courses || []) {
-      if (!isMarked(c.code) || cands.includes(c.code)) continue;
-      cands.push(c.code);
-      unitsOf.set(c.code, Number(c.units) || 0);
-    }
-    cands.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-    leaves.set(node.path, { node, cands, taken: [], order });
-  });
-
-  function leafMet(node, codes) {
-    const r = node.rule || {};
-    switch (r.type) {
-      case 'take_all':
-      case 'required': {
-        const need = (node.listed && node.listed.length) ? node.listed : (node.courses || []).map(c => c.code);
-        return need.length > 0 && need.every(code => codes.includes(code));
-      }
-      case 'pick':
-        return codes.length >= (r.n || 0) && (r.units == null || unitsSum(codes) >= r.units);
-      case 'min_units':
-        return unitsSum(codes) >= (r.units || 0);
-      case 'max_units':
-        return true;
-      default:
-        return codes.length > 0;
-    }
-  }
-
-  const assigned = new Map();
-  const take = (li, code) => { li.taken.push(code); assigned.set(code, li.node.path); };
-
-  // Phase 1: each category up to its own rule.
-  const firstPass = Array.from(leaves.values())
-    .filter(li => (li.node.rule || {}).type !== 'max_units')
-    .sort((a, b) => a.cands.length - b.cands.length
-      || (a.node.courses || []).length - (b.node.courses || []).length
-      || a.order - b.order);
-  for (const li of firstPass) {
-    for (const code of li.cands) {
-      if (leafMet(li.node, li.taken)) break;
-      if (!assigned.has(code)) take(li, code);
-    }
-  }
-
-  // Phase 2: groups that count courses or units across their parts.
-  const leavesUnder = node => {
-    const out = [];
-    (function walk(n) {
-      if (!(n.children || []).length) { if (leaves.has(n.path)) out.push(leaves.get(n.path)); return; }
-      for (const ch of n.children) walk(ch);
-    })(node);
-    return out;
-  };
-  const groups = nodes.filter(n => (n.children || []).length).reverse();
-  for (const g of groups) {
-    const r = g.rule || {};
-    const byCourses = r.type === 'pick' && r.count === 'courses';
-    if (!byCourses && r.type !== 'min_units') continue;
-    const parts = leavesUnder(g);
-    const groupMet = () => {
-      const taken = parts.flatMap(li => li.taken);
-      if (byCourses) return taken.length >= (r.n || 0) && (r.units == null || unitsSum(taken) >= r.units);
-      return unitsSum(taken) >= (r.units || 0);
-    };
-    for (const li of parts) {
-      const cap = (li.node.rule || {}).type === 'max_units' ? li.node.rule.units : null;
-      for (const code of li.cands) {
-        if (groupMet()) break;
-        if (assigned.has(code)) continue;
-        if (cap != null && unitsSum(li.taken) + (unitsOf.get(code) || 0) > cap) continue;
-        take(li, code);
-      }
-    }
-  }
-
-  // Status of every category, bottom up.
-  const byPath = new Map();
-  function statusOf(node) {
-    const r = node.rule || {};
-    const kids = (node.children || []).map(statusOf);
-    const taken = kids.length ? kids.flatMap(k => k.courses) : ((leaves.get(node.path) || {}).taken || []).slice();
-    const done = taken.filter(c => st[c] === 'completed');
-    const res = {
-      kind: kids.length ? 'group' : 'leaf',
-      rule: r.type || null,
-      courses: taken,
-      done: done.length,
-      inProgress: taken.length - done.length,
-      doneUnits: unitsSum(done),
-      inProgressUnits: unitsSum(taken) - unitsSum(done),
-      state: 'remaining',
-      need: {},
-      left: {},
-    };
-    if (!kids.length) {
-      if (r.type === 'max_units') {
-        res.state = 'optional';
-        res.need = { units: r.units };
-      } else {
-        res.state = leafMet(node, done) ? 'complete' : leafMet(node, taken) ? 'in_progress' : 'remaining';
-        if (r.type === 'take_all' || r.type === 'required') {
-          const need = (node.listed && node.listed.length) ? node.listed.length : (node.courses || []).length;
-          res.need = { courses: need };
-          res.left = { courses: Math.max(0, need - taken.length) };
-        } else if (r.type === 'pick') {
-          res.need = { courses: r.n || 0, units: r.units == null ? null : r.units };
-          res.left = {
-            courses: Math.max(0, (r.n || 0) - taken.length),
-            units: r.units == null ? 0 : Math.max(0, r.units - unitsSum(taken)),
-          };
-        } else if (r.type === 'min_units') {
-          res.need = { units: r.units || 0 };
-          res.left = { units: Math.max(0, (r.units || 0) - unitsSum(taken)) };
-        }
-      }
-    } else {
-      const parts = kids.filter(k => k.state !== 'optional');
-      const nDone = parts.filter(k => k.state === 'complete').length;
-      const nStarted = parts.filter(k => k.state === 'complete' || k.state === 'in_progress').length;
-      res.partsDone = nDone;
-      res.partsTotal = parts.length;
-      if (r.type === 'pick' && r.count === 'children') {
-        const n = r.n || 1;
-        res.need = { parts: n };
-        res.left = { parts: Math.max(0, n - nStarted) };
-        res.state = nDone >= n ? 'complete' : nStarted >= n ? 'in_progress' : 'remaining';
-      } else {
-        let totalDone = true;
-        let totalAll = true;
-        res.need = { parts: parts.length };
-        res.left = { parts: parts.length - nStarted };
-        if (r.type === 'pick' && r.count === 'courses') {
-          totalDone = done.length >= (r.n || 0);
-          totalAll = taken.length >= (r.n || 0);
-          res.need.courses = r.n || 0;
-          res.left.courses = Math.max(0, (r.n || 0) - taken.length);
-        } else if (r.type === 'min_units') {
-          totalDone = res.doneUnits >= (r.units || 0);
-          totalAll = unitsSum(taken) >= (r.units || 0);
-          res.need.units = r.units || 0;
-          res.left.units = Math.max(0, (r.units || 0) - unitsSum(taken));
-        }
-        res.state = (nDone === parts.length && totalDone) ? 'complete'
-          : (nStarted === parts.length && totalAll) ? 'in_progress' : 'remaining';
-      }
-    }
-    byPath.set(node.path, res);
-    return res;
-  }
-  const top = ((tree && tree.children) || []).map(statusOf).filter(s => s.state !== 'optional');
-  const complete = top.filter(s => s.state === 'complete').length;
-  const inProgress = top.filter(s => s.state === 'in_progress').length;
-  const summary = {
-    total: top.length,
-    complete,
-    inProgress,
-    remaining: top.length - complete - inProgress,
-    marked: assigned.size,
-    state: !top.length ? 'none'
-      : complete === top.length ? 'complete'
-      : complete + inProgress === top.length ? 'in_progress' : 'remaining',
-  };
-  return { byPath, assigned, summary };
-}
-
-/**
- * Short text for a category's status chip: { cls, text } with cls one of
- * done, ip, left, opt; null when there is nothing to say.
- */
-function minorStatusText(s) {
-  if (!s) return null;
-  if (s.state === 'complete') return { cls: 'done', text: 'Done' };
-  if (s.state === 'in_progress') return { cls: 'ip', text: 'In progress' };
-  const n = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
-  if (s.state === 'optional') {
-    const used = s.doneUnits + s.inProgressUnits;
-    return used ? { cls: 'opt', text: `${used} units used` } : null;
-  }
-  const left = s.left || {};
-  const bits = [];
-  if (left.courses) bits.push(n(left.courses, 'course'));
-  if (left.units) bits.push(`${left.units} units`);
-  if (!bits.length && left.parts) bits.push(n(left.parts, 'part'));
-  return { cls: 'left', text: bits.length ? `${joinWithAnd(bits)} left` : 'Not met yet' };
-}
-
-/** One line for a minor header, e.g. "2 of 5 requirements done, 1 in progress, 2 left". */
-function minorSummaryText(summary) {
-  if (!summary || !summary.total) return '';
-  const parts = [`${summary.complete} of ${summary.total} requirement${summary.total === 1 ? '' : 's'} done`];
-  if (summary.inProgress) parts.push(`${summary.inProgress} in progress`);
-  if (summary.remaining) parts.push(`${summary.remaining} left`);
-  return parts.join(', ');
-}
-
-/** Distinct marked courses under a tree node: { done, inProgress }. */
-function countMarkedCourses(node, statuses) {
-  const st = statuses || {};
-  const seen = new Set();
-  let done = 0;
-  let inProgress = 0;
-  (function walk(n) {
-    for (const c of (n && n.courses) || []) {
-      const code = normalizeCourseCode(c.code || c.course_code);
-      if (seen.has(code)) continue;
-      seen.add(code);
-      if (st[code] === 'completed') done++;
-      else if (st[code] === 'in_progress') inProgress++;
-    }
-    for (const ch of (n && n.children) || []) walk(ch);
-  })(node);
-  return { done, inProgress };
-}
-
-/** The double counting rules of a minor for one major (by_major overrides the categories). */
 function minorDoubleCountRules(def, majorCode) {
   const dc = (def && def.double_count) || {};
   const forMajor = (dc.by_major && majorCode && dc.by_major[majorCode]) || {};
+  const limit = typeof dc.max_with_major === 'number' ? dc.max_with_major : null;
+  const minorLimit = dc.edited
+    ? (typeof dc.max_with_other_minors === 'number' ? dc.max_with_other_minors : null)
+    : limit;
   return {
-    limit: typeof dc.max_with_major === 'number' ? dc.max_with_major : null,
-    known: dc.text != null || typeof dc.max_with_major === 'number',
-    genEdExempt: dc.gen_ed_exempt !== false,
+    limit,
+    minorLimit,
+    separate: minorLimit !== limit,
+    known: dc.text != null || typeof dc.max_with_major === 'number' || !!dc.edited,
     noLimit: forMajor.no_limit_categories || dc.no_limit_categories || [],
     noSharing: forMajor.no_sharing_categories || dc.no_sharing_categories || [],
   };
 }
 
-/** True when a category path is, or sits under, one of the category ids. */
-function pathInCategories(path, ids) {
-  if (!path || !ids || !ids.length) return false;
-  return String(path).split('---').some(seg => ids.includes(seg));
-}
-
 /**
  * The limit in plain English for a minor header. `whose` is "your" for a
- * student and "the student's" for everyone else.
+ * student and "a student's" for everyone else.
  */
 function minorDoubleCountLimitText(def, majorCode, whose) {
   const who = whose || 'your';
   const rules = minorDoubleCountRules(def, majorCode);
   if (!rules.known) return 'Confirm double counting with your advisor.';
   const names = ids => joinWithAnd(ids.map(id => minorCategoryName(def, id) || id));
+  if (rules.separate) {
+    const part = (lim, to) => (lim === 0 ? `No course may also count toward ${to}.`
+      : lim != null ? `At most ${lim} course${lim === 1 ? '' : 's'} may also count toward ${to}.`
+        : `Courses may also count toward ${to} without a limit.`);
+    const extra = [];
+    if (rules.noLimit.length) extra.push(`Courses used for ${names(rules.noLimit)} do not count toward these limits.`);
+    if (rules.noSharing.length) extra.push(`Courses used for ${names(rules.noSharing)} may not count toward any other program.`);
+    return [part(rules.limit, `${who} major`), part(rules.minorLimit, 'another minor'), ...extra].join(' ');
+  }
   const target = `${who} major or another minor`;
   if (rules.limit === 0) {
     return `No course may also count toward ${target}`
@@ -1665,65 +1880,17 @@ function minorDoubleCountLimitText(def, majorCode, whose) {
 }
 
 /**
- * Double counting for one minor. A marked course used for this minor is
- * shared when it also counts toward the student's major (a major requirement;
- * General Education overlap is free when the file says so) or is used by
- * another of the student's minors. Shared courses in a no_limit category are
- * free, in a no_sharing category they are not allowed, and the rest count
- * toward the limit.
- *
- * opts: { majorCode, majorKindOf(code), otherMinors: [{ name, assigned: Map }] }
+ * Where a minor's requirements come from: 'catalog' when its source_file is an
+ * archived CMU catalog page (.html, Product Management), 'audit' for an
+ * official audit file, null when it has none (Student-defined).
  */
-function checkMinorDoubleCounting(def, progress, opts) {
-  const o = opts || {};
-  const rules = minorDoubleCountRules(def, o.majorCode);
-  const shared = [];
-  for (const [code, path] of ((progress && progress.assigned) || new Map())) {
-    const kind = o.majorKindOf ? o.majorKindOf(code) : null;
-    const withMajor = kind === 'degree' || (kind === 'gened' && !rules.genEdExempt);
-    const withMinors = (o.otherMinors || []).filter(m => m.assigned && m.assigned.has(code)).map(m => m.name);
-    if (!withMajor && !withMinors.length) continue;
-    const free = pathInCategories(path, rules.noLimit);
-    const blocked = !free && pathInCategories(path, rules.noSharing);
-    shared.push({ code, path, withMajor, withMinors, free, blocked });
-  }
-  shared.sort((a, b) => a.code.localeCompare(b.code));
-  const counted = shared.filter(s => !s.free && !s.blocked);
-  return {
-    rules,
-    limit: rules.limit,
-    known: rules.known,
-    shared,
-    counted,
-    blocked: shared.filter(s => s.blocked),
-    over: rules.limit != null && counted.length > rules.limit,
-  };
+function minorSourceKind(def) {
+  const file = def && def.source_file ? String(def.source_file) : '';
+  if (!file) return null;
+  return /\.html?$/i.test(file) ? 'catalog' : 'audit';
 }
 
-/** Warnings for a minor header, from checkMinorDoubleCounting. */
-function minorDoubleCountWarnings(check, def, majorCode) {
-  const out = [];
-  if (!check) return out;
-  const major = majorCode ? `your ${majorCode} major` : 'your major';
-  if (check.over) {
-    const n = check.counted.length;
-    const codes = joinWithAnd(check.counted.map(s => s.code));
-    const lim = check.limit;
-    out.push(`${n} course${n === 1 ? '' : 's'} you marked ${n === 1 ? 'counts' : 'count'} toward this minor and toward ${major} or another minor (${codes}). `
-      + (lim === 0 ? 'None may.' : `At most ${lim} may.`) + ' Ask your advisor which ones to use.');
-  }
-  for (const s of check.blocked) {
-    const ids = String(s.path).split('---');
-    const name = minorCategoryName(def, ids[ids.length - 1]) || ids[ids.length - 1];
-    const others = [];
-    if (s.withMajor) others.push(major);
-    for (const m of s.withMinors) others.push(`your ${m} minor`);
-    out.push(`${s.code} is used here for ${name}, which may not also count toward another program, and it also counts toward ${joinWithAnd(others)}. Use another course here or confirm with your advisor.`);
-  }
-  return out;
-}
-
-/** Version strings come from the official files; show their " - " separators as commas. */
+/** The double counting rule text comes verbatim from the official files; show its " - " separators as commas. */
 function plainDataText(text) {
   return String(text == null ? '' : text).replace(/\s+[-‒-―]\s+/g, ', ');
 }
