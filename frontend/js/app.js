@@ -7106,6 +7106,8 @@ const App = {
       if (this._programPending === el.id) {
         if (event.preventDefault) event.preventDefault();
         this._applyProgramPick(el.id, el.value, 'stay');
+      } else {
+        this._programEnter = el.id;  // Enter in the open list: the change it brings applies at once
       }
       return;
     }
@@ -7118,8 +7120,18 @@ const App = {
       return;
     }
     if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
-    // Alt with an arrow and F4 open the list; anything else may move the choice in place.
-    const opens = event.altKey || key === 'F4' || (this._arrowsOpenTheList() && /^Arrow(Up|Down)$/.test(key || ''));
+    this._programEnter = null;
+    // Alt with an arrow and F4 open the list, and so does Space unless it is part of
+    // typing (a letter typed on this dropdown in the last second); anything else may
+    // move the choice in place.
+    const now = Date.now();
+    const typing = this._programTypedOn === el.id && now - (this._programTypedAt || 0) < 1000;
+    const opens = event.altKey || key === 'F4' || (key === ' ' && !typing)
+      || (this._arrowsOpenTheList() && /^Arrow(Up|Down)$/.test(key || ''));
+    if (key && key.length === 1 && key !== ' ') {
+      this._programTypedOn = el.id;
+      this._programTypedAt = now;
+    }
     this._programKeyNav = opens ? null : el.id;
   },
 
@@ -7129,7 +7141,7 @@ const App = {
   },
 
   _onProgramSelectChange(el) {
-    if (this._programKeyNav === el.id) {
+    if (this._programKeyNav === el.id && this._programEnter !== el.id) {
       this._programPending = el.id;  // a key moved the choice: wait for Enter or Tab
       return;
     }
@@ -7140,6 +7152,7 @@ const App = {
     const tab = this._programTab;
     this._programTab = null;
     this._programKeyNav = null;
+    this._programEnter = null;
     if (this._programPending !== el.id) return;
     if (!tab) {
       this._revertProgramSelect(el);
@@ -7167,6 +7180,7 @@ const App = {
   _applyProgramPick(id, value, focus) {
     this._programPending = null;
     this._programKeyNav = null;
+    this._programEnter = null;
     const before = typeof document !== 'undefined' ? document.activeElement : null;
     let saved;
     if (id === 'mnMajorPick') saved = this.setStudentMajor(value);

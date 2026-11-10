@@ -515,6 +515,24 @@ test('minors: on a closed programs dropdown a key only moves the choice; Enter, 
   add.value = 'math';
   App._onProgramSelectChange(add);
   assertEqual(App.profile.secondaries, ['business', 'psychology', 'math']);
+  // Space opens the list, unless it is part of typing a name ("Business A..."): then it only moves the choice.
+  App._programTypedAt -= 1500;  // the last letter typed (the p above) was more than a second ago
+  key(' ', add);
+  add.value = 'economics';
+  App._onProgramSelectChange(add);
+  assertEqual(App.profile.secondaries, ['business', 'psychology', 'math', 'economics'], 'a pick in the list Space opened');
+  key('h', add);
+  key(' ', add);
+  add.value = 'history';
+  App._onProgramSelectChange(add);
+  assertEqual(App.profile.secondaries.length, 4, 'Space while typing waits like a letter');
+  key('Escape', add);
+  // Enter in the open list: when the browser passes the keys on, the change Enter brings applies at once.
+  key('ArrowDown', add);
+  key('Enter', add);
+  add.value = 'writing';
+  App._onProgramSelectChange(add);
+  assertEqual(App.profile.secondaries, ['business', 'psychology', 'math', 'economics', 'writing']);
 });
 
 test('minors: picking in the Minors tab dropdown draws only the minor under it', () => {
