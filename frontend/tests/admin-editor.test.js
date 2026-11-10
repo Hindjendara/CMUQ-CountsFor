@@ -302,11 +302,16 @@ test('minor tree: archived codes and the admin changes are named', () => {
   assertEqual(node.adminAdded, ['76-101']);
   const html = App._minorNodeInfoHtml(node);
   assertTrue(html.includes('Archived on the admin page: 85-130.'));
-  assertFalse(/not in the course catalog: [^<]*85-130/.test(html), 'an archived course is not called missing');
+  assertFalse(/not in the course catalog: (?:<(?!\/div)[^>]*>|[^<])*85-130/.test(html), 'an archived course is not called missing');
   assertTrue(html.includes('Added on the admin page: 76-101.'));
   assertTrue(App.minorIndex.byCode.psychology.eligible.get('76-101').includes('survey'), 'the course card lists the minor');
   App.authedUser = { role: 'student' };
-  assertFalse(App._minorNodeInfoHtml(node).includes('Added on the admin page'), 'admins only');
+  const student = App._minorNodeInfoHtml(node);
+  assertFalse(student.includes('Added on the admin page'), 'admins only');
+  assertFalse(student.includes('Archived on the admin page'), 'students do not see admin wording');
+  assertTrue(/not in the course catalog: (?:<(?!\/div)[^>]*>|[^<])*85-130/.test(student), 'for students an archived course is not in the catalog');
+  App.authedUser = null;  // a guest
+  assertFalse(App._minorNodeInfoHtml(node).includes('Archived on the admin page'), 'guests neither');
 });
 
 test('course card and activity log: an Edit course data button for admins, readable events with Open buttons', () => {

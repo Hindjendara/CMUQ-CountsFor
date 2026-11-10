@@ -7026,16 +7026,18 @@ const App = {
 
   /** Notes, codes missing from the catalog and empty states inside a minor category. */
   _minorNodeInfoHtml(node) {
-    // A listed code archived on the admin page is named as archived, not as missing from the catalog.
-    const archived = this._archivedCodesIn(node.missing);
+    // For admins, a listed code archived on the admin page is named as archived, not as
+    // missing from the catalog. Everyone else sees it as missing, like any code without a row.
+    const admin = canManageUsers(this.authedUser);
+    const archived = admin ? this._archivedCodesIn(node.missing) : [];
     if (archived.length) node = Object.assign({}, node, { missing: node.missing.filter(code => !archived.includes(code)) });
     const lines = [];
     for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${this._minorTextHtml(note)}</div>`);
     if (node.missing && node.missing.length) {
       lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${this._minorTextHtml(joinWithAnd(node.missing))}.</div>`);
     }
-    if (archived.length) lines.push(`<div class="mn-node-note">Archived on the admin page: ${esc(joinWithAnd(archived))}.</div>`);
-    if (canManageUsers(this.authedUser)) {
+    if (archived.length) lines.push(`<div class="mn-node-note mn-node-admin">Archived on the admin page: ${esc(joinWithAnd(archived))}.</div>`);
+    if (admin) {
       if ((node.adminAdded || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Added on the admin page: ${esc(joinWithAnd(node.adminAdded))}.</div>`);
       if ((node.adminRemoved || []).length) lines.push(`<div class="mn-node-note mn-node-admin">Removed on the admin page: ${esc(joinWithAnd(node.adminRemoved))}.</div>`);
     }
@@ -7064,13 +7066,13 @@ const App = {
       .filter(m => !minors.includes(m.code) && !isMinorBlockedForMajor(m.code, p.primary))
       .map(m => `<option value="${esc(m.code)}">${esc(m.label)}</option>`).join('');
     const addSelect = addOpts
-      ? `<select class="mn-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" onchange="App._onStudentMinorAddPick(this.value)"><option value="">Add a minor</option>${addOpts}</select>`
+      ? `<select class="mn-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" ${this._programSelectEvents()}><option value="">Add a minor</option>${addOpts}</select>`
       : '';
     return `
       <div class="mn-programs" role="group" aria-label="Your major and minors">
         <label class="mn-label" for="mnMajorPick">Major</label>
         <div class="mn-prog-value">
-          <select class="mn-select" id="mnMajorPick" onchange="App._onStudentMajorPick(this.value)">${majorOpts}</select>
+          <select class="mn-select" id="mnMajorPick" ${this._programSelectEvents()}>${majorOpts}</select>
         </div>
         <span class="mn-label" id="mnMinorsLabel">Minors</span>
         <div class="mn-prog-value" role="group" aria-labelledby="mnMinorsLabel">
@@ -7079,27 +7081,126 @@ const App = {
       </div>`;
   },
 
-  // The programs bar dropdowns: the tree is drawn again after a change, so the
-  // focus goes back to the new dropdown (keyboard users keep their place).
-  _onStudentMajorPick(major) {
-    const saved = this.setStudentMajor(major);
-    this._focusById('mnMajorPick');
+  // The programs bar dropdowns (#mnMajorPick, #mnMinorAdd) change the student's
+  // programs. On a closed dropdown an arrow key or a typed letter already moves
+  // the choice (Chrome, Edge and Firefox fire a change for each key), so a
+  // choice made that way waits: Enter, or Tab on to the next control, applies
+  // it, and Escape or a click elsewhere puts the dropdown back. A pick in the
+  // open list (mouse, touch, or Enter in the list) applies at once. The tree is
+  // then drawn again, and the focus goes back to the new dropdown, or on to the
+  // control Tab moved to.
+  _programSelectEvents() {
+    return 'onchange="App._onProgramSelectChange(this)" onkeydown="App._onProgramSelectKey(event, this)" '
+      + 'onmousedown="App._onProgramSelectPointer(this)" onblur="App._onProgramSelectBlur(this)"';
+  },
+
+  /** On a Mac an arrow key opens a closed dropdown's list instead of moving the choice. */
+  _arrowsOpenTheList() {
+    const nav = typeof navigator !== 'undefined' ? navigator : null;
+    return !!nav && /Mac|iPhone|iPad|iPod/i.test(nav.platform || nav.userAgent || '');
+  },
+
+  _onProgramSelectKey(event, el) {
+    const key = event && event.key;
+    if (key === 'Enter') {
+      if (this._programPending === el.id) {
+        if (event.preventDefault) event.preventDefault();
+        this._applyProgramPick(el.id, el.value, 'stay');
+      }
+      return;
+    }
+    if (key === 'Escape') {
+      if (this._programPending === el.id) this._revertProgramSelect(el);
+      return;
+    }
+    if (key === 'Tab') {
+      this._programTab = event.shiftKey ? 'prev' : 'next';
+      return;
+    }
+    if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
+    // Alt with an arrow and F4 open the list; anything else may move the choice in place.
+    const opens = event.altKey || key === 'F4' || (this._arrowsOpenTheList() && /^Arrow(Up|Down)$/.test(key || ''));
+    this._programKeyNav = opens ? null : el.id;
+  },
+
+  _onProgramSelectPointer(el) {
+    this._programKeyNav = null;
+    if (this._programPending === el.id) this._revertProgramSelect(el);
+  },
+
+  _onProgramSelectChange(el) {
+    if (this._programKeyNav === el.id) {
+      this._programPending = el.id;  // a key moved the choice: wait for Enter or Tab
+      return;
+    }
+    this._applyProgramPick(el.id, el.value, 'stay');
+  },
+
+  _onProgramSelectBlur(el) {
+    const tab = this._programTab;
+    this._programTab = null;
+    this._programKeyNav = null;
+    if (this._programPending !== el.id) return;
+    if (!tab) {
+      this._revertProgramSelect(el);
+      return;
+    }
+    // Tab applies the choice once the focus has moved on, then follows it.
+    this._programPending = null;
+    const id = el.id;
+    const value = el.value;
+    setTimeout(() => this._applyProgramPick(id, value, tab), 0);
+  },
+
+  /** Put a programs bar dropdown back on the student's current choice. */
+  _revertProgramSelect(el) {
+    this._programPending = null;
+    this._programKeyNav = null;
+    el.value = el.id === 'mnMajorPick' ? ((this.profile && this.profile.primary) || '') : '';
+  },
+
+  /**
+   * Apply a programs bar choice; focus 'stay' puts the focus on the redrawn
+   * dropdown, 'next' or 'prev' on the control after or before it (where Tab
+   * went, unless that control was not drawn again).
+   */
+  _applyProgramPick(id, value, focus) {
+    this._programPending = null;
+    this._programKeyNav = null;
+    const before = typeof document !== 'undefined' ? document.activeElement : null;
+    let saved;
+    if (id === 'mnMajorPick') saved = this.setStudentMajor(value);
+    else if (id === 'mnMinorAdd' && value) saved = this.addStudentMinor(value);
+    if (focus === 'stay') {
+      if (!this._focusById(id)) this._focusById('mnMajorPick');
+    } else if (!(before && before.isConnected && before !== document.body)) {
+      this._focusBeside(id, focus === 'prev' ? -1 : 1);
+    }
     return saved;
   },
 
-  _onStudentMinorAddPick(code) {
-    const saved = this.addStudentMinor(code);
-    this._focusById('mnMinorAdd');
-    return saved;
+  /** Focus the control next to (step 1) or before (step -1) a control, by tab order. */
+  _focusBeside(id, step) {
+    if (typeof document === 'undefined' || !document.querySelectorAll) return;
+    const el = document.getElementById(id) || document.getElementById('mnMajorPick');
+    if (!el) return;
+    const controls = Array.from(document.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]'))
+      .filter(c => !c.disabled && c.tabIndex >= 0 && c.offsetParent !== null);
+    const i = controls.indexOf(el);
+    const target = (i >= 0 && controls[i + step]) || el;
+    if (!target.focus) return;
+    try { target.focus({ preventScroll: true }); } catch { target.focus(); }
   },
 
-  /** Focus a control by id, e.g. after a re-render replaced the one that was used. */
+  /** Focus a control by id, e.g. after a re-render replaced the one that was used. True when it was found. */
   _focusById(id) {
-    if (typeof document === 'undefined' || !document.getElementById) return;
+    if (typeof document === 'undefined' || !document.getElementById) return false;
     const el = document.getElementById(id);
     if (el && el.focus) {
       try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+      return true;
     }
+    return false;
   },
 
   _iconClose() {
@@ -7275,26 +7376,45 @@ const App = {
         + (others.length ? `<optgroup label="Other minors">${others.map(option).join('')}</optgroup>` : '')
       : others.map(option).join('');
     const placeholder = sel ? '' : '<option value="" selected disabled>Choose a minor</option>';
-    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
-    const empty = `
-      <div class="empty-state">
-        <img class="empty-illustration" src="assets/img/scotty-full.png" alt="" aria-hidden="true" />
-        <div class="empty-text">Choose a minor to see its full requirements.</div>
-      </div>`;
     return `
       <div class="mn-browse">
         <div class="mn-browse-head">
           <label class="mn-label" for="mnBrowsePick">Minor</label>
           <select class="mn-select" id="mnBrowsePick" onchange="App._onBrowseMinorPick(this.value)">${placeholder}${options}</select>
         </div>
-        ${sel ? filterHint + this._renderMinorSection(sel, 'browse') : empty}
+        <div class="mn-browse-body" id="mnBrowseBody">${this._minorsBrowseBodyHtml(sel)}</div>
       </div>`;
   },
 
-  /** The Minors tab dropdown: show the chosen minor; the focus stays on the dropdown. */
+  /** What the Minors tab shows under its dropdown: the chosen minor, or how to choose one. */
+  _minorsBrowseBodyHtml(sel) {
+    if (!sel) {
+      return `
+      <div class="empty-state">
+        <img class="empty-illustration" src="assets/img/scotty-full.png" alt="" aria-hidden="true" />
+        <div class="empty-text">Choose a minor to see its full requirements.</div>
+      </div>`;
+    }
+    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
+    return filterHint + this._renderMinorSection(sel, 'browse');
+  },
+
+  /**
+   * The Minors tab dropdown: show the chosen minor. Only the part under the
+   * dropdown is drawn again, so the dropdown keeps the focus and its typing
+   * ("Psy" reaches Psychology) while the keys move through the minors.
+   */
   _onBrowseMinorPick(code) {
-    this.browseMinor(code);
-    this._focusById('mnBrowsePick');
+    const body = typeof document !== 'undefined' ? document.getElementById('mnBrowseBody') : null;
+    if (!body || this.activeMajor !== MINORS_TAB || !this.minorIndex || !this.minorIndex.byCode[code]) {
+      this.browseMinor(code);
+      this._focusById('mnBrowsePick');
+      return;
+    }
+    this.browseMinorCode = code;
+    this._autoExpandMinor(code);
+    body.innerHTML = this._minorsBrowseBodyHtml(code);
+    this._focusById('mnBrowsePick');  // already there after a pick in the list: a no-op that keeps its typing
   },
 
   /**

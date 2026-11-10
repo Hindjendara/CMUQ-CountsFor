@@ -464,6 +464,77 @@ test('minors: a guest student adds and removes minors in the tree and keeps them
   assertTrue(treeHtml(document).includes('Not open to BA majors'));
 });
 
+test('minors: on a closed programs dropdown a key only moves the choice; Enter, Tab or a pick in the list applies it', () => {
+  const { App, ctx, document } = loadMinorsApp(STUDENT('CS', []), { isGuest: true });
+  App._refreshSemesterOptions = () => {};
+  App.renderTree();
+  assertTrue(treeHtml(document).includes('id="mnMinorAdd" aria-label="Add a minor" onchange="App._onProgramSelectChange(this)" onkeydown="App._onProgramSelectKey(event, this)"'));
+  const add = { id: 'mnMinorAdd', value: 'arabic' };
+  const key = (k, el, extra = {}) => App._onProgramSelectKey(Object.assign({ key: k, preventDefault() {} }, extra), el);
+  // Three presses of the down arrow (Chrome and Edge fire a change for each) add nothing.
+  for (const code of ['arabic', 'biology', 'business']) {
+    add.value = code;
+    key('ArrowDown', add);
+    App._onProgramSelectChange(add);
+  }
+  assertEqual(App.profile.secondaries, [], 'the arrow keys only move the choice');
+  let prevented = false;
+  key('Enter', add, { preventDefault() { prevented = true; } });
+  assertEqual(App.profile.secondaries, ['business'], 'Enter adds the minor shown');
+  assertTrue(prevented, 'Enter does not also open the list');
+  // Typing moves the choice too, and Escape puts the dropdown back.
+  add.value = 'psychology';
+  key('p', add);
+  App._onProgramSelectChange(add);
+  key('Escape', add);
+  assertEqual([add.value, App.profile.secondaries], ['', ['business']]);
+  // On the major, two presses of the down arrow and a click elsewhere change nothing.
+  const major = { id: 'mnMajorPick', value: 'IS' };
+  key('ArrowDown', major);
+  App._onProgramSelectChange(major);
+  major.value = 'BA';
+  key('ArrowDown', major);
+  App._onProgramSelectChange(major);
+  App._onProgramSelectBlur(major);
+  assertEqual([major.value, App.profile.primary, App.profile.secondaries], ['CS', 'CS', ['business']],
+    'the business minor stays: BA was never applied');
+  // Tab applies the choice once the focus has moved on.
+  ctx.setTimeout = fn => { fn(); return 0; };
+  major.value = 'IS';
+  key('ArrowDown', major);
+  App._onProgramSelectChange(major);
+  key('Tab', major);
+  App._onProgramSelectBlur(major);
+  assertEqual(App.profile.primary, 'IS');
+  // A pick in the open list (the mouse, or Alt with the down arrow) applies at once.
+  App._onProgramSelectPointer(add);
+  add.value = 'psychology';
+  App._onProgramSelectChange(add);
+  assertEqual(App.profile.secondaries, ['business', 'psychology']);
+  key('ArrowDown', add, { altKey: true });
+  add.value = 'math';
+  App._onProgramSelectChange(add);
+  assertEqual(App.profile.secondaries, ['business', 'psychology', 'math']);
+});
+
+test('minors: picking in the Minors tab dropdown draws only the minor under it', () => {
+  const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology']));
+  App.browseMinorCode = null;
+  App.switchMajor('MINORS');
+  assertTrue(treeHtml(document).includes('id="mnBrowseBody"'));
+  // The fake document makes elements only for #app's children: add the body the browser would have.
+  const body = { id: 'mnBrowseBody', innerHTML: '' };
+  document.live.set('mnBrowseBody', body);
+  const tree = treeHtml(document);
+  App._onBrowseMinorPick('math');
+  assertEqual(App.browseMinorCode, 'math');
+  assertEqual(treeHtml(document), tree, 'the dropdown is not drawn again');
+  assertTrue(body.innerHTML.includes('id="mn-section-math"') && body.innerHTML.includes('Tree filtered'));
+  document.live.delete('mnBrowseBody');
+  App._onBrowseMinorPick('economics');  // without the body (another tab drawn), the whole tab is drawn
+  assertTrue(treeHtml(document).includes('id="mn-section-economics"'));
+});
+
 test('minors: a signed-in student saves to the account one request at a time, the latest list last', async () => {
   const { App, ctx } = loadMinorsApp(STUDENT('CS', []), { authMode: 'authed' });
   const calls = [];
