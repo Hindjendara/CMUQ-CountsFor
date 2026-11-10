@@ -438,15 +438,97 @@ function normalizeCourseCode(code) {
 // backend and are applied here, after load and before indexing.
 const COURSE_EDIT_FIELDS = ['course_name', 'department', 'units', 'description', 'prerequisites', 'offered_qatar', 'offered_pitts', 'offered'];
 
+// What a course counts for is edited per program and per minor, as a change to
+// the catalog (README 12.2): { CS: { add: [rows], remove: [paths] },
+// 'MINOR:psychology': { add: [category paths], remove: [category paths] } }.
+// A key that is absent follows the catalog, so the daily updates keep flowing
+// in. A list value is the whole-list shape saved before 2026-11-10: it still
+// replaces its own program's rows, and nothing else.
+const MINOR_EDIT_PREFIX = 'MINOR:';
+
+// The root of each program's degree paths. Gen Ed paths start with GenEd in
+// every program, and the root alone decides a row's Gen Ed flag.
+const DEGREE_ROOTS = {
+  CS: 'BS in Computer Science',
+  IS: 'BS in Information Systems',
+  BA: 'BS in Business Administration',
+  BS: 'BS in Biological Sciences',
+  AI: 'BS in Artificial Intelligence',
+  GS: 'BS in General Studies',
+};
+
 function _emptyRequirements() {
   const out = {};
   for (const m of MAJOR_ORDER) out[m] = [];
   return out;
 }
 
+/** True when a path is GenEd or the program's degree root, then at least one more part. */
+function requirementPathRootOk(prog, path) {
+  const parts = String(path || '').split('---');
+  return parts.length >= 2 && parts.every(Boolean) && (parts[0] === 'GenEd' || parts[0] === DEGREE_ROOTS[prog]);
+}
+
+/** An edit row as stored: its path, the Gen Ed flag of its root, its program. Old flags are dropped. */
+function _editRow(r, prog) {
+  const requirement = typeof r === 'string' ? r : (r && r.requirement);
+  if (!requirement) return null;
+  return { requirement, type: String(requirement).split('---')[0] === 'GenEd', major: prog || (r && r.major) || '' };
+}
+
+/**
+ * One program's rows after an admin edit. A legacy list replaces them (any old
+ * "earlier" flags on it are ignored); { add, remove } drops the removed paths,
+ * then adds the rows the base does not list yet; no edit gives a copy of the base.
+ */
+function applyProgramEdit(baseRows, edit, prog) {
+  if (Array.isArray(edit)) {
+    const out = [];
+    for (const r of edit) {
+      const row = _editRow(r, prog);
+      if (row && !out.some(x => x.requirement === row.requirement)) out.push(row);
+    }
+    return out;
+  }
+  const rows = (baseRows || []).map(r => Object.assign({}, r));
+  if (!edit || typeof edit !== 'object') return rows;
+  const remove = new Set(edit.remove || []);
+  const out = rows.filter(r => !remove.has(r.requirement));
+  for (const r of edit.add || []) {
+    const row = _editRow(r, prog);
+    if (row && !out.some(x => x.requirement === row.requirement)) out.push(row);
+  }
+  return out;
+}
+
+/** The smallest { add, remove } that turns baseRows into draftRows (by path), or null when they list the same paths. */
+function programEditDelta(baseRows, draftRows) {
+  const base = new Set((baseRows || []).map(r => r && r.requirement).filter(Boolean));
+  const draft = new Set();
+  const add = [];
+  for (const r of draftRows || []) {
+    if (!r || !r.requirement || draft.has(r.requirement)) continue;
+    draft.add(r.requirement);
+    if (!base.has(r.requirement)) add.push({ requirement: r.requirement, type: String(r.requirement).split('---')[0] === 'GenEd' });
+  }
+  const remove = [...base].filter(p => !draft.has(p));
+  return add.length || remove.length ? { add, remove } : null;
+}
+
+/** True when two stored edits of one key say the same thing (a legacy list never matches). */
+function sameRequirementEdit(a, b) {
+  if (a == null || b == null) return a == null && b == null;
+  if (Array.isArray(a) || Array.isArray(b)) return false;
+  const paths = list => (list || []).map(x => (typeof x === 'string' ? x : x && x.requirement)).filter(Boolean).sort().join('\n');
+  return paths(a.add) === paths(b.add) && paths(a.remove) === paths(b.remove);
+}
+
 /**
  * Returns { courses, archived }. Each edited course gets `_edit` (the override)
  * and `_catalog` (the scraped values it replaced) so the admin editor can show both.
+ * Program edits change only their own program's rows; minor edits go to
+ * `_minorEdits` ({ minor: { add, remove } }) for buildMinorIndex() and never
+ * into `requirements`.
  */
 function applyCourseOverrides(courses, overrides) {
   if (!overrides || !overrides.length) return { courses, archived: [] };
@@ -500,9 +582,20 @@ function applyCourseOverrides(courses, overrides) {
       if (!course._added && !(f in course._catalog)) course._catalog[f] = course[f];
       course[f] = fields[f];
     }
-    if (o.requirements) {
+    if (o.requirements && typeof o.requirements === 'object' && Object.keys(o.requirements).length) {
       if (!course._added && !('requirements' in course._catalog)) course._catalog.requirements = course.requirements;
-      course.requirements = Object.assign(_emptyRequirements(), o.requirements);
+      const next = Object.assign(_emptyRequirements(), course.requirements);
+      for (const [key, edit] of Object.entries(o.requirements)) {
+        if (key.startsWith(MINOR_EDIT_PREFIX)) {
+          if (edit && typeof edit === 'object' && !Array.isArray(edit)) {
+            (course._minorEdits || (course._minorEdits = {}))[key.slice(MINOR_EDIT_PREFIX.length)] =
+              { add: (edit.add || []).slice(), remove: (edit.remove || []).slice() };
+          }
+        } else {
+          next[key] = applyProgramEdit(next[key], edit, key);
+        }
+      }
+      course.requirements = next;
     }
     if (fields.course_code && fields.course_code !== course.course_code) {
       if (!course._added) course._catalog.course_code = course.course_code;
@@ -517,11 +610,37 @@ function applyCourseOverrides(courses, overrides) {
   return { courses: courses.filter(c => !archivedCodes.has(c)), archived };
 }
 
-/** Every requirement path used in the catalog, per program, with its Gen Ed flag. */
-function knownRequirementPaths(courses) {
+/**
+ * Every requirement category per program, with its Gen Ed flag: each bucket of
+ * data/requirement_buckets.json when it was loaded (parseRequirementBuckets(),
+ * empty buckets included, in catalog order), then the paths of the catalog rows.
+ * A heading of the bucket file (a path with buckets under it, such as
+ * "BS in Computer Science---Computer Science") is left out unless catalog rows
+ * already use it: a course goes in a bucket, not in a heading, and several
+ * headings are old bucket names (README 14.10) that must stay flagged.
+ * Pass the scraped courses, before admin edits, so an edited path is not a category.
+ */
+function knownRequirementPaths(courses, buckets) {
   const out = {};
   for (const m of MAJOR_ORDER) out[m] = new Map();
-  for (const c of courses) {
+  const used = {};
+  for (const c of courses || []) {
+    for (const [prog, list] of Object.entries(c.requirements || {})) {
+      if (!out[prog]) continue;
+      const set = used[prog] || (used[prog] = new Set());
+      for (const r of list || []) if (r && r.requirement) set.add(r.requirement);
+    }
+  }
+  for (const [prog, paths] of Object.entries(buckets || {})) {
+    if (!out[prog]) continue;
+    const all = (paths || []).filter(Boolean);
+    for (const p of all) {
+      const heading = all.some(q => q !== p && q.startsWith(p + '---'));
+      if (heading && !(used[prog] && used[prog].has(p))) continue;
+      if (!out[prog].has(p)) out[prog].set(p, String(p).split('---')[0] === 'GenEd');
+    }
+  }
+  for (const c of courses || []) {
     for (const [prog, list] of Object.entries(c.requirements || {})) {
       if (!out[prog]) continue;
       for (const r of list || []) {
@@ -530,6 +649,33 @@ function knownRequirementPaths(courses) {
     }
   }
   return out;
+}
+
+/**
+ * data/requirement_buckets.json, written by the daily pipeline when it exists:
+ * every bucket path per program in catalog order, empty buckets included
+ * ({ CS: [paths], ... }; a "programs" wrapper and { path } items are accepted
+ * too). Returns { program: [paths] }, or null when the data holds no paths.
+ */
+function parseRequirementBuckets(data) {
+  if (!data || typeof data !== 'object') return null;
+  const src = data.programs && typeof data.programs === 'object' && !Array.isArray(data.programs) ? data.programs : data;
+  const out = {};
+  let found = 0;
+  for (const prog of Object.keys(MAJOR_META)) {
+    const list = src[prog];
+    const items = Array.isArray(list) ? list : (list && typeof list === 'object' ? Object.keys(list) : []);
+    const paths = [];
+    for (const item of items) {
+      const p = typeof item === 'string' ? item : (item && (item.path || item.requirement));
+      if (typeof p === 'string' && p.includes('---') && !paths.includes(p)) paths.push(p);
+    }
+    if (paths.length) {
+      out[prog] = paths;
+      found += paths.length;
+    }
+  }
+  return found ? out : null;
 }
 
 // ── Build course index ──────────────────────────────────────
@@ -1295,20 +1441,99 @@ function _minorLeafCourse(course) {
   };
 }
 
+/** The categories of a minor that hold courses (no sub categories), in file order: [{ path, id, label, pathLabel }]. */
+function minorLeafCategories(def) {
+  const out = [];
+  (function walk(cats, prefix, names) {
+    for (const cat of cats || []) {
+      if (!cat || !cat.id) continue;
+      const path = prefix ? prefix + '---' + cat.id : cat.id;
+      const labels = names.concat(cat.name || cat.id);
+      if ((cat.children || []).length) walk(cat.children, path, labels);
+      else out.push({ path, id: cat.id, label: cat.name || cat.id, pathLabel: labels.join(' › ') });
+    }
+  })((def && def.categories) || [], '', []);
+  return out;
+}
+
+/** The leaf categories that accept a course by the minor file alone: they list its code, or their select rule matches it. */
+function minorFileCategories(def, course) {
+  if (!def || !course) return [];
+  const code = normalizeCourseCode(course.course_code);
+  const out = [];
+  (function walk(cats, prefix) {
+    for (const cat of cats || []) {
+      if (!cat || !cat.id) continue;
+      const path = prefix ? prefix + '---' + cat.id : cat.id;
+      if ((cat.children || []).length) {
+        walk(cat.children, path);
+        continue;
+      }
+      const listed = (cat.courses || []).some(c => normalizeCourseCode(c) === code);
+      if (listed || (cat.select && courseMatchesSelect(course, cat.select))) out.push(path);
+    }
+  })(def.categories || [], '');
+  return out;
+}
+
+/** The admin's minor category edits in the catalog: Map(minor, Map(course code, { add: Set, remove: Set })). */
+function collectMinorEdits(courses) {
+  const out = new Map();
+  for (const c of courses || []) {
+    if (!c || !c._minorEdits) continue;
+    const code = normalizeCourseCode(c.course_code);
+    for (const [minor, e] of Object.entries(c._minorEdits)) {
+      if (!out.has(minor)) out.set(minor, new Map());
+      out.get(minor).set(code, { add: new Set((e && e.add) || []), remove: new Set((e && e.remove) || []) });
+    }
+  }
+  return out;
+}
+
+/**
+ * A leaf category's courses after the admin edits (edits: Map(code, { add, remove })):
+ * removed codes leave, added codes with a catalog row that is not hidden join,
+ * sorted by code. Also returns the codes each edit actually changed.
+ */
+function _applyMinorEdits(expanded, path, edits, courseIndex) {
+  const found = new Map(expanded.courses.map(c => [normalizeCourseCode(c.course_code), c]));
+  const adminAdded = [];
+  const adminRemoved = [];
+  for (const [code, e] of edits) {
+    if (e.remove.has(path) && found.has(code)) {
+      found.delete(code);
+      adminRemoved.push(code);
+    }
+    if (e.add.has(path) && !found.has(code)) {
+      const course = lookupCourse(courseIndex, code);
+      if (course && !isCourseHidden(course)) {
+        found.set(code, course);
+        adminAdded.push(code);
+      }
+    }
+  }
+  const courses = Array.from(found.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(e => e[1]);
+  return { courses, missing: expanded.missing, adminAdded: adminAdded.sort(), adminRemoved: adminRemoved.sort() };
+}
+
 /**
  * One minor as a requirement tree with the same node shape as the major trees
  * (label, path, children, courses, rule), so the same tree components render
  * it. Paths are category ids joined by "---"; tree keys are "minor:<code>".
+ * `edits` (from collectMinorEdits) adds and removes courses in its categories
+ * that hold courses; the codes it changed are on each node as adminAdded and
+ * adminRemoved.
  */
-function buildMinorTree(minorCode, def, courses, courseIndex) {
+function buildMinorTree(minorCode, def, courses, courseIndex, edits) {
   const treeKey = 'minor:' + minorCode;
   function build(cat, parentPath, depth) {
     const path = parentPath ? parentPath + '---' + cat.id : cat.id;
     const children = (cat.children || []).map(ch => build(ch, path, depth + 1));
     const hasList = Array.isArray(cat.courses) && cat.courses.length > 0;
-    const expanded = (hasList || cat.select)
+    let expanded = (hasList || cat.select)
       ? expandMinorCategory(cat, courses, courseIndex)
       : { courses: [], missing: [] };
+    if (!children.length && edits && edits.size) expanded = _applyMinorEdits(expanded, path, edits, courseIndex);
     const listed = [];
     for (const raw of cat.courses || []) {
       const code = normalizeCourseCode(raw);
@@ -1327,6 +1552,8 @@ function buildMinorTree(minorCode, def, courses, courseIndex) {
       notes: Array.isArray(cat.notes) ? cat.notes.slice() : [],
       listed,
       missing: expanded.missing,
+      adminAdded: expanded.adminAdded || [],
+      adminRemoved: expanded.adminRemoved || [],
       hasSelect: !!cat.select,
       selectOnly: !!cat.select && !hasList,
       courses: expanded.courses.map(_minorLeafCourse),
@@ -1355,14 +1582,16 @@ function buildMinorTree(minorCode, def, courses, courseIndex) {
 /**
  * Every minor of minors.json built against the loaded catalog:
  * { order: [codes sorted by name], byCode: { code: { code, key, def, tree, eligible } } }.
- * eligible maps a course code to the paths of the categories that accept it.
+ * eligible maps a course code to the paths of the categories that accept it,
+ * after the admin's minor category edits (collectMinorEdits()).
  */
 function buildMinorIndex(data, courses, courseIndex) {
   const index = { order: [], byCode: {} };
   const minors = (data && data.minors) || {};
+  const edits = collectMinorEdits(courses);
   for (const [code, def] of Object.entries(minors)) {
     if (!def || typeof def !== 'object') continue;
-    const tree = buildMinorTree(code, def, courses, courseIndex);
+    const tree = buildMinorTree(code, def, courses, courseIndex, edits.get(code));
     const eligible = new Map();
     (function walk(node) {
       for (const c of node.courses || []) {
@@ -1376,6 +1605,43 @@ function buildMinorIndex(data, courses, courseIndex) {
   index.order = Object.keys(index.byCode).sort((a, b) =>
     String(index.byCode[a].def.name || a).localeCompare(String(index.byCode[b].def.name || b)));
   return index;
+}
+
+// ── Admin minor settings ────────────────────────────────────
+// /api/minors/overrides corrects a few numbers of minors.json (backend/minor_overrides.py).
+const MINOR_SETTING_FIELDS = ['total_units', 'max_with_major', 'max_with_other_minors', 'admin_note'];
+
+/**
+ * A copy of the minors data with each admin override applied: total_units and
+ * admin_note on the minor, the two limits in double_count (marked `edited`, so
+ * they apply on their own). An edited minor gets `_edit` (the override) and
+ * `_file` (the file values it replaced). The cached file object is not changed.
+ */
+function applyMinorOverrides(minorsData, items) {
+  if (!minorsData || !minorsData.minors || !Array.isArray(items) || !items.length) return minorsData;
+  const minors = Object.assign({}, minorsData.minors);
+  for (const o of items) {
+    const def = o && minors[o.minor_code];
+    const f = (o && o.fields) || {};
+    if (!def || typeof def !== 'object' || !MINOR_SETTING_FIELDS.some(k => k in f)) continue;
+    const fileDc = def.double_count || {};
+    const dc = Object.assign({}, fileDc);
+    const next = Object.assign({}, def, { double_count: dc, _edit: o, _file: {} });
+    if ('total_units' in f) {
+      next._file.total_units = def.total_units;
+      next.total_units = f.total_units;
+    }
+    for (const k of ['max_with_major', 'max_with_other_minors']) {
+      if (!(k in f)) continue;
+      next._file[k] = fileDc[k] === undefined ? null : fileDc[k];
+      dc[k] = f[k];
+      dc.edited = true;
+    }
+    if (dc.edited && !('max_with_other_minors' in f)) dc.max_with_other_minors = fileDc.max_with_other_minors === undefined ? fileDc.max_with_major : fileDc.max_with_other_minors;
+    if ('admin_note' in f) next.admin_note = f.admin_note;
+    minors[o.minor_code] = next;
+  }
+  return Object.assign({}, minorsData, { minors });
 }
 
 /** True when a course can count for a minor (some category lists or matches it). */
@@ -1663,13 +1929,26 @@ function countMarkedCourses(node, statuses) {
   return { done, inProgress };
 }
 
-/** The double counting rules of a minor for one major (by_major overrides the categories). */
+/**
+ * The double counting rules of a minor for one major (by_major overrides the
+ * categories). The files state one limit for the major and other minors
+ * together (max_with_major, equal to max_with_other_minors in every file).
+ * Once an admin sets the limits on the admin page (applyMinorOverrides()
+ * marks double_count.edited), max_with_other_minors applies to other minors
+ * on its own: `separate` is then true when the two differ.
+ */
 function minorDoubleCountRules(def, majorCode) {
   const dc = (def && def.double_count) || {};
   const forMajor = (dc.by_major && majorCode && dc.by_major[majorCode]) || {};
+  const limit = typeof dc.max_with_major === 'number' ? dc.max_with_major : null;
+  const minorLimit = dc.edited
+    ? (typeof dc.max_with_other_minors === 'number' ? dc.max_with_other_minors : null)
+    : limit;
   return {
-    limit: typeof dc.max_with_major === 'number' ? dc.max_with_major : null,
-    known: dc.text != null || typeof dc.max_with_major === 'number',
+    limit,
+    minorLimit,
+    separate: minorLimit !== limit,
+    known: dc.text != null || typeof dc.max_with_major === 'number' || !!dc.edited,
     genEdExempt: dc.gen_ed_exempt !== false,
     noLimit: forMajor.no_limit_categories || dc.no_limit_categories || [],
     noSharing: forMajor.no_sharing_categories || dc.no_sharing_categories || [],
@@ -1691,6 +1970,15 @@ function minorDoubleCountLimitText(def, majorCode, whose) {
   const rules = minorDoubleCountRules(def, majorCode);
   if (!rules.known) return 'Confirm double counting with your advisor.';
   const names = ids => joinWithAnd(ids.map(id => minorCategoryName(def, id) || id));
+  if (rules.separate) {
+    const part = (lim, to) => (lim === 0 ? `No course may also count toward ${to}.`
+      : lim != null ? `At most ${lim} course${lim === 1 ? '' : 's'} may also count toward ${to}.`
+        : `Courses may also count toward ${to} without a limit.`);
+    const extra = [];
+    if (rules.noLimit.length) extra.push(`Courses used for ${names(rules.noLimit)} do not count toward these limits.`);
+    if (rules.noSharing.length) extra.push(`Courses used for ${names(rules.noSharing)} may not count toward any other program.`);
+    return [part(rules.limit, `${who} major`), part(rules.minorLimit, 'another minor'), ...extra].join(' ');
+  }
   const target = `${who} major or another minor`;
   if (rules.limit === 0) {
     return `No course may also count toward ${target}`
@@ -1732,14 +2020,24 @@ function checkMinorDoubleCounting(def, progress, opts) {
   }
   shared.sort((a, b) => a.code.localeCompare(b.code));
   const counted = shared.filter(s => !s.free && !s.blocked);
+  // With separate limits, courses shared with the major and with other minors are counted apart.
+  const countedMajor = counted.filter(s => s.withMajor);
+  const countedMinors = counted.filter(s => s.withMinors.length);
+  const overMajor = rules.separate && rules.limit != null && countedMajor.length > rules.limit;
+  const overMinors = rules.separate && rules.minorLimit != null && countedMinors.length > rules.minorLimit;
   return {
     rules,
     limit: rules.limit,
+    minorLimit: rules.minorLimit,
     known: rules.known,
     shared,
     counted,
+    countedMajor,
+    countedMinors,
+    overMajor,
+    overMinors,
     blocked: shared.filter(s => s.blocked),
-    over: rules.limit != null && counted.length > rules.limit,
+    over: rules.separate ? overMajor || overMinors : rules.limit != null && counted.length > rules.limit,
   };
 }
 
@@ -1748,13 +2046,16 @@ function minorDoubleCountWarnings(check, def, majorCode) {
   const out = [];
   if (!check) return out;
   const major = majorCode ? `your ${majorCode} major` : 'your major';
-  if (check.over) {
-    const n = check.counted.length;
-    const codes = joinWithAnd(check.counted.map(s => s.code));
-    const lim = check.limit;
-    out.push(`${n} course${n === 1 ? '' : 's'} you marked ${n === 1 ? 'counts' : 'count'} toward this minor and toward ${major} or another minor (${codes}). `
-      + (lim === 0 ? 'None may.' : `At most ${lim} may.`) + ' Ask your advisor which ones to use.');
+  const overText = (list, to, lim) => {
+    const n = list.length;
+    return `${n} course${n === 1 ? '' : 's'} you marked ${n === 1 ? 'counts' : 'count'} toward this minor and toward ${to} (${joinWithAnd(list.map(s => s.code))}). `
+      + (lim === 0 ? 'None may.' : `At most ${lim} may.`) + ' Ask your advisor which ones to use.';
+  };
+  if (check.over && !(check.rules && check.rules.separate)) {
+    out.push(overText(check.counted, `${major} or another minor`, check.limit));
   }
+  if (check.overMajor) out.push(overText(check.countedMajor, major, check.limit));
+  if (check.overMinors) out.push(overText(check.countedMinors, 'another of your minors', check.minorLimit));
   for (const s of check.blocked) {
     const ids = String(s.path).split('---');
     const name = minorCategoryName(def, ids[ids.length - 1]) || ids[ids.length - 1];

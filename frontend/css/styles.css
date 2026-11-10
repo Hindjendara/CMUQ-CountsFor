@@ -2792,6 +2792,8 @@ body.is-resizing-panels * {
   background: var(--major-is-bg);
   border-color: var(--major-is-border);
 }
+.cc-action-edit { color: var(--major-ba-text); }
+.cc-action-edit:hover { background: var(--major-ba-bg); border-color: var(--major-ba-border); }
 
 @media (max-width: 560px) {
   .cc-head { flex-direction: column; align-items: stretch; }
@@ -4404,6 +4406,71 @@ body.view-split .directory-fab { display: none; }
 .adm-search, .adm-select, .adm-textarea { background: var(--bg-card); color: var(--text-primary); }
 .adm-search::placeholder { color: var(--text-tertiary); }
 .adm-search:focus, .adm-select:focus { outline: none; border-color: var(--border-focus); box-shadow: var(--shadow-focus); }
+
+/* ── Admin page: what a course counts for, as changes to the catalog ── */
+.adm-course-views { margin-bottom: 14px; flex-wrap: wrap; }
+.adm-btn-small { padding: 3px 9px; font-size: 11.5px; border-radius: 6px; white-space: nowrap; }
+.adm-req.is-added { box-shadow: inset 3px 0 0 var(--major-bs-border); }
+.adm-req.is-removed { background: transparent; border: 1px dashed var(--border-light); color: var(--text-tertiary); }
+.adm-req.is-removed .adm-req-path { text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
+.adm-req.is-removed .adm-req-flags, .adm-req.is-removed .adm-req-tag { text-decoration: none; opacity: 0.75; }
+.adm-req-flags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: 1px; }
+.adm-req-flag { padding: 0 6px; border-radius: 999px; border: 1px solid var(--border-light); background: var(--bg-card); font-size: 10.5px; font-weight: 700; color: var(--text-tertiary); white-space: nowrap; }
+.adm-req-flag.is-added { border-color: var(--major-bs-border); background: var(--major-bs-bg); color: var(--major-bs-text); }
+.adm-req-flag.is-warn { border-color: var(--major-is-border); background: var(--major-is-bg); color: var(--major-is-text); }
+.adm-req-tag.is-minor { background: var(--minor-accent-bg, var(--bg-tertiary)); color: var(--minor-accent-text, var(--text-secondary)); }
+.adm-req-head-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.adm-req-group.is-edited { border-color: var(--major-ba-border); }
+.adm-legacy-note { margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--major-is-border); background: var(--major-is-bg); color: var(--major-is-text); font-size: 12.5px; font-weight: 600; line-height: 1.45; }
+.adm-section-gap { margin-top: 18px; }
+.adm-minor-group { margin-top: 12px; }
+.adm-minor-pick { flex: 1; min-width: 0; }
+.adm-minor-none { margin: 0 0 10px; }
+.adm-course-item-summary { font-size: 11.5px; color: var(--major-ba-text); overflow-wrap: anywhere; }
+.adm-course-item-warn { font-size: 11.5px; font-weight: 600; color: var(--major-is-text); overflow-wrap: anywhere; }
+/* Beats the grey ".adm-course-item-tags .adm-pill:not(...)" rule above. */
+.adm-pill-warn, .adm-course-item-tags .adm-pill.adm-pill-warn:not(.adm-pill-new):not(.adm-pill-edit) { background: var(--major-is-bg); border-color: var(--major-is-border); color: var(--major-is-text); }
+.adm-pill-removed { background: var(--bg-tertiary); border-color: var(--border-light); color: var(--text-tertiary); }
+.adm-log-side { display: flex; align-items: center; gap: 10px; flex: none; }
+.adm-saved-line { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--major-bs-border); background: var(--major-bs-bg); color: var(--major-bs-text); font-size: 12.5px; font-weight: 600; }
+.adm-minor-form .adm-saved-line { margin: 12px 0 0; }
+
+/* Courses in a category */
+.adm-cat-pick { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 3fr); gap: 12px; margin-top: 12px; }
+.adm-cat-pick .adm-select { width: 100%; min-width: 0; }
+.adm-cat-list { margin-bottom: 12px; }
+.adm-cat-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px; }
+.adm-cat-row .adm-pill { flex: none; font-size: 10.5px; font-weight: 700; }
+.adm-cat-row.is-removed .adm-cat-name { text-decoration: line-through; color: var(--text-tertiary); }
+.adm-cat-check { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+.adm-cat-check .adm-course-item-code { flex: none; min-width: 58px; }
+.adm-cat-name { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-cat-add { display: flex; gap: 8px; margin: 4px 0 14px; }
+.adm-cat-add .adm-search { min-width: 0; }
+
+/* Minor settings */
+.adm-minor-list { margin-top: 4px; }
+.adm-minor-item { grid-template-columns: minmax(0, 1fr) auto; }
+.adm-minor-item.is-active { background: var(--bg-tree-hover); box-shadow: inset 3px 0 0 var(--cmu-red); }
+.adm-minor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 14px 0 6px; }
+.adm-minor-grid .adm-select { width: 100%; }
+
+/* What admins set, as shown on the minors themselves (after the .mn-* rules it adjusts). */
+.mn-dc-edited { margin-top: 4px; padding: 0 10px; color: var(--minor-accent-text); }
+.mn-admin-note {
+  margin-top: 8px; padding: 8px 10px;
+  border-radius: 8px; border-left: 3px solid var(--minor-accent);
+  background: var(--bg-secondary); color: var(--text-primary);
+  font-size: 12.5px; line-height: 1.45; white-space: pre-line;
+}
+.mn-node-admin { color: var(--major-ba-text); }
+.mn-admin-btn { background: var(--bg-card); color: var(--minor-accent-text); }
+
+@media (max-width: 760px) {
+  .adm-cat-pick, .adm-minor-grid { grid-template-columns: 1fr; }
+  .adm-cat-add { flex-direction: column; }
+  .adm-log-side { justify-content: space-between; width: 100%; }
+}
 
 /* ── Admin page: course save confirmation ───────────────── */
 .adm-btn-primary { background: var(--cmu-red); border-color: var(--cmu-red); color: #fff; }

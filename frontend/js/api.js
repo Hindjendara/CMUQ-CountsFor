@@ -7,6 +7,9 @@
 
 const LOCAL_DATA = 'data/courses.json';
 const MINORS_DATA = 'data/minors.json';
+// Every bucket path per program, empty buckets too. Written by the daily
+// pipeline; optional (the course editor falls back to the catalog rows).
+const BUCKETS_DATA = 'data/requirement_buckets.json';
 
 function _bundledDataUrl(path) {
   const meta = typeof document !== 'undefined'
@@ -60,6 +63,18 @@ async function fetchMinors() {
     throw new Error(`${MINORS_DATA} has no minors.`);
   }
   return data;
+}
+
+// The requirement bucket list (data/requirement_buckets.json), parsed with
+// parseRequirementBuckets(); null when the file is missing or unreadable. Only
+// the admin course editor asks for it, so a missing file costs students nothing.
+async function fetchRequirementBuckets() {
+  if (typeof fetch !== 'function') return null;
+  try {
+    return parseRequirementBuckets(await _get(_bundledDataUrl(BUCKETS_DATA)));
+  } catch (e) {
+    return null;
+  }
 }
 
 // ============================================================
@@ -289,6 +304,21 @@ async function apiRestoreCourse(code) {
 }
 async function apiRevertCourse(code) {
   return apiFetch('/api/courses/overrides/' + encodeURIComponent(code), { method: 'DELETE' });
+}
+// [{ course_code, requirements }]: one transaction, one audit event per course.
+async function apiBatchEditCourses(items) {
+  return apiFetch('/api/courses/overrides/batch', { method: 'POST', body: { items } });
+}
+
+// ── Minor settings (read: everyone, write: admin) ────────────
+async function apiGetMinorOverrides() {
+  return apiFetch('/api/minors/overrides', { timeoutMs: 10000 });
+}
+async function apiEditMinor(code, body) {
+  return apiFetch('/api/minors/overrides/' + encodeURIComponent(code), { method: 'PATCH', body });
+}
+async function apiRevertMinor(code) {
+  return apiFetch('/api/minors/overrides/' + encodeURIComponent(code), { method: 'DELETE' });
 }
 
 async function apiListStaffDirectory() {

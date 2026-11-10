@@ -453,7 +453,12 @@ class CourseOverride(db.Model):
     is_new: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fields: Mapped[str | None] = mapped_column(Text, nullable=True)        # JSON: only the changed catalog fields
-    requirements: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: full "counts for" map when edited
+    # JSON, one key per edited program or minor, each a change to the catalog:
+    # {"CS": {"add": [{"requirement", "type", "major"}], "remove": [paths]},
+    #  "MINOR:psychology": {"add": [category paths], "remove": [category paths]}}.
+    # A missing key follows the catalog. A list value is the whole-list shape saved
+    # before 2026-11-10 (still applied to its own program, never written again).
+    requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_by_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -470,6 +475,42 @@ class CourseOverride(db.Model):
             "archived": self.archived,
             "fields": json.loads(self.fields) if self.fields else {},
             "requirements": json.loads(self.requirements) if self.requirements else None,
+            "updated_by_email": self.updated_by_email,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class MinorOverride(db.Model):
+    """Admin corrections to a minor's settings in frontend/data/minors.json.
+
+    The file is built by hand from the official minor files, and a few of its
+    numbers are uncertain (unit totals, double counting limits). One row per
+    minor; `fields` holds only the values that differ from the file:
+    total_units, max_with_major, max_with_other_minors (an integer or null for
+    no limit) and admin_note (shown to students as a note from CMU-Q).
+    """
+    __tablename__ = "minor_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    minor_code: Mapped[str] = mapped_column(String(40), nullable=False, unique=True, index=True)
+    fields: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
+    updated_by_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    def to_dict(self) -> dict:
+        try:
+            fields = json.loads(self.fields) if self.fields else {}
+        except ValueError:
+            fields = {}
+        return {
+            "minor_code": self.minor_code,
+            "fields": fields if isinstance(fields, dict) else {},
             "updated_by_email": self.updated_by_email,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

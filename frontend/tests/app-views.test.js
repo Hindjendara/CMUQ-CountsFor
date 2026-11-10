@@ -90,6 +90,8 @@ function loadApp(opts = {}) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), 'utf8'), ctx, { filename: file });
   }
   ctx.showToast = () => {};
+  // loadData() also reads the admin minor settings; none unless a test sets its own.
+  ctx.apiGetMinorOverrides = async () => ({ ok: true, data: { items: [] } });
   const App = vm.runInContext('App', ctx);
   App._renderHome = () => HOME_MARKER;
   App._loadPopularCourses = () => {};

@@ -32,7 +32,7 @@ load('js/profile.js');
 load('tests/test-runner.js');
 
 // Load each test file separately so results can be reported per file.
-const TEST_FILES = ['tests/profile.test.js', 'tests/data.test.js', 'tests/minors.test.js', 'tests/utils.test.js'];
+const TEST_FILES = ['tests/profile.test.js', 'tests/data.test.js', 'tests/minors.test.js', 'tests/course-edits.test.js', 'tests/utils.test.js'];
 const byFile = [];
 for (const file of TEST_FILES) {
   const start = __tests.length;
@@ -40,7 +40,7 @@ for (const file of TEST_FILES) {
   byFile.push({ file, tests: __tests.slice(start) });
 }
 // Node-only suites (they read source files with fs), loaded with require().
-const NODE_TEST_FILES = ['tests/dash-guard.test.js', 'tests/minors-file.test.js', 'tests/app-views.test.js', 'tests/catalog-data.test.js'];
+const NODE_TEST_FILES = ['tests/dash-guard.test.js', 'tests/minors-file.test.js', 'tests/app-views.test.js', 'tests/admin-editor.test.js', 'tests/catalog-data.test.js'];
 for (const file of NODE_TEST_FILES) {
   const start = __tests.length;
   require(path.join(ROOT, file));
