@@ -16,6 +16,7 @@ from .models import (
     SchedulePlan, SignInEvent, User, UserActivityDay, WishlistItem,
 )
 from .permissions import require_role_group, ROLE_GROUP_ADMIN
+from .semesters import semester_rank
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
@@ -185,7 +186,11 @@ def insights():
         idx = min(11, max(0, (created - start).days // 7))
         weeks[idx] += 1
 
-    semesters = [s for (s,) in db.session.query(CourseSearchCount.semester_code).distinct().order_by(CourseSearchCount.semester_code)]
+    # Newest first, as in the app's semester picker.
+    semesters = sorted(
+        (s for (s,) in db.session.query(CourseSearchCount.semester_code).distinct().order_by(CourseSearchCount.semester_code)),
+        key=semester_rank, reverse=True,
+    )
 
     return jsonify(
         semester=semester,

@@ -84,7 +84,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | Term | Meaning |
 |---|---|
 | **SOC** | Schedule of Classes. CMU's public course offering site at `https://enr-apps.as.cmu.edu/open/SOC/SOCServlet`. The scraper reads sections, days, times, campus and modality from it. |
-| **Semester codes** | `F26` = Fall 2026, `S26` = Spring 2026, `M26` = Summer 2026, `N26` = Fall mini (see `SEASON_NAME` in `js/data.js`). Backend validates with regex `^[FSMN]\d{2}$`. |
+| **Semester codes** | `F26` = Fall 2026, `S26` = Spring 2026, `M26` = Summer 2026, `N26` = Fall mini (see `SEASON_NAME` in `js/data.js`). Backend validates with regex `^[FSMN]\d{2}$`. No list of semesters is kept in code: the semester picker lists the semesters the catalog's SOC offerings have, so a new one (Spring 2027, a summer) appears the day the daily update scrapes it (8.3). |
 | **Course code** | Always normalized to `NN-NNN`, e.g. `15-122`. `normalizeCourseCode()` in `js/data.js` and `_normalize_code()` in `backend/course_overrides.py` accept `15122`, `15122.0`, `15-122`. |
 | **Requirement path** | A string of segments joined by three hyphens, e.g. `GenEd---Foundations---Contextual Thinking`. The frontend splits on `---` to build the requirement tree. The bucket names are the 2026-27 catalog's (14.10). |
 | **`type` on a requirement** | Boolean. `true` means GenEd, `false` means a major (core) requirement. |
@@ -281,6 +281,7 @@ Removed in November 2026 and still in git history: `render.yaml`, `backend/Procf
 | `wishlist.py` | `/api/wishlist` routes. |
 | `plans.py` | `/api/plans` routes (list, share by email, share link, accept link). |
 | `search_analytics.py` | `/api/search-analytics` (course lookup counts per program and semester). |
+| `semesters.py` | Semester codes: `normalize_semester()` (any code matching the regex), `semester_rank()` (newest first) and `default_semester()` (the newest fall or spring with Qatar sections in `soc.json`, read again when the file changes). |
 | `email_util.py` | Password reset email via Resend API or SMTP. |
 | `requirements.txt` | Pinned Python dependencies (Flask 3.0.3, Flask-SQLAlchemy 3.1.1, flask-cors 4.0.1, SQLAlchemy 2.0.51, psycopg2-binary 2.9.10, google-auth, requests, itsdangerous, gunicorn 22.0.0, python-dotenv, pytest 8.3.2). pytest is installed on the server too: the daily update runs the parser tests before it scrapes. |
 | `.env.example` | Template for `backend/.env`: every variable the API reads, with local values and the production value in a comment. |
@@ -641,9 +642,9 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | 525 | `knownRequirementPaths()` | All requirement paths per program, used by the course editor's autocomplete. |
 | 539 to 598 | `buildCourseIndex()`, `lookupCourse()`, `findTreeNode()`, `collectCoursesForRequirement()`, `formatRequirementPath()`, `requirementLeafLabel()` | Index by `15-122` and `15122`. Tree lookups. |
 | 600 to 666 | `getCourseMappings()`, `orderCfColumns()`, `summarizeFlagsByStatus()`, `getAlsoCountsFor()` | Display data for the course card. |
-| 668 to 721 | `predictOffering()`, `sortSemesters()` | Rule-based "likely offered next term" hint (no ML). |
+| 668 to 721 | `predictOffering()`, `semesterRank()`, `sortSemesters()` | Rule-based "likely offered next term" hint (no ML). Semesters sort newest first; within a year spring, summer, fall. |
 | 723 to 743 | `DEPT_NAMES`, `getDeptName()` | Department number to name. |
-| 745 to 880 | `SEMESTER_OPTIONS`, `MODALITY_OPTIONS`, `availableSemesterOptions()`, `semesterLabel()`, `getCourseOfferings()`, `filterOfferings()`, `courseHasMatchingOffering()` | Semester, campus and modality filters over SOC offerings. |
+| 745 to 880 | `MODALITY_OPTIONS`, `catalogSemesters()`, `semesterOptions()`, `availableSemesterOptions()`, `resolveSemesterChoice()`, `semesterLabel()`, `normalizeSemesterCode()`, `getCourseOfferings()`, `filterOfferings()`, `courseHasMatchingOffering()` | Semester, campus and modality filters over SOC offerings. The semester list is the semesters the loaded catalog has sections for, newest first, after "All semesters"; labels come from the code ("S27" is "Spring 2027"). The app opens on the newest fall or spring with a Qatar section (summer only when there is no fall or spring), or on the semester picked last (`cf_semester`, 8.8) while the catalog still has it. `pick_default_semester()` in `backend/semesters.py` applies the same rule to `soc.json`. |
 | 882 to 1116 | `PLAN_DAY_COLUMNS`, `parseDaysTimes()`, `formatDaysTimesForDisplay()`, `planOfferingKey()`, `groupOfferingsBySection()`, `findPlanConflicts()`, `layoutPlanDayBlocks()` and friends | Schedule planner math: parsing times, conflicts, calendar layout (7:00 to 22:00). Stored `days_times` keep the SOC form `MW 03:30PM-04:50PM` (plan keys and `parseDaysTimes` read it); `formatDaysTimesForDisplay()` shows it as `MW 3:30 PM to 4:50 PM` on course cards and the plan list, and returns any other string unchanged. |
 | 1118 to 1740 | `COURSE_STATUSES`, `COURSE_STATUS_KEY`, `normalizeCourseStatuses()`, `nextCourseStatus()`, `courseMatchesSelect()`, `expandMinorCategory()`, `minorRuleLabel()` (chips worded like the major chips), `buildMinorTree()`, `buildMinorIndex()`, `courseCountsForMinor()`, `majorCountKind()`, `computeMinorProgress()`, `minorStatusText()`, `minorSummaryText()`, `countMarkedCourses()`, `minorDoubleCountRules()`, `minorDoubleCountLimitText()`, `checkMinorDoubleCounting()`, `minorDoubleCountWarnings()`, `minorSourceKind()`, `plainDataText()` | Minors: each minor of `data/minors.json` as a tree against the catalog, a student's progress from their course statuses, and double counting (8.10). |
 | 1742 to end | `annotateDoubleCounters()`, `annotateMultiProgram()` | Profile-aware flags on courses: for a student `_majorKind` (`degree`, `gened` or none for their major), `_minorMatches` (their minors the course can count for) and `_doubleCounter` (both); `_programCount`. |
@@ -697,14 +698,14 @@ Everything lives on one object literal `const App = { ... }`, started by `App.in
 | Lines (approx.) | Section | Key functions |
 |---|---|---|
 | 5 to 14 | Home constants | `HOME_POPULAR_COURSES`, `HOME_SEARCH_CHIPS`, `HOME_RECENT_MAPPINGS`, `MINORS_TAB` (id of the Minors tab) |
-| 15 to 39 | State | `courses`, `courseIndex`, `trees` (the majors and `minor:<code>`), `treeSections`, `minorsData`, `minorIndex`, `browseMinorCode`, `layoutMode`, `activeMajor` (a major code or `MINORS_TAB`), `selectedCourse`, filters (`locationFilter`, `activeSemester` default `F26`, `modalityFilter`), `profile`, `authedUser`, `authMode` (`authed`, `demo`, `login`), `isGuest`, `serverFlags` |
+| 15 to 39 | State | `courses`, `courseIndex`, `trees` (the majors and `minor:<code>`), `treeSections`, `minorsData`, `minorIndex`, `browseMinorCode`, `layoutMode`, `activeMajor` (a major code or `MINORS_TAB`), `selectedCourse`, filters (`locationFilter`, `activeSemester` (a semester code or `all`; null until the catalog loads), `modalityFilter`), `_semesters` (the catalog's semester codes and default), `profile`, `authedUser`, `authMode` (`authed`, `demo`, `login`), `isGuest`, `serverFlags` |
 | 40 to 224 | Boot and auth state | `init()`, `_redirectToLogin()`, `_restorePendingSharePlan()`, `_afterAuthed()`, `_syncLocalToServer()` (one-time upload of local flags and wishlist), `_loadServerFlags()`, `_needsOnboarding()`, `_hydrateProfileFromServer()` (drops minors the app no longer offers) |
 | 225 to 236 | Theme | `applyTheme()`, `toggleTheme()` |
 | 237 to 345 | Data loading | `_prepareCatalog()` (fetch the catalog, `minors.json` and the overrides), `_buildCatalog()` (apply edits, index, annotate, build the major and minor trees), `loadData()`, `autoExpandFirstLevel()` |
 | 346 to 595 | Onboarding (students only) | `renderOnboarding()`, `_renderOnboardingScreen()`, `_obPickMajor()`, `_obPickMinor()`, `_obAddMinor()`, `_obRemoveMinor()`, `_finishOnboarding()` (PATCHes `/api/me`) |
 | 596 to 851 | Sign-in result, guest, sign-out, role badge | `_afterSignIn()`, `_readGuestFlag()`, `exitGuest()`, `setGuestRole()` (keeps the guest student's major and minors in `cf_guest_student` while the Faculty view is on), `signOut()`, `_roleBadgeHtml()`, `editRole()`, `_visibleMajors()`, `_guestBannerHtml()` |
 | 852 to 1067 | Shell rendering | `renderShell()` (navbar with Saved, Plans, Admin or Flag review buttons, directory button; redraws the requirement map in split view), `_syncDirectoryFabLayout()`, `_initPanelResizer()` (split view drag handle) |
-| 1068 to 1351 | Events and filters | `bindGlobalEvents()`, `_filterParams()`, `_refreshSemesterOptions()`, `setSemester()`, `setModalityFilter()`, `setLocation()`, `setMobileLens()`, `reset()` |
+| 1068 to 1351 | Events and filters | `bindGlobalEvents()`, `_filterParams()`, `_resolveSemesters()` (the semester list and the semester shown, once the catalog loads), `_semesterOptionsHtml()`, `_refreshSemesterOptions()`, `setSemester()` (also saves `cf_semester`), `setModalityFilter()`, `setLocation()`, `setMobileLens()`, `reset()` |
 | 1352 to 1571 | Explorer mode and course search | `enterExplorer()`, `exitExplorer()`, `handleSearchKeydown()`, `_selectCourse()`, `selectSearchResult()` |
 | 1572 to 1808 | Category index and unified home search | `_buildCategoryIndex()` (requirement categories and one entry per minor), `selectCategoryResult()`, `handleUnifiedSearchKeydown()`, `selectUnifiedResult()`, `runHomeSearchChip()` |
 | 1809 to 2201 | Home screen | `renderLeftEmpty()`, `_renderHome()`, `_renderHomeDock()`, popular courses (`_recordCourseSearch()`, `_loadPopularCourses()`, local fallback counts), `_renderQuickStart()`, navbar counters |
@@ -753,7 +754,8 @@ Every browser storage key (found by searching `localStorage`, `sessionStorage`, 
 | `cf_guest_student` | local | `app.js` | The guest Student view's major and minors, kept while the guest looks at the Faculty view |
 | `cf_plan` | local | legacy | Old single plan, migrated into `cf_plans_v2` on load |
 | `cf_split_left_px` | local | `app.js` | Split view panel width |
-| `cf_search_counts_<PROGRAM>_<SEMESTER>` | local | `app.js` | Local fallback for "popular courses" |
+| `cf_semester` | local | `app.js` | The semester picked last, `{ code, defaultCode }` (`defaultCode` is the default when it was picked). The app opens on it while the catalog has that semester, unless a newer default has come out since (a new fall or spring with Qatar sections): then it opens on the new one. "All semesters" is always kept. |
+| `cf_search_counts_<PROGRAM>_<SEMESTER>` | local | `app.js` | Local fallback for "popular courses" (under "All semesters", the default semester's counts) |
 
 Note: course statuses live only in the browser too; saving them on the account comes with the server (21.4). Schedule plans live only in the browser. The server stores a plan only when someone shares it (`/api/plans/share`, `/api/plans/accept-share`), and `GET /api/plans` returns those copies. There is no endpoint that saves a user's own plans.
 
@@ -848,14 +850,14 @@ Student-only CRUD on the caller's own saved courses with notes. `GET /api/wishli
 
 ### 9.9 Search analytics (`backend/search_analytics.py`)
 
-When a signed-in **student** opens a course, the frontend posts `/api/search-analytics/events`; the server increments a counter keyed by (student's program, semester, course). `GET /popular?program=CS&semester=F26&limit=5` is public and returns only aggregates. No per-user data is stored.
+When a signed-in **student** opens a course, the frontend posts `/api/search-analytics/events`; the server increments a counter keyed by (student's program, semester, course). `GET /popular?program=CS&semester=F26&limit=5` is public and returns only aggregates. No per-user data is stored. Any semester code is accepted (`^[FSMN]\d{2}$`, no fixed list). Without one, the server uses the newest fall or spring with Qatar sections in `soc.json` (`default_semester()` in `backend/semesters.py`), or answers 400 `invalid_semester` when `soc.json` cannot be read. Under "All semesters" the app counts and shows lookups for its default semester.
 
 ### 9.10 Admin console API and audit log (`backend/admin.py`)
 
 - `record_event(actor, action, target, **details)` adds an `admin_audit_events` row to the current session; the caller's commit saves it together with the change.
 - Actions written today: `user.update`, `directory.add`, `directory.update`, `directory.remove`, `directory.revoke`, `flag.status`, `flag.note`, `course.add`, `course.update`, `course.revert`, `course.archive`, `course.restore`.
 - `GET /api/admin/overview`: user counts by role and group, new users in 7 and 30 days, active in 7 days (by `last_login`), incomplete profiles, flag counts by status, wishlist totals, plan count, total course lookups, directory row count, `course_data.last_scrape` (read from the top of the server's `soc.json`: `SOC_JSON_PATH`, default `backend/data/soc.json`), six most recent signups.
-- `GET /api/admin/insights?semester=F26`: top lookups, top lookups per program, most saved, most flagged, students per program, signups per week for 12 weeks, list of semesters with data.
+- `GET /api/admin/insights?semester=F26`: top lookups, top lookups per program, most saved, most flagged, students per program, signups per week for 12 weeks, list of semesters with data (newest first).
 - `GET /api/admin/sign-ins?days=7|30|90`: sign-in activity (active people, sign-ins, app opens, daily series, breakdowns, per-person table). See section 13.
 - `GET /api/admin/activity?action=course.&page=1&limit=50`: paginated audit log; `action` is a prefix match (a trailing `*` is ignored).
 
@@ -1995,6 +1997,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `frontend/tests/catalog-data.test.js` (Node only) reads `data/courses.json` and `data/requirement_buckets.json` and checks them against `js/data.js` (14.10, 14.5.1).
 - `frontend/tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen, and that the course editor saves a row under its own code and refuses a number another row already has. Its minors tests run the real `renderTree()` with a small catalog and the real `minors.json`: a student's minor sections after the major, statuses saved in `cf_course_status`, a double counting warning, the Minors tab for faculty, Product Management with its catalog rule (and not open to BA majors), no campus note on any minor, a guest adding and removing minors across a view switch, one account save at a time, and a missing minors file.
 - `frontend/tests/utils.test.js` covers `hasTypedText()` (the landing page check for typed text).
+- Semesters: `backend/tests/test_semesters.py` covers `backend/semesters.py` (any code accepted, newest first, the default rule, `soc.json` read again when it changes) and `test_search_analytics.py` stores any code and takes the default from `soc.json`. In `frontend/tests/data.test.js` and the semester tests of `app-views.test.js` the picker lists the catalog's semesters newest first and opens on Spring 2027, keeps the choice in `cf_semester`, and lists a fake new semester F27 with no code change, which becomes the default once it has Qatar sections.
 
 There is no CI that runs the tests. On the server, the daily update runs the two SOC parser test files before every scrape (14.2), which is why pytest is in `backend/requirements.txt`.
 

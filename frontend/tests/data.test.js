@@ -329,6 +329,74 @@ test('normalizeSemesterCode: accepts label or code', () => {
   assertEqual(normalizeSemesterCode('Summer 2026'), 'M26');
 });
 
+// ── Semesters from the Schedule of Classes ──────────────────
+// The picker lists the semesters the catalog has sections for. No semester is
+// named in js/, so a new one in the daily scrape needs no code change.
+
+function socCatalog(...extra) {
+  const off = (semester_code, campus) => ({ semester_code, campus, modality: 'In Person', section: 'A' });
+  return [
+    { course_code: '15-122', offerings: [off('F25', 'Qatar'), off('S26', 'Qatar'), off('F26', 'Qatar'), off('S27', 'Qatar')] },
+    { course_code: '21-127', offerings: [off('M26', 'Pittsburgh'), off('S27', 'Pittsburgh')] },
+    ...extra,
+  ];
+}
+
+test('catalogSemesters: the catalog semesters newest first; the default is the newest fall or spring in Qatar', () => {
+  const s = catalogSemesters(socCatalog());
+  assertEqual(s.codes, ['S27', 'F26', 'M26', 'S26', 'F25']);
+  assertEqual(s.defaultCode, 'S27');
+  assertEqual(availableSemesterOptions(socCatalog()).map(o => o.label),
+    ['All semesters', 'Spring 2027', 'Fall 2026', 'Summer 2026', 'Spring 2026', 'Fall 2025']);
+});
+
+test('catalogSemesters: a new semester (F27) in the catalog is offered, and is the default once Qatar has sections', () => {
+  const pitt = { course_code: '36-200', offerings: [{ semester_code: 'F27', campus: 'Pittsburgh' }] };
+  const opts = availableSemesterOptions(socCatalog(pitt));
+  assertEqual(opts[1], { code: 'F27', label: 'Fall 2027' });
+  assertEqual(catalogSemesters(socCatalog(pitt)).defaultCode, 'S27', 'Pittsburgh sections alone do not move the default');
+  const qatar = { course_code: '67-250', offerings: [{ semester_code: 'F27', campus: 'Qatar' }] };
+  assertEqual(catalogSemesters(socCatalog(pitt, qatar)).defaultCode, 'F27');
+});
+
+test('catalogSemesters: summer is offered but never the default; cancelled sections do not count', () => {
+  const summer = { course_code: '15-112', offerings: [{ semester_code: 'M27', campus: 'Qatar' }] };
+  const cancelled = { course_code: '15-213', offerings: [{ semester_code: 'F27', campus: 'Qatar', cancelled: true }] };
+  const s = catalogSemesters(socCatalog(summer, cancelled));
+  assertEqual(s.codes.slice(0, 2), ['M27', 'S27']);
+  assertEqual(s.defaultCode, 'S27');
+  assertEqual(catalogSemesters([{ course_code: '15-112', offerings: [{ semester_code: 'M27', campus: 'Qatar' }] }]).defaultCode, 'M27',
+    'a catalog with only a summer opens on it');
+  assertEqual(catalogSemesters([]), { codes: [], defaultCode: null });
+});
+
+test('semesterOptions: the semester on screen stays listed even when the catalog lacks it', () => {
+  assertEqual(semesterOptions(['S27'], 'F24').map(o => o.code), ['all', 'S27', 'F24']);
+  assertEqual(semesterOptions(['S27'], 'all').map(o => o.code), ['all', 'S27']);
+  assertEqual(semesterOptions([], null), [{ code: 'all', label: 'All semesters' }]);
+});
+
+test('resolveSemesterChoice: the saved choice while offered; else the default, also once a newer default is out', () => {
+  const s = catalogSemesters(socCatalog());
+  assertEqual(resolveSemesterChoice(s, null), 'S27');
+  assertEqual(resolveSemesterChoice(s, { code: 'F26', defaultCode: 'S27' }), 'F26');
+  assertEqual(resolveSemesterChoice(s, 'M26'), 'M26', 'a bare code');
+  assertEqual(resolveSemesterChoice(s, { code: 'all', defaultCode: 'F26' }), 'all');
+  assertEqual(resolveSemesterChoice(s, { code: 'F24', defaultCode: 'S27' }), 'S27', 'no longer in the catalog');
+  assertEqual(resolveSemesterChoice(s, { code: 'F26', defaultCode: 'F26' }), 'S27', 'picked before Spring 2027 came out');
+  assertEqual(resolveSemesterChoice({ codes: [], defaultCode: null }, { code: 'F26' }), 'all');
+});
+
+test('semesterLabel, normalizeSemesterCode, sortSemesters: work for any code', () => {
+  assertEqual(semesterLabel('S27'), 'Spring 2027');
+  assertEqual(semesterLabel('F31'), 'Fall 2031');
+  assertEqual(semesterLabel('X27'), 'X27');
+  assertEqual(normalizeSemesterCode('Spring 2027'), 'S27');
+  assertEqual(normalizeSemesterCode(' f27 '), 'F27');
+  assertEqual(normalizeSemesterCode('Fall'), null);
+  assertEqual(sortSemesters(['F25', 'S27', 'M26', 'F26', 'S26', 'bad']), ['S27', 'F26', 'M26', 'S26', 'F25', 'bad']);
+});
+
 // ── summarizeFlagsByStatus ──────────────────────────────────
 
 test('summarizeFlagsByStatus: counts each status, ignores unknown and null', () => {
