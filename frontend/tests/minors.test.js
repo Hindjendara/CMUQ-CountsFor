@@ -464,3 +464,10 @@ test('plainDataText and joinWithAnd: data strings without dash punctuation, plai
   assertFalse(pathInCategories('quant---data_science', ['statistics']));
   assertFalse(pathInCategories('', ['x']));
 });
+
+test('minorSourceKind: a catalog page, an official audit file or no source', () => {
+  assertEqual(minorSourceKind({ source_file: 'backend/data/sources/catalog-2026-27/minors/product-management-minor.html' }), 'catalog');
+  assertEqual(minorSourceKind({ source_file: 'cmu_minor_psychology.json' }), 'audit');
+  assertEqual(minorSourceKind({ source_file: null }), null);
+  assertEqual(minorSourceKind(null), null);
+});

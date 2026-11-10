@@ -33,6 +33,9 @@ if action == "fail":
 if action.startswith("copy:"):
     _, src, var = action.split("|")
     shutil.copyfile(src, os.environ[var])
+if action.startswith("beside:"):
+    _, src, name = action.split("|")
+    shutil.copyfile(src, os.path.join(os.path.dirname(os.environ["COURSES_JSON_PATH"]), name))
 ''' % {"vars": PATH_VARS}
 
 
@@ -57,6 +60,7 @@ LIVE_SOC = make_soc("2026-11-01T12:00:00+00:00", LIVE_COUNTS)
 NEW_SOC = make_soc("2026-11-02T12:00:00+00:00", LIVE_COUNTS)
 LIVE_CATALOG = {"_meta": {}, "courses": [{"course_code": f"15-{100 + i}"} for i in range(40)]}
 NEW_CATALOG = {"_meta": {}, "courses": LIVE_CATALOG["courses"] + [{"course_code": "15-999"}]}
+BUCKETS = {"CS": ["BS in Computer Science---Computer Science", "GenEd---Science and Engineering"]}
 
 
 def dump(path, data):
@@ -72,6 +76,7 @@ class Deploy:
         self.soc = root / "backend" / "data" / "soc.json"
         self.courses = root / "frontend" / "data" / "courses.json"
         self.gz = root / "frontend" / "data" / "courses.json.gz"
+        self.buckets = root / "frontend" / "data" / "requirement_buckets.json"
         self.staging = root / "backend" / "var" / "staging"
         self.log = tmp / "fake_log.jsonl"
         self.script = tmp / "fake_step.py"
@@ -82,8 +87,9 @@ class Deploy:
         dump(path, data)
         return path
 
-    def fake_steps(self, monkeypatch, *, soc=None, catalog=None, fail=None):
-        """Replace the pipeline: the scrape writes `soc`, reconcile writes `catalog`."""
+    def fake_steps(self, monkeypatch, *, soc=None, catalog=None, buckets=None, fail=None):
+        """Replace the pipeline: the scrape writes `soc`, reconcile writes `catalog`,
+        the overlay step writes `buckets` (requirement_buckets.json) beside it."""
         actions = {"scrape_soc": "noop", "reconcile_offerings": "noop",
                    "apply_mapping_overlays": "noop", "validate_soc_coverage": "noop"}
         if soc is not None:
@@ -91,6 +97,9 @@ class Deploy:
         if catalog is not None:
             actions["reconcile_offerings"] = (
                 f"copy:|{self.prepared('courses.json', catalog)}|COURSES_JSON_PATH")
+        if buckets is not None:
+            actions["apply_mapping_overlays"] = (
+                f"beside:|{self.prepared('requirement_buckets.json', buckets)}|requirement_buckets.json")
         if fail:
             actions[fail] = "fail"
 
@@ -135,13 +144,16 @@ def read_json(path):
 # ---------- Success ----------
 
 def test_success_publishes_the_staged_files(deploy, monkeypatch):
-    deploy.fake_steps(monkeypatch, soc=NEW_SOC, catalog=NEW_CATALOG)
+    deploy.fake_steps(monkeypatch, soc=NEW_SOC, catalog=NEW_CATALOG, buckets=BUCKETS)
     old_soc, old_courses = deploy.soc.read_bytes(), deploy.courses.read_bytes()
 
     assert update_data.main(["--skip-tests"]) == 0
 
     assert read_json(deploy.soc) == NEW_SOC
     assert read_json(deploy.courses) == NEW_CATALOG
+    assert read_json(deploy.buckets) == BUCKETS
+    assert not (deploy.buckets.parent / "requirement_buckets.json.prev").exists()
+    assert not (deploy.staging / "requirement_buckets.json").exists()
     assert (deploy.soc.parent / "soc.json.prev").read_bytes() == old_soc
     assert (deploy.courses.parent / "courses.json.prev").read_bytes() == old_courses
     assert gzip.decompress(deploy.gz.read_bytes()) == deploy.courses.read_bytes()
@@ -151,8 +163,31 @@ def test_success_publishes_the_staged_files(deploy, monkeypatch):
     assert not (deploy.staging / "soc.json").exists()
     assert not (deploy.staging / "courses.json").exists()
     if os.name == "posix":
-        for p in (deploy.soc, deploy.courses, deploy.gz):
+        for p in (deploy.soc, deploy.courses, deploy.gz, deploy.buckets):
             assert (p.stat().st_mode & 0o777) == 0o644
+
+
+def test_unchanged_bucket_list_is_not_rewritten(deploy, monkeypatch):
+    old = 1_600_000_000
+    dump(deploy.buckets, BUCKETS)
+    os.utime(deploy.buckets, (old, old))
+    deploy.fake_steps(monkeypatch, soc=NEW_SOC, catalog=NEW_CATALOG, buckets=BUCKETS)
+    assert update_data.main(["--skip-tests"]) == 0
+    assert deploy.buckets.stat().st_mtime == old
+
+    changed = {**BUCKETS, "BA": ["GenEd---University Core---Free Electives"]}
+    deploy.fake_steps(monkeypatch, soc=make_soc("2026-11-03T12:00:00+00:00", LIVE_COUNTS), buckets=changed)
+    assert update_data.main(["--skip-tests"]) == 0
+    assert read_json(deploy.buckets) == changed
+
+
+def test_a_run_that_writes_no_bucket_list_leaves_the_live_one(deploy, monkeypatch, capsys):
+    dump(deploy.buckets, BUCKETS)
+    before = deploy.buckets.read_bytes()
+    deploy.fake_steps(monkeypatch, soc=NEW_SOC, catalog=NEW_CATALOG)
+    assert update_data.main(["--skip-tests"]) == 0
+    assert deploy.buckets.read_bytes() == before
+    assert "requirement_buckets.json: not written by this run" in capsys.readouterr().out
 
 
 def test_steps_run_in_order_on_seeded_staging_copies(deploy, monkeypatch):
@@ -285,6 +320,9 @@ GATE_CASES = {
         "F26": {"Pittsburgh": 100}, "M25": {"Pittsburgh": 10, "Qatar": 4}})),
     "catalog lost one row": dict(soc=NEW_SOC, catalog=_drop(NEW_CATALOG, "15-120")),
     "catalog shrank": dict(soc=NEW_SOC, catalog={"courses": LIVE_CATALOG["courses"][:30]}),
+    "bucket list does not parse": dict(soc=NEW_SOC, catalog=NEW_CATALOG, buckets="{ not json"),
+    "bucket list is not a list per program": dict(soc=NEW_SOC, catalog=NEW_CATALOG,
+                                                  buckets={"CS": "GenEd---Science and Engineering"}),
 }
 
 
@@ -295,6 +333,7 @@ def test_failing_gate_leaves_live_files_untouched(deploy, monkeypatch, capsys, c
     assert update_data.main(["--skip-tests"]) == 1
     assert deploy.snapshot() == before
     assert not deploy.gz.exists()
+    assert not deploy.buckets.exists()
     assert "GATE FAILED" in capsys.readouterr().out
 
 
@@ -376,6 +415,14 @@ def test_catalog_codes_are_compared_normalized():
 def test_unchanged_last_scrape_is_fine_without_a_scrape():
     assert gates(new_soc=LIVE_SOC, scraped=False) == []
     assert any("did not write" in p for p in gates(new_soc=LIVE_SOC, scraped=True))
+
+
+def test_bucket_list_gate():
+    assert update_data.check_buckets(BUCKETS) == []
+    assert update_data.check_buckets({}) != []
+    assert update_data.check_buckets(["GenEd---A"]) != []
+    assert update_data.check_buckets({"CS": ["GenEd---A", ""]}) == [
+        "new requirement_buckets.json: CS is not a list of bucket paths"]
 
 
 def test_gzip_is_deterministic():
@@ -477,6 +524,9 @@ def test_real_steps_on_repo_data_with_a_fake_scrape(deploy, monkeypatch):
 
     assert read_json(deploy.soc)["metadata"]["last_scrape"] == "2099-01-01T00:00:00+00:00"
     assert gzip.decompress(deploy.gz.read_bytes()) == deploy.courses.read_bytes()
+    buckets = read_json(deploy.buckets)
+    assert update_data.check_buckets(buckets) == []
+    assert set(buckets) == {"CS", "IS", "BA", "BS", "AI"}
     if deploy.courses.read_bytes() == live_catalog:
         assert not (deploy.courses.parent / "courses.json.prev").exists()
     # the checkout's own data files are not touched

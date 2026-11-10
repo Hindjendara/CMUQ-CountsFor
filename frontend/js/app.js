@@ -2306,9 +2306,8 @@ const App = {
         const typeCls = m.isGenEd ? 'gened' : 'req';
         const safePath = m.fullPath.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         return `
-          <div class="cc-cf-item${m.earlier ? ' is-earlier' : ''}" data-nav-major="${majorCode}" data-nav-path="${safePath}" title="${esc(formatRequirementPath(m.fullPath))}">
+          <div class="cc-cf-item" data-nav-major="${majorCode}" data-nav-path="${safePath}" title="${esc(formatRequirementPath(m.fullPath))}">
             <span class="cc-cf-item-label">${esc(m.shortLabel)}</span>
-            ${m.earlier ? this._earlierTagHtml(m.earlierReason, 'cc-cf-item-earlier') : ''}
             <span class="cc-cf-item-type cc-cf-item-type-${typeCls}">${typeLabel}</span>
           </div>`;
       }).join('');
@@ -2767,23 +2766,14 @@ const App = {
       : '';
 
     return `
-      <div class="tr-leaf ${isActive ? 'active' : ''}${c.earlier ? ' is-earlier' : ''}${status ? ' tr-leaf-' + status : ''}" data-course-code="${esc(c.code)}">
+      <div class="tr-leaf ${isActive ? 'active' : ''}${status ? ' tr-leaf-' + status : ''}" data-course-code="${esc(c.code)}">
         ${statusBtn}
         <span class="tr-leaf-code">${esc(c.code)}</span>
         <span class="tr-leaf-name">${esc(c.name)}${notes.length ? `<span class="tr-leaf-notes">${notes.join('')}</span>` : ''}</span>
-        ${c.earlier ? this._earlierTagHtml(c.earlierReason, 'tr-earlier-tag') : ''}
         ${c.units ? `<span class="tr-leaf-units">${c.units}u</span>` : ''}
         ${alsoHtml}${mpChip}
         ${this._renderRowActions(fullCourse)}
       </div>`;
-  },
-
-  // A course kept on a bucket from an earlier version of the requirement (not
-  // in the 2026-27 catalog). Plain text, with the reason in the tooltip.
-  _earlierTagHtml(reason, cls) {
-    const why = reason ? ` (${reason})` : '';
-    const title = `Earlier requirement${why}: listed in an earlier version of this requirement, not in the 2026-27 catalog. Check with your advisor.`;
-    return `<span class="${cls}" title="${esc(title)}">Earlier requirement</span>`;
   },
 
   // ── Per-row inline actions (wishlist + flag) ───────────────
@@ -6350,8 +6340,8 @@ const App = {
   },
 
   /**
-   * One minor: a header (name, version, campus note, progress, the double
-   * counting limit, warnings and notes) and its categories as tree cards.
+   * One minor: a header (name, version, progress, the double counting limit,
+   * warnings and notes) and its categories as tree cards.
    * mode: 'student' in the student's own tree, 'browse' in the Minors tab.
    */
   _renderMinorSection(code, mode) {
@@ -6385,7 +6375,6 @@ const App = {
     const meta = [];
     if (def.title) meta.push(`<span>${esc(def.title)}</span>`);
     if (def.total_units != null) meta.push(`<span>${esc(String(def.total_units))} units</span>`);
-    if (def.campus_note) meta.push(`<span class="mn-pill mn-pill-campus">${esc(def.campus_note)}</span>`);
     const version = def.version ? `<div class="mn-version">Version: ${esc(plainDataText(def.version))}</div>` : '';
 
     const dc = def.double_count || {};
@@ -6394,10 +6383,13 @@ const App = {
     const ruleText = dc.text
       ? String(dc.text).split(' | ').map(t => plainDataText(t.trim())).filter(Boolean).map(withPeriod).join(' ')
       : '';
+    // The rule's own words: from the audit file, or from the catalog page for a
+    // minor built from one (Product Management).
+    const ruleLabel = minorSourceKind(def) === 'catalog' ? 'Catalog rule' : 'Audit rule';
     const dcHtml = `
       <div class="mn-dc">
         <div><span class="mn-dc-label">Double counting</span> ${esc(limitText)}</div>
-        ${ruleText ? `<div class="mn-dc-rule">Audit rule: ${esc(ruleText)}</div>` : ''}
+        ${ruleText ? `<div class="mn-dc-rule">${ruleLabel}: ${esc(ruleText)}</div>` : ''}
       </div>`;
 
     let warnHtml = '';

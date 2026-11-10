@@ -7,7 +7,9 @@ Replaces the old GitHub Actions scrape workflow. Cron runs it through run_scrape
   2. Gate: the SOC parser tests, as the old workflow ran them (--skip-tests skips).
   3. Stage: copy the live soc.json and courses.json into CF_STAGING_DIR.
      scrape_soc.py carries old semesters forward from the file it overwrites,
-     so it must start from a copy of the live soc.json.
+     so it must start from a copy of the live soc.json. apply_mapping_overlays.py
+     writes requirement_buckets.json (the admin course editor's bucket list)
+     next to the staged catalog.
   4. Run the pipeline on the staged copies, stopping at the first failure:
      scrape_soc.py -> reconcile_offerings.py -> apply_mapping_overlays.py
      -> validate_soc_coverage.py. --no-scrape skips the scrape (a rebuild after
@@ -16,12 +18,14 @@ Replaces the old GitHub Actions scrape workflow. Cron runs it through run_scrape
      (a new one, when this run scraped); for every semester in both the live
      and the new soc.json, each campus keeps at least CF_MIN_SECTION_RATIO of
      its sections; the catalog keeps at least CF_MIN_CATALOG_RATIO of its rows
-     and never loses a course code.
+     and never loses a course code; requirement_buckets.json, when the run
+     wrote one, is {program: [bucket paths]}.
   6. Promote with os.replace, keeping <file>.prev copies for rollback:
      courses.json and courses.json.gz (gzip -9, served by Apache to clients
-     that accept gzip), then soc.json last. A catalog that is unchanged byte
-     for byte is not touched (its mtime and ETag stay), but soc.json is still
-     promoted so the admin overview shows the last successful scrape.
+     that accept gzip), requirement_buckets.json (no .prev: it is rebuilt from
+     the catalog on every run), then soc.json last. A file that is unchanged
+     byte for byte is not touched (its mtime and ETag stay), but soc.json is
+     still promoted so the admin overview shows the last successful scrape.
 
 Any failure exits non-zero and leaves the live files untouched; the staged
 files stay in CF_STAGING_DIR for inspection until the next run.
@@ -66,6 +70,10 @@ DEFAULT_MIN_SECTION_RATIO = 0.98
 DEFAULT_MIN_CATALOG_RATIO = 0.95
 
 TEST_FILES = ("test_scrape_soc.py", "test_soc_parse.py")
+# The admin course editor's bucket list, written by apply_mapping_overlays.py
+# next to the catalog it updates (its REQUIREMENT_BUCKETS_NAME).
+BUCKETS_NAME = "requirement_buckets.json"
+STAGED_NAMES = ("soc.json", "courses.json", BUCKETS_NAME)
 
 
 # ---------- Logging ----------
@@ -89,9 +97,11 @@ class Paths:
         self.live_gz = self.live_courses.with_name("courses.json.gz")
         self.overlays = root / "backend" / "data" / "mapping_overlays.json"
         self.lock = root / "backend" / "var" / "update.lock"
+        self.live_buckets = self.live_courses.with_name(BUCKETS_NAME)
         self.staging = staging
         self.staged_soc = staging / "soc.json"
         self.staged_courses = staging / "courses.json"
+        self.staged_buckets = staging / BUCKETS_NAME
 
     @classmethod
     def from_env(cls) -> "Paths":
@@ -253,6 +263,15 @@ def catalog_rows(catalog, label: str) -> list:
     return rows
 
 
+def check_buckets(buckets, label: str = "new requirement_buckets.json") -> list[str]:
+    """Reasons not to publish a bucket list: it must be {program: [paths]}."""
+    if not isinstance(buckets, dict) or not buckets:
+        return [f"{label}: expected an object of programs"]
+    bad = sorted(str(p) for p, paths in buckets.items()
+                 if not isinstance(paths, list) or not all(isinstance(x, str) and x for x in paths))
+    return [f"{label}: {p} is not a list of bucket paths" for p in bad]
+
+
 def section_counts(soc, label: str) -> dict[tuple[str, str], int]:
     """{(semester, campus): number of sections} over every course in soc.json."""
     counts: dict[tuple[str, str], int] = {}
@@ -359,6 +378,9 @@ def promote(paths: Paths) -> dict[str, bool]:
     leaves the live files as they were. Returns which live files changed.
     """
     courses_changed = not filecmp.cmp(paths.staged_courses, paths.live_courses, shallow=False)
+    buckets_changed = paths.staged_buckets.exists() and not (
+        paths.live_buckets.exists()
+        and filecmp.cmp(paths.staged_buckets, paths.live_buckets, shallow=False))
     soc_changed = not (paths.live_soc.exists()
                        and filecmp.cmp(paths.staged_soc, paths.live_soc, shallow=False))
     new_catalog = paths.staged_courses.read_bytes()
@@ -367,7 +389,7 @@ def promote(paths: Paths) -> dict[str, bool]:
     soc_prev = paths.live_soc.with_name("soc.json.prev")
 
     # (temp, target) in the order they go live: the .prev backups, the catalog,
-    # its .gz right after it, and soc.json last.
+    # its .gz right after it, the bucket list, and soc.json last.
     swaps: list[tuple[Path, Path]] = []
     try:
         if courses_changed:
@@ -378,6 +400,8 @@ def promote(paths: Paths) -> dict[str, bool]:
             swaps.append((_copy_temp(paths.staged_courses, paths.live_courses), paths.live_courses))
         if gz_needed:
             swaps.append((_write_temp(paths.live_gz, gzip_bytes(new_catalog)), paths.live_gz))
+        if buckets_changed:
+            swaps.append((_copy_temp(paths.staged_buckets, paths.live_buckets), paths.live_buckets))
         if soc_changed:
             paths.live_soc.parent.mkdir(parents=True, exist_ok=True)
             swaps.append((_copy_temp(paths.staged_soc, paths.live_soc), paths.live_soc))
@@ -392,15 +416,18 @@ def promote(paths: Paths) -> dict[str, bool]:
     log("courses.json: " + ("updated, previous copy in courses.json.prev" if courses_changed
                             else "unchanged, not rewritten"))
     log("courses.json.gz: " + ("written" if gz_needed else "up to date"))
+    log(f"{BUCKETS_NAME}: " + ("updated" if buckets_changed
+                               else "unchanged" if paths.staged_buckets.exists()
+                               else "not written by this run, left as it was"))
     log("soc.json: " + ("updated" if soc_changed else "unchanged"))
-    return {"courses": courses_changed, "gz": gz_needed, "soc": soc_changed}
+    return {"courses": courses_changed, "gz": gz_needed, "buckets": buckets_changed, "soc": soc_changed}
 
 
 # ---------- Main ----------
 
 def stage(paths: Paths) -> None:
     paths.staging.mkdir(parents=True, exist_ok=True)
-    for name in ("soc.json", "courses.json"):
+    for name in STAGED_NAMES:
         (paths.staging / name).unlink(missing_ok=True)
     shutil.copyfile(paths.live_courses, paths.staged_courses)
     if paths.live_soc.exists():
@@ -449,6 +476,8 @@ def update(args, paths: Paths) -> int:
         live_catalog = load_json_file(paths.live_courses, "live courses.json")
         problems = check_gates(new_soc, new_catalog, live_soc, live_catalog, scraped=scraped,
                                section_ratio=section_ratio, catalog_ratio=catalog_ratio)
+        if paths.staged_buckets.exists():
+            problems += check_buckets(load_json_file(paths.staged_buckets, "new requirement_buckets.json"))
     except GateError as exc:
         problems = [str(exc)]
     if problems:
@@ -460,7 +489,7 @@ def update(args, paths: Paths) -> int:
         f"{len(catalog_rows(new_catalog, 'new courses.json'))} courses)")
 
     promote(paths)
-    for name in ("soc.json", "courses.json"):
+    for name in STAGED_NAMES:
         (paths.staging / name).unlink(missing_ok=True)
     return EXIT_OK
 

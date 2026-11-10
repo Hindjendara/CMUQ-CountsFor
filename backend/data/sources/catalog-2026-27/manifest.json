@@ -1,0 +1,346 @@
+[
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/schoolofcomputerscience/undergraduatecomputerscience/computer-science-bs/",
+    "file": "majors/computer-science-bs.html",
+    "fetched_at": "2026-11-09T16:50:41Z",
+    "sha256": "c4d2353e29f61985bfde85b75883f95446119bf5a512f0aa29d28a74a0394a3f",
+    "title": "Computer Science, B.S. < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/schoolofcomputerscience/artificialintelligence/artificial-intelligence-bs/",
+    "file": "majors/artificial-intelligence-bs.html",
+    "fetched_at": "2026-11-09T16:50:45Z",
+    "sha256": "e29f7a16ffce3a8b35fa60382a865368b569b8cac888baf3cb899e7b5dee47c9",
+    "title": "Artificial Intelligence, B.S. < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/melloncollegeofscience/departmentofbiologicalsciences/biological-sciences-bs/",
+    "file": "majors/biological-sciences-bs.html",
+    "fetched_at": "2026-11-09T16:50:49Z",
+    "sha256": "4ac7c2d59e2fca9ae0e726057605bc24f2fb455e4acc47b2c0bd72fa1871addb",
+    "title": "Biological Sciences, B.S. < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/undergraduatebusinessadministrationprogram/business-administration-bs/",
+    "file": "majors/business-administration-bs.html",
+    "fetched_at": "2026-11-09T16:50:52Z",
+    "sha256": "4144edceef857b7d100523a60f6a2c082460fe9ef58583f149aa0f16344719ba",
+    "title": "Business Administration, B.S. < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/dietrichcollegeofhumanitiesandsocialsciences/informationsystems/information-systems-bs/",
+    "file": "majors/information-systems-bs.html",
+    "fetched_at": "2026-11-09T16:50:55Z",
+    "sha256": "ba044588a64f6064a164d6f8b52e79d97db508ae36a86359449abd41d85bdae2",
+    "title": "Information Systems, B.S. < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/schoolofcomputerscience/general-education/",
+    "file": "gen-ed/scs-general-education.html",
+    "fetched_at": "2026-11-09T16:50:58Z",
+    "sha256": "388bb3db7e13dc054c5b09d5b365882a653cf2292f5579da692639355955c22b",
+    "title": "SCS General Education < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/melloncollegeofscience/general-education/",
+    "file": "gen-ed/mcs-general-education.html",
+    "fetched_at": "2026-11-09T16:51:02Z",
+    "sha256": "b973f439b62a793fd43a1dfbf7cabb9d416538c97fb7ca5052330d9b32a6780c",
+    "title": "Mellon College of Science General Education < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/melloncollegeofscience/",
+    "file": "gen-ed/mcs-college.html",
+    "fetched_at": "2026-11-09T16:51:05Z",
+    "sha256": "4660b35760309ffbf86455092573e718444081b2528d52286968f136c6a4112e",
+    "title": "Mellon College of Science < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/dietrichcollegeofhumanitiesandsocialsciences/general-education/",
+    "file": "gen-ed/dietrich-general-education.html",
+    "fetched_at": "2026-11-09T16:51:09Z",
+    "sha256": "2f2e65f18fad724efed99926e01587e5d3163392400be53df0ff9cb070ac31d6",
+    "title": "Dietrich College General Education Program < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/universitycore/",
+    "file": "gen-ed/tepper-university-core.html",
+    "fetched_at": "2026-11-09T16:51:12Z",
+    "sha256": "98270850da772ad467dbb07adc0dd7f288425ba115bc6272acfd59eb923caaa6",
+    "title": "University Core < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/schoolofcomputerscience/scs-concentrations/",
+    "file": "related/scs-concentrations.html",
+    "fetched_at": "2026-11-09T16:51:15Z",
+    "sha256": "4dc8c97febc6f02bac71fae973548c14ca44592f66a9b0421b0e4e5fb3dfe7b8",
+    "title": "SCS Concentrations (for SCS students) < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/qatar/",
+    "file": "qatar/qatar.html",
+    "fetched_at": "2026-11-09T16:51:18Z",
+    "sha256": "7e5b91c9bab4004ed67aec224a0ead992f694d27c1488862518cd726c7c15731",
+    "title": "Carnegie Mellon University in Qatar < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/qatar/tech-entrepreneurship-minor/",
+    "file": "minors/tech-entrepreneurship-minor.html",
+    "fetched_at": "2026-11-09T16:51:22Z",
+    "sha256": "81f96267280467ba3deb116e59c6771bf56fb782b560a5249a35edda3b604fa6",
+    "title": "Tech Entrepreneurship, Minor (CMU-Q) < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/dietrichcollegeofhumanitiesandsocialsciences/departmentoflanguagesculturesappliedlinguistics/arabic-studies-minor/",
+    "file": "minors/arabic-studies-minor.html",
+    "fetched_at": "2026-11-09T16:51:25Z",
+    "sha256": "5ee30b2a671b43b8211b37a77206d5b6bb54c895205b8c91bb59fc33876abb75",
+    "title": "Arabic Studies, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/melloncollegeofscience/departmentofbiologicalsciences/biological-sciences-minor/",
+    "file": "minors/biological-sciences-minor.html",
+    "fetched_at": "2026-11-09T16:51:28Z",
+    "sha256": "64458cc3bfe7b0e78de854e178ec1db222761ef255ea7767d4cf2a3358fcb506",
+    "title": "Biological Sciences, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/minors/business-administration-minor/",
+    "file": "minors/business-administration-minor.html",
+    "fetched_at": "2026-11-09T16:51:31Z",
+    "sha256": "852ed788d76f375a8cba9e487a2b7a1430c2409efd32724245cf1d0a175963d8",
+    "title": "Business Administration, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/minors/business-analytics-optimization-minor/",
+    "file": "minors/business-analytics-optimization-minor.html",
+    "fetched_at": "2026-11-09T16:51:34Z",
+    "sha256": "42b482b2c1b69a5c92e85328c68abaa437293d63ccbec5b4950f5c32459c650d",
+    "title": "Business Analytics and Optimization, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/schoolofcomputerscience/minors/computational-biology-minor/",
+    "file": "minors/computational-biology-minor.html",
+    "fetched_at": "2026-11-09T16:51:37Z",
+    "sha256": "04d66a3181766c6cf6ba9f500b99b9f533ff9281d7bd894e119fda073c184789",
+    "title": "Computational Biology, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/schoolofcomputerscience/minors/computer-science-minor/",
+    "file": "minors/computer-science-minor.html",
+    "fetched_at": "2026-11-09T16:51:40Z",
+    "sha256": "5e7547ca3fafb86dd9567f4f25bbc607c896a00ed22987e9e029a5bf8fd7d1e7",
+    "title": "Computer Science, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/minors/economics-minor/",
+    "file": "minors/economics-minor.html",
+    "fetched_at": "2026-11-09T16:51:43Z",
+    "sha256": "99c8472aed142f1669316a369c6c1a738c754624df72bb2d8b009f78f314b855",
+    "title": "Economics, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/minors/financial-management-minor/",
+    "file": "minors/financial-management-minor.html",
+    "fetched_at": "2026-11-09T16:51:46Z",
+    "sha256": "39772ba353bfdb157343c9cab8136305570f6cc4e1954e50c9c8a8a6ea1ea576",
+    "title": "Financial Management, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/dietrichcollegeofhumanitiesandsocialsciences/departmentofhistory/history-minor/",
+    "file": "minors/history-minor.html",
+    "fetched_at": "2026-11-09T16:51:49Z",
+    "sha256": "45657bf0630c659b58314ffbee3d7b77272cc9b387a0fa5cbcd37f54c062ec2c",
+    "title": "History, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/melloncollegeofscience/departmentofmathematicalsciences/mathematical-sciences-minor/",
+    "file": "minors/mathematical-sciences-minor.html",
+    "fetched_at": "2026-11-09T16:51:52Z",
+    "sha256": "a4281aa758b6758452cfb9ebe73cc2ecc6b78cd001335c93ea830149c3843df6",
+    "title": "Mathematical Sciences, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/melloncollegeofscience/departmentofbiologicalsciences/neuroscience-minor/",
+    "file": "minors/neuroscience-minor.html",
+    "fetched_at": "2026-11-09T16:51:56Z",
+    "sha256": "3ed3ed240c0e9ad279017bd382f4a9268201ce6b595119f897e1523a93fa62de",
+    "title": "Neuroscience, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/dietrichcollegeofhumanitiesandsocialsciences/departmentofenglish/professional-writing-minor/",
+    "file": "minors/professional-writing-minor.html",
+    "fetched_at": "2026-11-09T16:51:59Z",
+    "sha256": "74e52de5fdebf20a4b8eb7bddfc5b186a8a3a2ae4aa55164579dd7018b19780f",
+    "title": "Professional Writing, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/dietrichcollegeofhumanitiesandsocialsciences/departmentofpsychology/psychology-minor/",
+    "file": "minors/psychology-minor.html",
+    "fetched_at": "2026-11-09T16:52:02Z",
+    "sha256": "56ea1cf585ba39528d38c1f025698e5be8c8ec00cb0fd64afbb4d9cc073f0254",
+    "title": "Psychology, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/dietrichcollegeofhumanitiesandsocialsciences/departmentofsocialanddecisionsciences/sociology-minor/",
+    "file": "minors/sociology-minor.html",
+    "fetched_at": "2026-11-09T16:52:05Z",
+    "sha256": "2ab62d6de3be3b4968d96b88bc87fbc06402f14adbaedba694ea5113b60bfc3d",
+    "title": "Sociology, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/minors/product-management-minor/",
+    "file": "minors/product-management-minor.html",
+    "fetched_at": "2026-11-10T12:22:53Z",
+    "sha256": "1138cd2723ef13e77b1d157d2fffc13c56bd56e222876ff02b5793488efe26dc",
+    "title": "Product Management, Minor < Carnegie Mellon University",
+    "catalog_year": "2026-2027"
+  },
+  {
+    "url": "https://www.cs.cmu.edu/education/undergraduate/humanities-and-arts-requirements",
+    "file": "offsite/scs-humanities-and-arts-requirements.html",
+    "fetched_at": "2026-11-09T16:52:08Z",
+    "sha256": "f40c0fe9d592d7069b09ce365c6121b6dc71aa1da2974689cef8e46a9a4c3cf6",
+    "title": "Humanities and Arts",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/education/undergraduate/science-and-engineering-reqs1",
+    "file": "offsite/scs-science-and-engineering-requirements.html",
+    "fetched_at": "2026-11-09T16:52:12Z",
+    "sha256": "3efa4705e156fea1c0403d4b9abe674ec844bb9edeabe90aec3735a8343b023d",
+    "title": "Science and Engineering",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-cat1",
+    "file": "offsite/scs-gen-ed-reqs-cat1.json",
+    "fetched_at": "2026-11-09T16:52:15Z",
+    "sha256": "26d5a43b89c99ac4850eb057f17bbbe139f2f63406b104f42e07b0705b92d1f1",
+    "title": "SCS general education list data: scs-gen-ed-reqs-cat1",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-cat2",
+    "file": "offsite/scs-gen-ed-reqs-cat2.json",
+    "fetched_at": "2026-11-09T16:52:19Z",
+    "sha256": "692f41ba12924287b322c8c65df97b2652625e549cc5a84417224b4f56d41c24",
+    "title": "SCS general education list data: scs-gen-ed-reqs-cat2",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-cat3",
+    "file": "offsite/scs-gen-ed-reqs-cat3.json",
+    "fetched_at": "2026-11-09T16:52:22Z",
+    "sha256": "337c67718df244cae77d76acec39dbc3a88b9e12e53a040576b70e0b1729036d",
+    "title": "SCS general education list data: scs-gen-ed-reqs-cat3",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-arts-additions",
+    "file": "offsite/scs-gen-ed-reqs-arts-additions.json",
+    "fetched_at": "2026-11-09T16:52:27Z",
+    "sha256": "5ad06f82075db34b6101b07f73070ca8d313eb3cdcdfdb8a12c1399fe32ba20f",
+    "title": "SCS general education list data: scs-gen-ed-reqs-arts-additions",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-arts-deletions",
+    "file": "offsite/scs-gen-ed-reqs-arts-deletions.json",
+    "fetched_at": "2026-11-09T16:52:31Z",
+    "sha256": "d4fc29ef98a887965d64790ad984dd1e8b092eba63f5722c06f666439f19248d",
+    "title": "SCS general education list data: scs-gen-ed-reqs-arts-deletions",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-sci-approved",
+    "file": "offsite/scs-gen-ed-reqs-sci-approved.json",
+    "fetched_at": "2026-11-09T16:52:34Z",
+    "sha256": "2307b495fcebbd68a6c55f597c237b99a94aee3263f7d3bf6dd9287655f848a8",
+    "title": "SCS general education list data: scs-gen-ed-reqs-sci-approved",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-lab-approved",
+    "file": "offsite/scs-gen-ed-reqs-lab-approved.json",
+    "fetched_at": "2026-11-09T16:52:37Z",
+    "sha256": "20e600e446e1586f9162a1178975f3bc820b061b4e69e525d925557922ca53aa",
+    "title": "SCS general education list data: scs-gen-ed-reqs-lab-approved",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cs.cmu.edu/rs-datasources/data-source/scs-gen-ed-reqs-sci-deletions",
+    "file": "offsite/scs-gen-ed-reqs-sci-deletions.json",
+    "fetched_at": "2026-11-09T16:52:40Z",
+    "sha256": "3448b5637d82a75f1fbff9c19e59a06a057df11299aa6394cda2f4f31a8fb7f8",
+    "title": "SCS general education list data: scs-gen-ed-reqs-sci-deletions",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cmu.edu/mcs/academics/undergrad/advising/course-planning/nontechnical-breadth-requirements",
+    "file": "offsite/mcs-nontechnical-breadth-requirements.html",
+    "fetched_at": "2026-11-09T16:52:43Z",
+    "sha256": "16a6fd79bc5cfef0475ff3058cea7c90ddb72d3f7017bb761c2465e1610db6d2",
+    "title": "Nontechnical Breadth Requirements | Mellon College of Science",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cmu.edu/dietrich/gened/",
+    "file": "offsite/dietrich-gened-home.html",
+    "fetched_at": "2026-11-09T16:52:47Z",
+    "sha256": "ed121385d6a3686e1752f6f0b85f03aa44703351d157fba63d26cd48716793e7",
+    "title": "Home - Dietrich College General Education Program - Dietrich College of Humanities and Social Sciences - Carnegie Mellon University",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cmu.edu/dietrich/gened/curriculum/index.html",
+    "file": "offsite/dietrich-gened-curriculum.html",
+    "fetched_at": "2026-11-09T16:52:53Z",
+    "sha256": "45759b797fbe510d808a1e4bfe637069109f85f5c4f1a89b7dc6f12c8ab34d8d",
+    "title": "Curriculum - Dietrich College General Education Program - Dietrich College of Humanities and Social Sciences - Carnegie Mellon University",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cmu.edu/dietrich/gened/curriculum/policies.html",
+    "file": "offsite/dietrich-gened-policies.html",
+    "fetched_at": "2026-11-09T16:52:56Z",
+    "sha256": "1cde2325fcd2ebab48e36dc4dfcc98fd09b7a9583a15c4acdab7e0b89b4a0ded",
+    "title": "General Education Policies - Dietrich College General Education Program - Dietrich College of Humanities and Social Sciences - Carnegie Mellon University",
+    "catalog_year": null
+  },
+  {
+    "url": "https://www.cmu.edu/dietrich/gened/course-options/index.html",
+    "file": "offsite/dietrich-gened-course-options.html",
+    "fetched_at": "2026-11-09T16:52:59Z",
+    "sha256": "eb129c71f28944fa0c66cd8c7b21b5cab1c1f6f3f357e8ef38935028c20d5f81",
+    "title": "Course Options - Dietrich College General Education Program - Dietrich College of Humanities and Social Sciences - Carnegie Mellon University",
+    "catalog_year": null
+  }
+]

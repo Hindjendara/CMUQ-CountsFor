@@ -2,7 +2,8 @@
 
 Small synthetic catalogs check each section, the order they run in and that a
 second run changes nothing. The last tests check the real overlay file against
-frontend/data/courses.json.
+frontend/data/courses.json. The rule_buckets section has its own tests in
+test_rule_buckets.py.
 """
 import copy
 import json
@@ -231,7 +232,9 @@ def test_overlay_paths_exist_in_catalog(real_courses):
 
 
 def test_overlay_file_lists_only_settled_entries():
-    assert set(OVERLAY_DOC) == {"description", "overlays", "remove_mappings", "qatar_visibility"}
+    assert set(OVERLAY_DOC) == {"description", "overlays", "rule_buckets", "remove_mappings",
+                                "qatar_visibility", "catalog_buckets"}
+    assert set(OVERLAY_DOC["catalog_buckets"]) == {"CS", "IS", "BA", "BS", "AI"}
     removals = {e["course_code"]: e["programs"] for e in OVERLAY_DOC["remove_mappings"]}
     assert removals == {"85-414": "all", "85-426": "all"}
     assert [(e["course_code"], e["rule"]) for e in OVERLAY_DOC["qatar_visibility"]] == [

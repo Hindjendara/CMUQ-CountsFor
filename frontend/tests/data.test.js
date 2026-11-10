@@ -233,16 +233,14 @@ test('getCourseMappings: IGI path shows leaf only, not parent breadcrumb', () =>
     IS: ['GenEd---Foundations---Intercultural and Global Inquiry'],
   }));
   assertEqual(m.IS[0].shortLabel, 'Intercultural and Global Inquiry');
-  assertEqual(m.IS[0].earlier, false);
 });
 
-test('getCourseMappings: carries the earlier requirement flag and reason', () => {
+test('getCourseMappings: a row from an older audit or a catalog rule counts like any other', () => {
   const course = makeCourse('70-213', { BA: ['BS in Business Administration---Business Electives'] });
-  course.requirements.BA[0].earlier = true;
-  course.requirements.BA[0].earlier_reason = 'older degree version';
+  course.requirements.BA[0].source = 'rule';
   const m = getCourseMappings(course);
-  assertEqual(m.BA[0].earlier, true);
-  assertEqual(m.BA[0].earlierReason, 'older degree version');
+  assertEqual(Object.keys(m.BA[0]).sort(), ['fullPath', 'isGenEd', 'parts', 'shortLabel']);
+  assertEqual(m.BA[0].shortLabel, 'Business Electives');
 });
 
 test('requirementLeafLabel: strips GenEd path to leaf', () => {
@@ -267,18 +265,17 @@ test('requirementLeafLabel: catalog bucket names show as they are; degree roots 
   assertEqual(formatRequirementPath('BS in Artificial Intelligence---Ethics Course'), 'AI Degree Requirements > Ethics Course');
 });
 
-// ── Requirement trees: catalog order, earlier rows, gen ed root ──
+// ── Requirement trees: catalog order, gen ed root ──
 
 function treeCatalog() {
   const row = (path, extra) => Object.assign({ requirement: path, type: path.startsWith('GenEd'), major: 'CS' }, extra || {});
   const core = 'BS in Computer Science---Computer Science---Computer Science Core';
   return [
     { course_code: '02-201', course_name: 'Programming for Scientists', units: 10,
-      requirements: { CS: [row('BS in Computer Science---Computer Science---Two School of Computer Science electives',
-        { earlier: true, earlier_reason: 'not covered by the 2026-27 rule' })] } },
+      requirements: { CS: [row('BS in Computer Science---Computer Science---Two School of Computer Science electives')] } },
     { course_code: '07-128', course_name: 'First Year Seminar', units: 3, requirements: { CS: [row(core)] } },
     { course_code: '07-129', course_name: 'Freshmen Immigration Course', units: 3,
-      requirements: { CS: [row(core, { earlier: true, earlier_reason: 'older degree version' })] } },
+      requirements: { CS: [row(core, { source: 'rule' })] } },
     { course_code: '15-122', course_name: 'Principles of Imperative Computation', units: 12, requirements: { CS: [row(core)] } },
     { course_code: '15-151', course_name: 'Mathematical Foundations for Computer Science', units: 12,
       requirements: { CS: [row('BS in Computer Science---Mathematics---All of the following Mathematics courses')] } },
@@ -297,12 +294,14 @@ test('normalizeTree: sibling buckets follow the catalog order of the rules', () 
   assertEqual(cs.children[0].rule.label, 'Take all');
 });
 
-test('buildRequirementTree: earlier rows keep their flag and list after current courses', () => {
+test('buildRequirementTree: every course on a bucket lists the same way, in catalog row order', () => {
   const tree = normalizeTree(buildRequirementTree(treeCatalog(), 'CS'), 'CS', 0);
   const core = findTreeNode(tree, 'BS in Computer Science---Computer Science---Computer Science Core');
-  assertEqual(core.courses.map(c => c.code), ['07-128', '15-122', '07-129']);
-  assertEqual(core.courses.map(c => c.earlier), [false, false, true]);
-  assertEqual(core.courses[2].earlierReason, 'older degree version');
+  // 07-129 comes from an older audit and its row carries a rule tag: neither is shown or sorted on.
+  assertEqual(core.courses.map(c => c.code), ['07-128', '07-129', '15-122']);
+  for (const c of core.courses) {
+    assertFalse('earlier' in c || 'earlierReason' in c || 'source' in c, `${c.code} carries no flag`);
+  }
 });
 
 test('splitTreeSections: the GenEd root is gen ed, the degree root is not', () => {

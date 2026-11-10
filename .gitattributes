@@ -2,3 +2,7 @@
 # also on Windows with core.autocrlf=true: a CR breaks bash, cron and systemd.
 *.sh text eol=lf
 deploy/** text eol=lf
+
+# Archived source pages are frozen evidence: keep their bytes exactly as
+# served (no line ending conversion), so they still match manifest.json.
+backend/data/sources/*/** -text
