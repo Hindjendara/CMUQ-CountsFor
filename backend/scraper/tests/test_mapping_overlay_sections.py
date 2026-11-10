@@ -286,7 +286,14 @@ def test_real_overlay_merge_result(real_courses):
         ("BS", "D. STEM Course", True),
         ("AI", "Science and Engineering", True),
     }
-    assert leaves("85-414") == set()
+    # 85-414 is Cognition in the Age of AI now: its old course's rows are 85-472's, and
+    # only the 2026-27 rules give it rows (its remove_mappings entry is gone). 85-426
+    # keeps none: remove_mappings wins over every rule.
+    assert leaves("85-414") == {
+        ("BA", "Scientific Reasoning", True),
+        ("BS", "E. Nontechnical Elective Courses", True),
+    }
+    assert all(r.get("source") == "rule" for reqs in rows["85-414"]["requirements"].values() for r in reqs)
     assert leaves("85-426") == set()
     assert leaves("85-151") == {
         ("CS", "Category 1: Cognition, Choice and Behavior", True),
@@ -310,6 +317,7 @@ def test_old_psychology_numbers_stay_removed(real_courses):
     rows = by_code(real_courses)
     for current in ("85-454", "85-411", "85-151", "85-418"):
         assert any(rows[current]["requirements"][m] for m in ("CS", "IS", "BA", "BS")), current
-    # 85-104 (Psychopathology until Fall 2025, now 85-190) is reused for a new course.
+    # 85-104 (Psychopathology until Fall 2025, now 85-190) is reused for a new course: none
+    # of Psychopathology's rows stay, only the rows the 2026-27 rules give the new course.
     assert rows["85-104"]["course_name"] == "Psychology and Society - Inside Out Program"
-    assert not any(rows["85-104"]["requirements"].values())
+    assert all(r.get("source") == "rule" for reqs in rows["85-104"]["requirements"].values() for r in reqs)

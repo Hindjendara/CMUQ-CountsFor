@@ -33,8 +33,9 @@ Discontinued courses ("x") keep their row and rows as past courses (85-426
 keeps none: remove_mappings).
 
 The result depends only on the provenance, the list and the catalog's current
-rows, so the script can run on a catalog that other changes reshaped (without
-"earlier" marks, with rule rows), and a second run changes nothing.
+rows, so the script can run on a catalog that other changes reshaped (with rule
+rows, which the rule step owns), and a second run changes nothing. A moved row
+is a plain {requirement, type, major} row: older audit rows count like the rest.
 
 Usage (from the repo root):
   python backend/scraper/migrate_psychology_numbers.py             # dry run: print the summary
@@ -188,8 +189,8 @@ def soc_info(soc: dict) -> tuple[set[str], dict[str, str]]:
 
 # ---------- Migration ----------
 
-def _send(target: dict, rows_by_program: dict[str, list[dict]], same_course: bool) -> int:
-    return sum(merge_requirement_rows(target, p, rows, same_course) for p, rows in rows_by_program.items())
+def _send(target: dict, rows_by_program: dict[str, list[dict]]) -> int:
+    return sum(merge_requirement_rows(target, p, rows) for p, rows in rows_by_program.items())
 
 
 def _group(pairs) -> dict[str, list[dict]]:
@@ -205,7 +206,7 @@ def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
     by_code = {c.get("course_code"): c for c in courses if c.get("course_code")}
     before = copy.deepcopy(by_code)
     log: dict = {"created": [], "removed": [], "sent": {}, "new_on_target": {}, "reused": {},
-                 "filled": {}, "status_taken": [], "before": before}
+                 "filled": {}, "before": before}
 
     # A number the SOC lists gets its row from reconcile, with the SOC's title.
     unreconciled = sorted(c for c in ren.new_codes if c not in by_code and c in (soc_running or set()))
@@ -233,7 +234,6 @@ def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
 
     # The old course's rows go to its new number; snapshot what each target had.
     targets_before = {z: {k: dict(r) for k, r in _row_keys(by_code.get(z)).items()} for z in ren.new_codes}
-    retired = set(ren.retired)
     for y in ren.renumbered:
         target = by_code[ren.new_number[y]]
         current = _row_keys(by_code.get(y))
@@ -242,9 +242,8 @@ def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
                    if k in current and not is_rule_row(current[k])]
         missing = [(r["program"], {"requirement": r["requirement"], "type": r["type"]})
                    for r in own if _key(r) not in current and not r["mirror"]]
-        # Only a retired number's rows were judged (2026-27) for this same course.
-        _send(target, _group(present), same_course=y in retired)
-        _send(target, _group(missing), same_course=False)
+        _send(target, _group(present))
+        _send(target, _group(missing))
         log["sent"][y] = len(present) + len(missing)
 
     # Reused numbers keep the rows of the course that has the number now.
@@ -256,7 +255,7 @@ def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
         z = ren.new_number[y]
         detail = {"z": z, "own_old": own_old, "created": y in log["created"],
                   "stayed": [], "moved": [], "absent": [], "final": []}
-        for program, reqs in (row.get("requirements") or {}).items():
+        for program, reqs in list((row.get("requirements") or {}).items()):
             keep_rows = []
             for r in reqs or []:
                 if not isinstance(r, dict):
@@ -278,6 +277,8 @@ def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
                 else:
                     detail["moved"].append((program, path, MOVED_EVIDENCE.get((y, program, path), GENERIC_MOVED)))
             reqs[:] = keep_rows
+            if not keep_rows and program not in BASE_PROGRAMS:
+                del row["requirements"][program]  # no empty AI list, as on every course without AI rows
         had = _row_keys(before.get(y))
         for r in prov.get(y, []):
             if _key(r) not in had and not r["mirror"]:
@@ -296,15 +297,12 @@ def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
     for y, detail in log["reused"].items():
         detail["final"] = sorted((p, path) for p, path, _ in _row_keys(by_code.get(y)))
 
-    # What each new number gained, and which of its rows lost an earlier mark.
+    # What each new number gained.
     for z, had in targets_before.items():
         now = _row_keys(by_code.get(z))
         gained = sorted(k for k in now if k not in had)
         if gained:
             log["new_on_target"][z] = gained
-        for k, r in had.items():
-            if r.get("earlier") and k in now and not now[k].get("earlier"):
-                log["status_taken"].append((z, k))
     return log
 
 
@@ -384,7 +382,7 @@ def entry_actions(ren: Renumbering, log: dict, courses: list[dict], titles: dict
                                                                          if d["created"] else "its row")
                              + (f"; {len(d['moved'])} old course rows left {old}" if d["moved"] else ""))
             elif sent:
-                parts.append(f"no {old} row (removed earlier); its {sent} old audit rows are on {new} "
+                parts.append(f"no {old} row (removed before the migration); its {sent} old audit rows are on {new} "
                              f"({gained} new there)")
             else:
                 parts.append(f"no {old} row and no old audit rows; nothing to move")
@@ -412,8 +410,6 @@ def summary_lines(ren: Renumbering, log: dict, courses: list[dict]) -> list[str]
         if d["moved"]:
             lines.append(f"  {y} lost (rows of the old course, now {d['z']}): "
                          + "; ".join(f"{p} {_leaf(path)}" for p, path, _ in d["moved"]))
-    for z, (p, path, _) in log["status_taken"]:
-        lines.append(f"  {z} {p} {_leaf(path)}: no longer earlier (the course counts there under its old number)")
     lines.append(f"catalog rows: {len(log['before'])} -> {len(courses)}")
     return lines
 

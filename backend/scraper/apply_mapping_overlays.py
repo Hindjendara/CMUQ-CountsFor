@@ -763,6 +763,16 @@ def apply_overlay_document(courses: list[dict], doc: dict, renumbering: Renumber
     return stats
 
 
+def include_note(item: str, renumbering: Renumbering | None = None) -> str:
+    """The NOTE text for a rule addition the catalog has no row for ("rule id:
+    code"). The 2026-27 lists may name a retired Psychology number next to its
+    new number (85-314 and 85-370), so the note then says where the course is now."""
+    code = item.rsplit(": ", 1)[-1]
+    if renumbering is not None and code in renumbering.retired:
+        return f"{item} (a retired Psychology number, now {renumbering.new_number[code]})"
+    return item
+
+
 def requirement_buckets_path(catalog_path: Path) -> Path:
     """requirement_buckets.json lives next to the catalog it describes."""
     return Path(catalog_path).with_name(REQUIREMENT_BUCKETS_NAME)
@@ -890,7 +900,7 @@ def main() -> int:
         for rule_id, counts in stats["rule_buckets"].items():
             print(f"  rule {rule_id}: matched={counts['matched']} added={counts['added']}")
         for item in stats["rule_includes_missing"]:
-            print(f"  NOTE rule bucket include: course not in the catalog: {item}")
+            print(f"  NOTE rule bucket include: course not in the catalog: {include_note(item, renumbering)}")
         for item in stats["overlay_codes_missing"]:
             print(f"  WARNING overlay: course not in the catalog, not created: {item}")
         for code in stats["remove_codes_missing"]:

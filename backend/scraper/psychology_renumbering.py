@@ -192,36 +192,22 @@ def is_rule_row(row: dict) -> bool:
     return isinstance(row, dict) and row.get("source") == RULE_SOURCE
 
 
-def _names_code(text, code: str) -> bool:
-    return bool(re.search(rf"(?<![\d-]){re.escape(code)}(?![\d])", str(text or "")))
-
-
-def merge_requirement_rows(target: dict, program: str, rows: Iterable[dict],
-                           same_course: bool = False) -> int:
+def merge_requirement_rows(target: dict, program: str, rows: Iterable[dict]) -> int:
     """Give target (a new number's row) the requirement rows of its course's
     old number; returns how many rows target did not have.
 
     A row target lacks is added as {requirement, type, major}: the mapping
-    moves with its course. A row target already has stays as it is, except
-    that it loses "source": "rule" (a moved mapping is not the rule step's to
-    remove).
-
-    same_course is for the current rows of a retired old number, whose 2026-27
-    status ("earlier") was judged for this same course under its old number.
-    An added row then keeps its earlier mark, unless earlier_reason names
-    target's number (the 2026-27 source lists the new number, so the row is
-    current there), and a row target already has loses its earlier mark when
-    the moved row has none (the 2026-27 source counts the course under its old
-    number). Without it, the status is not used: the old audit rows the
-    migration reads from git have none, and the rows of a reused number were
-    judged for the course that has the number now.
+    moves with its course and counts like every other row (older audit rows
+    count like the rest, decision of November 10, 2026). A row target already
+    has stays as it is, except that it loses "source": "rule" (a moved mapping
+    is not the rule step's to remove). An AI list is made only for a row it
+    gets: like every course without AI rows, target keeps no empty AI list.
     """
     reqs = target.get("requirements")
     if not isinstance(reqs, dict):
         reqs = target["requirements"] = {k: [] for k in PROGRAM_KEYS}
-    bucket = reqs.setdefault(program, [])
-    existing = {requirement_key(program, r): r for r in bucket if isinstance(r, dict)}
-    code = target.get("course_code")
+    bucket = reqs.get(program)
+    existing = {requirement_key(program, r): r for r in bucket or [] if isinstance(r, dict)}
     added = 0
     for row in rows:
         if not isinstance(row, dict) or not row.get("requirement"):
@@ -231,15 +217,10 @@ def merge_requirement_rows(target: dict, program: str, rows: Iterable[dict],
         if have is not None:
             if have.get("source") == RULE_SOURCE:
                 have.pop("source")
-            if same_course and have.get("earlier") and not row.get("earlier"):
-                have.pop("earlier", None)
-                have.pop("earlier_reason", None)
             continue
         new = {"requirement": row["requirement"], "type": bool(row.get("type")), "major": program}
-        if same_course and row.get("earlier") and not _names_code(row.get("earlier_reason"), code):
-            new["earlier"] = True
-            if row.get("earlier_reason"):
-                new["earlier_reason"] = row["earlier_reason"]
+        if bucket is None:
+            bucket = reqs[program] = []
         bucket.append(new)
         existing[key] = new
         added += 1
@@ -283,7 +264,7 @@ def retire_old_rows(courses: list[dict], by_code: dict[str, dict], ren: Renumber
         target = by_code[ren.new_number[old]]
         for program, reqs in (row.get("requirements") or {}).items():
             rows = [r for r in reqs or [] if not is_rule_row(r)]
-            moved += merge_requirement_rows(target, program, rows, same_course=True)
+            moved += merge_requirement_rows(target, program, rows)
         fill_text(target, row)
         removed.append(old)
     if removed:

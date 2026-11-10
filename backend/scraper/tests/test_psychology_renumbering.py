@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scrap
 
 import migrate_psychology_numbers as mpn  # noqa: E402
 import validate_soc_coverage as vsc  # noqa: E402
-from apply_mapping_overlays import OverlayError, apply_file, apply_overlay_document  # noqa: E402
+from apply_mapping_overlays import OverlayError, apply_file, apply_overlay_document, include_note  # noqa: E402
 from pipeline_paths import COURSES_JSON, MAPPING_OVERLAYS_JSON, PSYCHOLOGY_RENUMBERING_JSON, ROOT  # noqa: E402
 from psychology_renumbering import (  # noqa: E402
     SOURCE_LABEL,
@@ -89,13 +89,19 @@ def row(code, name, reqs=(), **extra):
     return out
 
 
-def keys(course, with_status=False):
+def keys(course, with_source=False):
     out = set()
     for program, reqs in course["requirements"].items():
         for r in reqs:
             k = (program, r["requirement"])
-            out.add(k + (bool(r.get("earlier")), r.get("source")) if with_status else k)
+            out.add(k + (r.get("source"),) if with_source else k)
     return out
+
+
+def plain_rows(courses):
+    """True when every requirement row is {requirement, type, major}, plus "source" on a rule row."""
+    return all(set(r) <= {"requirement", "type", "major", "source"}
+               for c in courses for reqs in c["requirements"].values() for r in reqs)
 
 
 def by_code(courses):
@@ -172,19 +178,17 @@ def catalog():
     """85-370 is the reused number; 85-314 and 85-102 are retired numbers with rows."""
     return [
         row("85-370", "Cognitive Neuropsychology Research Methods",
-            [req("CS", SE), req("CS", CAT1, earlier=True, earlier_reason="older degree version"),
-             req("BA", SR), req("CS", HAC, source="rule")], description="Lab course."),
+            [req("CS", SE), req("CS", CAT1), req("BA", SR), req("CS", HAC, source="rule")],
+            description="Lab course."),
         row("85-413", "Perception", [req("CS", CAT1)]),
         row("85-314", "Cognitive Neuroscience Research Methods", [req("BA", SR), req("BS", NTE)],
             offered=["S21", "S25"]),
-        row("85-100", "Introduction to Psychology", [req("BA", SR, earlier=True, earlier_reason="older degree version")],
-            qatar_only=True),
+        row("85-100", "Introduction to Psychology", [req("BA", SR)], qatar_only=True),
         row("85-102", "Introduction to Psychology",
-            [req("IS", SS), req("BA", SR), req("CS", CAT1, earlier=True, earlier_reason="renumbered as 85-100"),
-             req("CS", HAC, source="rule")],
+            [req("IS", SS), req("BA", SR), req("CS", CAT1), req("CS", HAC, source="rule")],
             description="The world is a crazy, confusing place.", offered=["S18", "M25"]),
         row("85-426", "Reverse Engineering Brains and Machines"),
-        row("85-294", "Teaching Assistantship", offered=["S24", "F25"]),
+        row("85-294", "Teaching Assistantship", [req("AI", HAC, source="rule")], offered=["S24", "F25"]),
     ]
 
 
@@ -193,11 +197,10 @@ def test_retired_number_moves_to_its_new_number_and_is_deleted(ren, catalog):
     rows = by_code(catalog)
     assert "85-102" not in rows and "85-314" not in rows and "85-294" not in rows
     assert stats["renumbering_removed"] == ["85-102", "85-294", "85-314"]
-    # 85-102's rows are 85-100's now: the earlier mark of the same course under its
-    # old number counts there, the CS row the 2026-27 list gives 85-100 is current,
-    # and the rule row is left to the rule step.
-    assert keys(rows["85-100"], True) == {("BA", SR, False, None), ("IS", SS, False, None),
-                                          ("CS", CAT1, False, None)}
+    # 85-102's rows are 85-100's now, as plain rows that count like the rest; the
+    # rule row is left to the rule step.
+    assert keys(rows["85-100"], True) == {("BA", SR, None), ("IS", SS, None), ("CS", CAT1, None)}
+    assert plain_rows(catalog)
     assert rows["85-100"]["description"] == "The world is a crazy, confusing place."
     assert rows["85-100"]["qatar_only"] is True
 
@@ -223,6 +226,8 @@ def test_missing_new_number_rows_come_from_the_list(ren, catalog):
         "requirements": {"CS": [], "IS": [], "BA": [], "BS": []}, "soc_sections": [],
         "offerings": [], "source": SOURCE_LABEL,
     }
+    # 85-294 had only an AI rule row: it is not moved, and 85-501 gets no empty AI list.
+    assert "AI" not in rows["85-501"]["requirements"]
     assert rows["85-459"]["course_name"] == "Emotion and Motivation" and rows["85-459"]["units"] == 0
     assert rows["85-459"]["offered"] == []
     assert keys(rows["85-426"]) == set()  # discontinued: kept as it is
@@ -246,6 +251,15 @@ def test_overlay_file_may_not_name_a_retired_number(ren, catalog):
     with pytest.raises(OverlayError, match="85-102"):
         apply_overlay_document(catalog, doc, ren)
     assert catalog == before
+
+
+def test_a_rule_naming_a_retired_number_says_where_the_course_is(ren):
+    # The 2026-27 SCS lists name 85-314 next to 85-370, its new number; the daily
+    # step deletes the 85-314 row, so the rule's note points at 85-370.
+    assert include_note("cs-science-engineering: 85-314", ren) == (
+        "cs-science-engineering: 85-314 (a retired Psychology number, now 85-370)")
+    assert include_note("cs-science-engineering: 19-440", ren) == "cs-science-engineering: 19-440"
+    assert include_note("cs-science-engineering: 85-314") == "cs-science-engineering: 85-314"
 
 
 def test_covered_by_new_number(ren):
@@ -340,24 +354,19 @@ def provenance():
 
 
 def migration_catalog():
-    """As the 2026-27 bucket work left it: 85-370 still has Perception's rows (two of
-    them marked earlier) next to the rows the 2026-27 lists give it."""
+    """As the 2026-27 bucket work left it: 85-370 still has Perception's rows (from
+    the older audits) next to the rows the 2026-27 lists give it."""
     return [
         row("85-370", "Cognitive Neuropsychology Research Methods", [
-            req("CS", CAT1, earlier=True, earlier_reason="older degree version"),
-            req("CS", HAC, earlier=True, earlier_reason="not covered by the 2026-27 rule"),
-            req("CS", SE), req("CS", LAB), req("BA", SR), req("BS", NTE),
-            req("AI", HAC, earlier=True, earlier_reason="not covered by the 2026-27 rule"),
-            req("AI", SE), req("AI", CAT1A, earlier=True, earlier_reason="older degree version"),
+            req("CS", CAT1), req("CS", HAC), req("CS", SE), req("CS", LAB), req("BA", SR), req("BS", NTE),
+            req("AI", HAC), req("AI", SE), req("AI", CAT1A),
         ]),
         row("85-413", "Perception", [req("CS", CAT1), req("BA", SR)]),
         row("85-314", "Cognitive Neuroscience Research Methods", [req("BA", SR), req("BS", NTE), req("CS", SE)],
             offered=["S21", "S25"], description="Lab course."),
-        row("85-100", "Introduction to Psychology", [req("CS", CAT1), req("CS", HAC),
-                                                     req("BA", SR, earlier=True, earlier_reason="older degree version")]),
+        row("85-100", "Introduction to Psychology", [req("CS", CAT1), req("CS", HAC), req("BA", SR)]),
         row("85-102", "Introduction to Psychology", [
-            req("CS", CAT1, earlier=True, earlier_reason="renumbered as 85-100"), req("CS", HAC),
-            req("IS", SS), req("BA", SR), req("AI", HAC)]),
+            req("CS", CAT1), req("CS", HAC), req("IS", SS), req("BA", SR), req("AI", HAC)]),
     ]
 
 
@@ -379,8 +388,9 @@ def test_migration_moves_rows_by_course(ren):
     assert rows["85-413"]["description"] == ""  # a reused number's text stays with its number
     assert {(p, path) for p, path, _ in log["reused"]["85-370"]["moved"]} == {
         ("CS", CAT1), ("CS", HAC), ("AI", HAC), ("AI", CAT1A)}
-    # 85-102 counted for BA under its old number, so 85-100's row is no longer earlier.
-    assert ("BA", SR, False, None) in keys(rows["85-100"], True)
+    # Moved rows are plain rows: they count like the rest.
+    assert ("BA", SR, None) in keys(rows["85-100"], True)
+    assert plain_rows(courses)
     assert log["created"] == ["85-501", "85-459"]
     assert rows["85-501"]["source"] == SOURCE_LABEL
 
@@ -393,14 +403,9 @@ def test_migration_twice_and_on_a_reshaped_catalog(ren):
     assert courses == once
     assert log["created"] == [] and log["removed"] == []
 
-    # Another branch drops the earlier marks and adds rule rows: same rows, and
-    # rule rows stay where they are.
+    # A catalog with rule rows (the rule step's): same rows, and rule rows stay
+    # where they are.
     reshaped = migration_catalog()
-    for c in reshaped:
-        for reqs in c["requirements"].values():
-            for r in reqs:
-                r.pop("earlier", None)
-                r.pop("earlier_reason", None)
     by_code(reshaped)["85-370"]["requirements"]["BS"].append(req("BS", "GenEd---Rule Bucket", source="rule"))
     mpn.migrate(reshaped, ren, provenance())
     rows = by_code(reshaped)
@@ -461,9 +466,12 @@ def test_catalog_follows_the_list(real_rows):
     assert real_rows["85-104"]["course_name"] == "Psychology and Society - Inside Out Program"
     assert real_rows["85-151"]["offered"] == ["F20", "F21", "M23", "S24", "M24", "M25"]
     assert real_rows["85-100"]["qatar_only"] is True
-    assert keys(real_rows["85-414"]) == set()
+    # 85-414's old course's rows are 85-472's; it has only the rows the rule step owns.
+    assert {s for *_, s in keys(real_rows["85-414"], True)} == {"rule"}
     assert {("BA", SR), ("BS", NTE)} <= keys(real_rows["85-472"])
     assert keys(real_rows["85-426"]) == set()
+    # A course has an AI list only when it has AI rows, also where the renumbering moved rows.
+    assert not [c for c, r in real_rows.items() if "AI" in r["requirements"] and not r["requirements"]["AI"]]
 
 
 def test_overlay_file_names_no_retired_number():

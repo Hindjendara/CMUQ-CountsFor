@@ -434,8 +434,11 @@ def test_rule_rows_follow_the_catalog_decisions(real_courses):
         return any(r["requirement"].endswith("---" + leaf) for r in rows_of[code].get(prog, []))
 
     assert has("85-458", "BA", "Scientific Reasoning")        # a Doha psychology course, by the 85-102 rule
-    for code in ("85-414", "85-426"):                          # explicit removals win over every rule
-        assert not any(rows_of[code].values()), code
+    assert not any(rows_of["85-426"].values())                 # an explicit removal wins over every rule
+    # 85-414 (Cognition in the Age of AI since the renumbering) needs no removal: the rules
+    # count it like any other course, and its old course's rows are 85-472's.
+    assert has("85-414", "BA", "Scientific Reasoning")
+    assert all(r.get("source") == "rule" for reqs in rows_of["85-414"].values() for r in reqs)
     ai_scs = [c["course_code"] for c in real_courses for r in c["requirements"].get("AI", [])
               if r["requirement"] == AI_SCS]
     assert ai_scs and all(int(code[3:]) < 600 for code in ai_scs)
