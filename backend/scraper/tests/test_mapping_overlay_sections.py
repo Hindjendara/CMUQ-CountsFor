@@ -90,6 +90,20 @@ def test_remove_mappings_by_program_and_all():
     assert stats["mappings_removed"] == 2
 
 
+def test_removing_the_ai_rows_leaves_no_empty_ai_list():
+    courses = catalog()
+    rows = by_code(courses)
+    rows["85-110"]["requirements"]["AI"] = [req("AI", HA)]
+    rows["85-170"]["requirements"]["AI"] = []
+    doc = {"remove_mappings": [{"course_code": "85-110", "programs": ["AI"]},
+                               {"course_code": "85-170", "programs": "all"}]}
+    stats = apply_overlay_document(courses, doc)
+    assert set(rows["85-110"]["requirements"]) == {"CS", "IS", "BA", "BS"}
+    assert req_keys(rows["85-110"]) == {("CS", HA, True), ("IS", SS, True)}
+    assert set(rows["85-170"]["requirements"]) == {"CS", "IS", "BA", "BS"}
+    assert stats["mappings_removed"] == 2
+
+
 def test_remove_mappings_wins_over_overlays():
     courses = catalog()
     doc = {
@@ -238,7 +252,9 @@ def test_overlay_file_lists_only_settled_entries():
     assert set(OVERLAY_DOC["catalog_buckets"]) == {"CS", "IS", "BA", "BS", "AI"}
     removals = {e["course_code"]: e["programs"] for e in OVERLAY_DOC["remove_mappings"]}
     # 85-414 needs no entry since the renumbering migration: its old course's rows are 85-472's.
-    assert removals == {"85-426": "all"}
+    # 03-351 is cross-listed with 02-262: the SCS Science and Engineering rule rules it out,
+    # and AI keeps only what its own lists state (its CS, BA and BS rows stay).
+    assert removals == {"85-426": "all", "03-351": ["AI"]}
     assert [(e["course_code"], e["rule"]) for e in OVERLAY_DOC["qatar_visibility"]] == [
         ("85-100", "show_only_if_offered_qatar"),
     ]
@@ -295,6 +311,7 @@ def test_real_overlay_merge_result(real_courses):
     }
     assert all(r.get("source") == "rule" for reqs in rows["85-414"]["requirements"].values() for r in reqs)
     assert leaves("85-426") == set()
+    assert "AI" not in rows["03-351"]["requirements"] and rows["03-351"]["requirements"]["CS"]
     assert leaves("85-151") == {
         ("CS", "Category 1: Cognition, Choice and Behavior", True),
         ("CS", "C. Humanities and Arts Electives", True),

@@ -32,10 +32,21 @@ number the Schedule of Classes lists must already have its row from reconcile.
 Discontinued courses ("x") keep their row and rows as past courses (85-426
 keeps none: remove_mappings).
 
-The result depends only on the provenance, the list and the catalog's current
-rows, so the script can run on a catalog that other changes reshaped (with rule
-rows, which the rule step owns), and a second run changes nothing. A moved row
-is a plain {requirement, type, major} row: older audit rows count like the rest.
+The offered history before Fall 2025 (history_before) also belongs to the
+course that had the number then (correct_history). Each new number gets the
+provenance history of its old number, and of the old numbers the 2026-11-09
+cleanup merged into it (EARLIER_MERGES): 85-370 gets 85-314's, 85-413 gets old
+85-370's (Perception), 85-100 gets 85-102's. A reused number keeps none of its
+own history before Fall 2025, which is its old course's. Semesters from Fall
+2025 on are the SOC's and stay. On a row the SOC created (soc_ingested),
+reconcile rebuilds every semester soc.json holds, so the history leaves those
+semesters out (M25, which soc.json holds as malformed data only).
+
+The result depends only on the provenance, the list, the catalog's current
+rows and the semesters soc.json holds, so the script can run on a catalog that
+other changes reshaped (with rule rows, which the rule step owns), and a second
+run changes nothing. A moved row is a plain {requirement, type, major} row:
+older audit rows count like the rest.
 
 Usage (from the repo root):
   python backend/scraper/migrate_psychology_numbers.py             # dry run: print the summary
@@ -62,6 +73,7 @@ from psychology_renumbering import (  # noqa: E402
     Renumbering,
     create_missing_rows,
     default_path,
+    history_before,
     is_rule_row,
     load_renumbering,
     merge_requirement_rows,
@@ -75,6 +87,10 @@ PROVENANCE_COMMIT = "79e29ec"
 PROVENANCE_FILE = "data/courses.json"  # the layout before frontend/ and backend/
 RENAMES_JSON = BACKEND_DATA_DIR / "requirement_path_renames.json"
 BASE_PROGRAMS = ("CS", "IS", "BA", "BS")
+# Old numbers the 2026-11-09 cleanup merged into their current number that the
+# department's list does not name (README 14.6, approved that day as the same
+# course): their history before Fall 2025 is the current number's too.
+EARLIER_MERGES = {"85-253": "85-190", "85-261": "85-190"}
 
 CS_CATEGORY_1 = "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior"
 AI_CATEGORY_1A = "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1A: Cognitive Studies"
@@ -165,6 +181,81 @@ def provenance_rows(old_courses: list[dict], renames: dict, codes: set[str]) -> 
     return out
 
 
+def provenance_history(old_courses: list[dict], codes: set[str]) -> dict[str, list[str]]:
+    """code -> its offered semesters before Fall 2025 in the provenance, oldest first, each once."""
+    out: dict[str, list[str]] = {}
+    for course in old_courses:
+        code = normalize_course_code(course.get("course_code"))
+        if code in codes:
+            out[code] = history_before(out.get(code, []) + list(course.get("offered") or []))
+    return out
+
+
+def history_sources(ren: Renumbering) -> dict[str, list[str]]:
+    """new number -> the old numbers whose history before Fall 2025 is that course's:
+    its old number on the list (when it is another code) and EARLIER_MERGES."""
+    out: dict[str, list[str]] = {}
+    for code in ren.new_codes:
+        old = ren.old_number.get(code)
+        if old and old != code:
+            out.setdefault(code, []).append(old)
+    for old, new in EARLIER_MERGES.items():
+        out.setdefault(new, []).append(old)
+    return out
+
+
+def history_codes(ren: Renumbering) -> set[str]:
+    """Every code whose provenance history correct_history reads."""
+    return {old for olds in history_sources(ren).values() for old in olds}
+
+
+def correct_history(courses: list[dict], ren: Renumbering, history: dict[str, list[str]],
+                    soc_held: dict[str, set[str]] | None = None) -> dict[str, tuple[list, list]]:
+    """Give each new number the offered history of its course before Fall 2025 (in place).
+
+    history: provenance_history of history_codes(ren). A new number's history
+    before Fall 2025 becomes that of its sources (history_sources), plus what
+    it has already, except on a reused number, whose own history before Fall
+    2025 is its old course's (that history goes to the old course's new number,
+    whose source it is). Semesters from Fall 2025 on stay in their order.
+    soc_held: code -> the semesters reconcile rebuilds from soc.json on that row
+    (a row the SOC created); they are left out of the history, as reconcile
+    would drop them. Returns {code: (offered before, offered after)} for the
+    rows that changed.
+    """
+    by_code = {c.get("course_code"): c for c in courses if c.get("course_code")}
+    reused = set(ren.reused)
+    changed: dict[str, tuple[list, list]] = {}
+    for code, olds in history_sources(ren).items():
+        row = by_code.get(code)
+        if row is None:
+            continue
+        offered = list(row.get("offered") or [])
+        before = history_before(offered)
+        want = set() if code in reused else set(before)
+        for old in olds:
+            want |= set(history.get(old) or [])
+        if row.get("soc_ingested"):
+            want -= set((soc_held or {}).get(code) or ())
+        if set(before) == want:
+            continue  # nothing to correct: the list keeps its order
+        row["offered"] = history_before(want) + [s for s in offered if s not in set(before)]
+        changed[code] = (offered, row["offered"])
+    return changed
+
+
+def soc_held_semesters(soc: dict, courses: list[dict]) -> dict[str, set[str]]:
+    """code -> the semesters reconcile rebuilds from soc.json on a row the SOC
+    created (soc_ingested): every semester soc.json holds, except those where
+    the course appears only as ignored malformed data. A row soc.json does not
+    list keeps its offered list unchanged (reconcile_offerings.reconcile_file)."""
+    from reconcile_offerings import soc_presence  # noqa: E402
+    held = set(soc.get("semesters") or {})
+    present, ignored_only = soc_presence(soc)
+    return {c["course_code"]: held - ignored_only.get(c["course_code"], set())
+            for c in courses if c.get("soc_ingested") and c.get("course_code") in present}
+
+
 def _key(row: dict) -> tuple:
     return (row["program"], row["requirement"], bool(row["type"]))
 
@@ -201,12 +292,17 @@ def _group(pairs) -> dict[str, list[dict]]:
 
 
 def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
-            soc_running: set[str] | None = None) -> dict:
-    """Apply the list to courses (in place). Returns what happened, per code."""
+            soc_running: set[str] | None = None, history: dict[str, list[str]] | None = None,
+            soc_held: dict[str, set[str]] | None = None) -> dict:
+    """Apply the list to courses (in place). Returns what happened, per code.
+
+    With history (provenance_history), the offered history before Fall 2025
+    follows its course too (correct_history, with soc_held from soc.json).
+    """
     by_code = {c.get("course_code"): c for c in courses if c.get("course_code")}
     before = copy.deepcopy(by_code)
     log: dict = {"created": [], "removed": [], "sent": {}, "new_on_target": {}, "reused": {},
-                 "filled": {}, "before": before}
+                 "filled": {}, "history": {}, "before": before}
 
     # A number the SOC lists gets its row from reconcile, with the SOC's title.
     unreconciled = sorted(c for c in ren.new_codes if c not in by_code and c in (soc_running or set()))
@@ -303,6 +399,10 @@ def migrate(courses: list[dict], ren: Renumbering, prov: dict[str, list[dict]],
         gained = sorted(k for k in now if k not in had)
         if gained:
             log["new_on_target"][z] = gained
+
+    # The offered history before Fall 2025 follows its course.
+    if history is not None:
+        log["history"] = correct_history(courses, ren, history, soc_held)
     return log
 
 
@@ -410,6 +510,10 @@ def summary_lines(ren: Renumbering, log: dict, courses: list[dict]) -> list[str]
         if d["moved"]:
             lines.append(f"  {y} lost (rows of the old course, now {d['z']}): "
                          + "; ".join(f"{p} {_leaf(path)}" for p, path, _ in d["moved"]))
+    history = log.get("history") or {}
+    lines.append(f"offered history before Fall 2025 corrected on {len(history)} rows")
+    for code, (was, now) in sorted(history.items()):
+        lines.append(f"  {code}: {' '.join(history_before(was)) or 'none'} -> {' '.join(history_before(now)) or 'none'}")
     lines.append(f"catalog rows: {len(log['before'])} -> {len(courses)}")
     return lines
 
@@ -497,12 +601,16 @@ def main(argv: list[str] | None = None) -> int:
     data = load_json(args.catalog)
     courses = data["courses"] if isinstance(data, dict) else data
     codes = set(ren.new_number) | set(ren.new_codes)
-    prov = provenance_rows(load_provenance(args.provenance), load_json(args.renames), codes)
-    soc_running, titles = (soc_info(load_json(args.soc)) if Path(args.soc).exists() else (None, {}))
+    old_courses = load_provenance(args.provenance)
+    prov = provenance_rows(old_courses, load_json(args.renames), codes)
+    history = provenance_history(old_courses, history_codes(ren))
+    soc = load_json(args.soc) if Path(args.soc).exists() else None
+    soc_running, titles = soc_info(soc) if soc is not None else (None, {})
+    soc_held = soc_held_semesters(soc, courses) if soc is not None else None
     overlays = load_json(args.overlays) if Path(args.overlays).exists() else None
 
     try:
-        log = migrate(courses, ren, prov, soc_running)
+        log = migrate(courses, ren, prov, soc_running, history, soc_held)
     except MigrationError as exc:
         print(f"ERROR: {exc} (catalog not saved)")
         return 1

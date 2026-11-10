@@ -682,9 +682,14 @@ def apply_remove_mappings(by_code: dict[str, dict], removed: dict[str, set[str]]
         if not isinstance(reqs, dict):
             continue
         for program in sorted(programs):
-            if reqs.get(program):
-                stats["mappings_removed"] += len(reqs[program])
-                reqs[program] = []
+            rows = reqs.get(program)
+            if rows:
+                stats["mappings_removed"] += len(rows)
+            if program in BASE_PROGRAM_KEYS:
+                if rows:
+                    reqs[program] = []
+            elif program in reqs:
+                del reqs[program]  # like every course without AI rows: no empty AI list
     return stats
 
 
@@ -888,7 +893,8 @@ def main() -> int:
         merged = ", ".join(f"{c}->{renumbering.new_number[c]}" for c in stats["renumbering_removed"])
         print(
             f"{path.name}: renumbering created={len(stats['renumbering_created'])} "
-            f"merged={len(stats['renumbering_removed'])}{f' ({merged})' if merged else ''}"
+            f"merged={len(stats['renumbering_removed'])}{f' ({merged})' if merged else ''} "
+            f"sections={stats['renumbering_sections_moved']}"
         )
         print(
             f"{path.name}: normalized={stats['codes_normalized']} "

@@ -482,7 +482,7 @@
         "min_number": 200,
         "max_number": 599,
         "min_units_per_course": 9,
-        "include": ["02-180", "05-180", "07-180", "16-180"],
+        "include": ["02-180", "05-180", "07-180", "16-180", "07-599"],
         "exclude": [
           "02-201", "02-223", "02-250", "02-261", "05-200", "07-402",
           "11-423", "15-351", "16-211", "16-223", "16-224", "16-397",
@@ -492,7 +492,7 @@
       "source": [
         {"file": "backend/data/sources/catalog-2026-27/majors/artificial-intelligence-bs.html", "heading": "Curriculum > School of Computer Science Electives > Two general computer science electives"}
       ],
-      "note": "The AI page's own lists: two of the first year mini courses 02-180, 05-180, 07-180 and 16-180 together count as one elective (15-195 and 15-295 are not on the AI page). Graduate courses (600 and above) are not added: the page gives a floor (200-level or above), and some SCS undergraduate and graduate courses might not be allowed based on course content, so an advisor decides on a graduate course; add one in the admin course editor."
+      "note": "The AI page's own lists: two of the first year mini courses 02-180, 05-180, 07-180 and 16-180 together count as one elective (15-195 and 15-295 are not on the AI page). The page also counts up to 18 units of 07-599, the SCS Honors Undergraduate Research Thesis, toward SCS elective requirements (9 per semester for 2 semesters at most), so it is an addition: the Schedule of Classes lists it with variable units, which the 9 unit minimum cannot read. Graduate courses (600 and above) are not added: the page gives a floor (200-level or above), and some SCS undergraduate and graduate courses might not be allowed based on course content, so an advisor decides on a graduate course; add one in the admin course editor."
     },
     {
       "id": "ai-science-engineering",
@@ -701,7 +701,8 @@
     }
   ],
   "remove_mappings": [
-    {"course_code": "85-426", "programs": "all", "reason": "The mappings came from Learning in Humans and Machines, which the Psychology department's renumbering list discontinues; the SOC now lists 85-426 as Reverse Engineering Brains and Machines. Left unmapped until the user confirms."}
+    {"course_code": "85-426", "programs": "all", "reason": "The mappings came from Learning in Humans and Machines, which the Psychology department's renumbering list discontinues; the SOC now lists 85-426 as Reverse Engineering Brains and Machines. Left unmapped until the user confirms."},
+    {"course_code": "03-351", "programs": ["AI"], "reason": "Cross-listed with 02-262, which has its own AI Science and Engineering and Laboratory rows. The SCS Science and Engineering rule rules 03-351 out (ai-science-engineering exclude), and AI keeps only what its own lists state; the row was a copy of an older audit CS row. Its CS, BA and BS rows stay."}
   ],
   "qatar_visibility": [
     {"course_code": "85-100", "rule": "show_only_if_offered_qatar", "note": "85-100 is not in the H&SS sheet, so it shows only if the Schedule of Classes lists it for Qatar."}

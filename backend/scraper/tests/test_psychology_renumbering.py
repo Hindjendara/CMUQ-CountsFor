@@ -219,9 +219,11 @@ def test_missing_new_number_rows_come_from_the_list(ren, catalog):
     stats = apply_renumbering(catalog, ren)
     rows = by_code(catalog)
     assert stats["renumbering_created"] == ["85-501", "85-459"]
+    # The list gives 85-501 85-294's history before Fall 2025 (S24); deleting 85-294
+    # gives it the rest of 85-294's offered semesters (F25).
     assert rows["85-501"] == {
         "course_code": "85-501", "course_name": "Teaching Assistantship", "department": "85",
-        "units": 0, "description": "", "prerequisites": "", "offered": ["S24"],
+        "units": 0, "description": "", "prerequisites": "", "offered": ["S24", "F25"],
         "offered_qatar": False, "offered_pitts": False,
         "requirements": {"CS": [], "IS": [], "BA": [], "BS": []}, "soc_sections": [],
         "offerings": [], "source": SOURCE_LABEL,
@@ -238,7 +240,64 @@ def test_daily_step_twice_changes_nothing(ren, catalog):
     once = copy.deepcopy(catalog)
     stats = apply_renumbering(catalog, ren)
     assert catalog == once
-    assert stats == {"renumbering_created": [], "renumbering_removed": [], "renumbering_rows_moved": 0}
+    assert stats == {"renumbering_created": [], "renumbering_removed": [], "renumbering_rows_moved": 0,
+                     "renumbering_sections_moved": 0}
+
+
+def offering(sem, sec, campus="Pittsburgh", days="MW 10:00AM-11:20AM", units="9"):
+    return {"semester": sem, "semester_code": sem, "campus": campus, "section": sec, "modality": "in_person",
+            "units": units, "days_times": days, "instructor": "", "location": "", "delivery_mode_raw": ""}
+
+
+def sections(course):
+    return [(o["semester_code"], o["campus"], o["section"], o["days_times"]) for o in course["offerings"]]
+
+
+def test_a_retired_row_gives_its_sections_and_semesters_to_its_new_number(ren, catalog):
+    """The SOC still lists 85-294 next to 85-501 (A in F25 and F26, and S26 under
+    85-294 only): the sections the new number lacks join it, once each, newest
+    semester first, each next to its own lecture; the campus flags and offered follow."""
+    rows = by_code(catalog)
+    rows["85-294"]["offerings"] = [offering("S26", "A"), offering("F25", "A"), offering("F25", "A", days="F 01:00PM-01:50PM"),
+                                   offering("F25", "W", "Qatar")]
+    rows["85-294"]["offered"] = ["S24", "F25", "S26"]
+    target = row("85-501", "Teaching Assistantship", offered=["F25", "F26"], soc_ingested=True,
+                 offerings=[offering("F26", "Lec 1"), offering("F26", "B"), offering("F25", "Lec 1"), offering("F25", "A")])
+    catalog.append(target)
+    stats = apply_renumbering(catalog, ren)
+    assert stats["renumbering_sections_moved"] == 2  # S26 A and F25 W; 85-501 has F25 A already
+    got = by_code(catalog)["85-501"]
+    assert sections(got) == [
+        ("F26", "Pittsburgh", "Lec 1", "MW 10:00AM-11:20AM"),
+        ("F26", "Pittsburgh", "B", "MW 10:00AM-11:20AM"),
+        ("S26", "Pittsburgh", "A", "MW 10:00AM-11:20AM"),
+        ("F25", "Pittsburgh", "Lec 1", "MW 10:00AM-11:20AM"),
+        ("F25", "Pittsburgh", "A", "MW 10:00AM-11:20AM"),
+        ("F25", "Qatar", "W", "MW 10:00AM-11:20AM"),
+    ]
+    assert got["offered_qatar"] is True and got["offered_pitts"] is True
+    assert [(s["semester_code"], s["section"]) for s in got["soc_sections"]] == [
+        (o["semester_code"], o["section"]) for o in got["offerings"]]
+    assert got["offered"] == ["S24", "F25", "S26", "F26"]
+    once = copy.deepcopy(catalog)
+    apply_renumbering(catalog, ren)
+    assert catalog == once
+
+
+def test_merged_sections_keep_each_section_with_its_own_lecture():
+    from psychology_renumbering import merge_offerings
+    # A lone section of the old number must not join the new number's lecture.
+    target = row("85-503", "Internship", offerings=[offering("M26", "Lec 1"), offering("M26", "A")])
+    assert merge_offerings(target, {"offerings": [offering("M26", "I")]}) == 1
+    assert [o["section"] for o in target["offerings"]] == ["I", "Lec 1", "A"]
+    # The old number's lecture keeps its own sections after the new number's lone section.
+    target = row("85-503", "Internship", offerings=[offering("M26", "B")])
+    merge_offerings(target, {"offerings": [offering("M26", "Lec 2"), offering("M26", "C")]})
+    assert [o["section"] for o in target["offerings"]] == ["B", "Lec 2", "C"]
+    # Nothing new: nothing changes.
+    before = copy.deepcopy(target)
+    assert merge_offerings(target, {"offerings": [offering("M26", "C")]}) == 0
+    assert target == before
 
 
 def test_overlay_file_may_not_name_a_retired_number(ren, catalog):
@@ -426,6 +485,37 @@ def test_migration_needs_a_reconciled_catalog(ren):
         mpn.migrate(migration_catalog(), ren, provenance(), soc_running={"85-459"})
 
 
+def test_history_follows_the_course(ren):
+    """Before Fall 2025 the history of 85-370 is Perception's (now 85-413) and the
+    history of 85-314 is Cognitive Neuroscience Research Methods' (now 85-370)."""
+    history = {"85-314": ["S21", "S25"], "85-370": ["F20", "F24"], "85-102": ["S18", "M25"]}
+    courses = [
+        row("85-370", "Cognitive Neuroscience Research Methods", offered=["F20", "F24", "F20", "S26"]),
+        row("85-413", "Perception", offered=["F25", "S26"], soc_ingested=True),
+        row("85-100", "Introduction to Psychology", offered=["F25"], soc_ingested=True),
+        row("85-501", "Teaching Assistantship", offered=["S24", "F25"]),
+    ]
+    changed = mpn.correct_history(courses, ren, history, soc_held={"85-100": {"M25", "F25"}})
+    rows = by_code(courses)
+    assert rows["85-370"]["offered"] == ["S21", "S25", "S26"]  # a reused number: its own history is the old course's
+    assert rows["85-413"]["offered"] == ["F20", "F24", "F25", "S26"]
+    # On a row the SOC created, reconcile rebuilds the semesters soc.json holds: M25 stays out.
+    assert rows["85-100"]["offered"] == ["S18", "F25"]
+    assert rows["85-501"]["offered"] == ["S24", "F25"]  # no history to add: the list keeps its order
+    assert sorted(changed) == ["85-100", "85-370", "85-413"]
+    once = copy.deepcopy(courses)
+    assert mpn.correct_history(courses, ren, history, soc_held={"85-100": {"M25", "F25"}}) == {}
+    assert courses == once
+
+
+def test_history_sources_name_the_old_numbers():
+    sources = mpn.history_sources(REAL)
+    assert sources["85-370"] == ["85-314"] and sources["85-413"] == ["85-370"]
+    assert sources["85-100"] == ["85-102"] and sources["85-472"] == ["85-414"]
+    assert sources["85-190"] == ["85-104", "85-253", "85-261"]  # with the 2026-11-09 merges
+    assert "85-105" not in sources  # same number: its history is its own
+
+
 def test_migration_dry_run_writes_nothing_and_apply_writes(tmp_path):
     catalog_path, prov_path, list_path = tmp_path / "courses.json", tmp_path / "prov.json", tmp_path / "list.json"
     write(catalog_path, {"_meta": {}, "courses": migration_catalog()})
@@ -462,9 +552,14 @@ def test_catalog_follows_the_list(real_rows):
     for code in REAL.new_codes:
         r = real_rows[code]
         if r.get("source") == SOURCE_LABEL:
-            assert r["course_name"] == REAL.title[code] and not r["offerings"], code
+            # A row from the list has no SOC sections of its own; 85-151 has the ones the
+            # SOC lists under its old number 85-251.
+            assert r["course_name"] == REAL.title[code], code
+            assert not r["offerings"] or REAL.old_number[code] in REAL.retired, code
     assert real_rows["85-104"]["course_name"] == "Psychology and Society - Inside Out Program"
-    assert real_rows["85-151"]["offered"] == ["F20", "F21", "M23", "S24", "M24", "M25"]
+    # 85-151 Personality has 85-251's history, and the M26 section the SOC still lists under 85-251.
+    assert real_rows["85-151"]["offered"] == ["F20", "F21", "M23", "S24", "M24", "M25", "M26"]
+    assert [(o["semester_code"], o["section"]) for o in real_rows["85-151"]["offerings"]] == [("M26", "A6")]
     assert real_rows["85-100"]["qatar_only"] is True
     # 85-414's old course's rows are 85-472's; it has only the rows the rule step owns.
     assert {s for *_, s in keys(real_rows["85-414"], True)} == {"rule"}
@@ -489,13 +584,37 @@ def _git_has_provenance() -> bool:
         return False
 
 
+@pytest.fixture(scope="module")
+def provenance_courses():
+    return mpn.load_provenance(None)
+
+
 @pytest.mark.skipif(not _git_has_provenance(), reason="needs the git history (commit 79e29ec)")
-def test_migration_on_the_committed_catalog_changes_nothing():
+def test_migration_on_the_committed_catalog_changes_nothing(provenance_courses):
     data = json.loads(COURSES_JSON.read_text(encoding="utf-8"))
     courses = data["courses"]
     before = copy.deepcopy(courses)
     codes = set(REAL.new_number) | set(REAL.new_codes)
-    prov = mpn.provenance_rows(mpn.load_provenance(None), RENAMES, codes)
-    log = mpn.migrate(courses, REAL, prov)
+    prov = mpn.provenance_rows(provenance_courses, RENAMES, codes)
+    history = mpn.provenance_history(provenance_courses, mpn.history_codes(REAL))
+    soc = json.loads((ROOT / "backend" / "data" / "soc.json").read_text(encoding="utf-8"))
+    log = mpn.migrate(courses, REAL, prov, history=history, soc_held=mpn.soc_held_semesters(soc, courses))
     assert courses == before
-    assert log["created"] == [] and log["removed"] == []
+    assert log["created"] == [] and log["removed"] == [] and log["history"] == {}
+
+
+@pytest.mark.skipif(not _git_has_provenance(), reason="needs the git history (commit 79e29ec)")
+def test_committed_history_follows_the_course(real_rows, provenance_courses):
+    """The offered history before Fall 2025 is the history of the course that has the number now."""
+    old = mpn.provenance_history(provenance_courses, mpn.history_codes(REAL) | set(REAL.reused))
+
+    def early(code):
+        return history_before(real_rows[code]["offered"])
+
+    assert early("85-370") == old["85-314"] == ["S21", "S22", "S23", "S24", "S25"]
+    assert early("85-413") == old["85-370"] == ["F20", "F21", "F22", "F23", "F24"]  # Perception
+    assert early("85-350") == old["85-340"] and early("85-414") == []
+    assert set(old["85-350"]) - {"M25"} == set(early("85-450"))  # M25: soc.json holds it, 85-450 is a SOC row
+    assert set(old["85-414"]) <= set(early("85-472"))
+    assert set(old["85-102"]) <= set(early("85-100"))
+    assert set(old["85-104"]) | set(old["85-253"]) | set(old["85-261"]) <= set(early("85-190"))

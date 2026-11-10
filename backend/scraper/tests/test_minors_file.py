@@ -36,6 +36,12 @@ SCOTTY_MD = OFFICIAL_DIR / "Minors_general-information_Scotty.md"
 # (summer_2025_and_earlier or fall_2025_and_later). The minors build step uses the same rule.
 RENUMBERING = load_renumbering()
 ERA_KEYS = {"summer_2025_and_earlier": "old", "fall_2025_and_later": "new"}
+# A number range in a file written with the old Psychology numbers is a range of old
+# numbers: a new number inside it whose old number (on the department's list) lies
+# outside it is another course, so the category excludes it too. Only the Psychology
+# minor's Advanced Courses (85-350 to 85-499) has such numbers: 85-350 (old 85-340)
+# and 85-370 (old 85-314), research methods courses now.
+RANGE_EXCLUDES = {("psychology", "advanced"): {"85-350", "85-370"}}
 CATALOG_NAMES = {c["course_code"]: c.get("course_name")
                  for c in json.loads(COURSES_JSON.read_text(encoding="utf-8"))["courses"]}
 
@@ -265,7 +271,7 @@ def test_course_codes_come_from_the_minor_file(minors):
             for c in cat["courses"]:
                 assert c in allowed, (code, cat["id"], c)
             for c in (cat["select"] or {}).get("exclude", []):
-                assert c in {now[x] for x in excluded}, (code, cat["id"], c)
+                assert c in {now[x] for x in excluded} | RANGE_EXCLUDES.get((code, cat["id"]), set()),                     (code, cat["id"], c)
 
 
 def test_no_listed_code_is_lost(minors):
@@ -277,7 +283,29 @@ def test_no_listed_code_is_lost(minors):
         excludes = {c for cat in leaves(m) for c in (cat["select"] or {}).get("exclude", [])}
         missing = {c for c in listed if now[c] not in courses}
         assert not missing, (code, sorted(missing))
-        assert {now[c] for c in excluded} == excludes, code
+        extra = {c for (minor, _), codes in RANGE_EXCLUDES.items() if minor == code for c in codes}
+        assert {now[c] for c in excluded} | extra == excludes, code
+
+
+def test_range_excludes_are_the_new_numbers_whose_old_number_is_outside_the_range(minors):
+    for (code, cat_id), extra in RANGE_EXCLUDES.items():
+        select = next(c for c in leaves(minors[code]) if c["id"] == cat_id)["select"]
+
+        def inside(c):
+            prefix, number = _split(c)
+            return prefix in select["prefixes"] and select["min_number"] <= number <= select["max_number"]
+
+        derived = {new for new in RENUMBERING.new_codes if inside(new)
+                   and RENUMBERING.old_number.get(new) not in (None, new)
+                   and not inside(RENUMBERING.old_number[new])}
+        assert derived == extra, (code, cat_id)
+        assert extra <= set(select["exclude"]), (code, cat_id)
+    # Every other Psychology range in the files covers all numbers, so the renumbering
+    # moves no course into or out of it.
+    for code, m in with_file(minors).items():
+        for cat in leaves(m):
+            if cat["select"] and (code, cat["id"]) not in RANGE_EXCLUDES and "85" in cat["select"]["prefixes"]:
+                assert (cat["select"]["min_number"], cat["select"]["max_number"]) == (0, 999), (code, cat["id"])
 
 
 def test_old_psychology_numbers_appear_as_new_numbers(minors):

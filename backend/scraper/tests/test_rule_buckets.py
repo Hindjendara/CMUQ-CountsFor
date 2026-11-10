@@ -443,6 +443,9 @@ def test_rule_rows_follow_the_catalog_decisions(real_courses):
               if r["requirement"] == AI_SCS]
     assert ai_scs and all(int(code[3:]) < 600 for code in ai_scs)
     assert not has("15-351", "AI", "School of Computer Science Electives")  # an AI deletion
+    # The AI page counts up to 18 units of the SCS Honors thesis toward SCS electives; the
+    # SOC lists it with variable units, so it is an addition, not a unit match.
+    assert has("07-599", "AI", "School of Computer Science Electives")
 
 
 def test_only_the_ai_scs_electives_rows_were_handed_to_their_rule(real_courses):

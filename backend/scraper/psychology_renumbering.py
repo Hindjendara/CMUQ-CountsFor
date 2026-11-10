@@ -29,11 +29,12 @@ the additive overlays, README 14.6):
 2. A retired code that has a row (reconcile creates one when the SOC still
    lists the old number, for example 85-251 in M26) gives its requirement rows
    to its new number, fills the new row's empty description and prerequisites,
-   and is deleted.
+   gives it the sections and offered semesters it lacks (merge_offerings,
+   merge_offered), and is deleted.
 
 A reused number's row is never deleted, and rule rows ("source": "rule", which
 the rule step owns) are not moved. The one-time move of the old audit mappings
-on reused numbers is migrate_psychology_numbers.py.
+and of the offered history on reused numbers is migrate_psychology_numbers.py.
 """
 from __future__ import annotations
 
@@ -47,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from json_io import load_json  # noqa: E402
 from pipeline_paths import PSYCHOLOGY_RENUMBERING_JSON  # noqa: E402
+from reconcile_offerings import reconcile_course  # noqa: E402
 from soc_parse import normalize_course_code, normalize_title  # noqa: E402
 
 CODE_RE = re.compile(r"^\d{2}-\d{3}$")
@@ -237,6 +239,67 @@ def fill_text(target: dict, old_row: dict) -> list[str]:
     return filled
 
 
+def offering_key(offering: dict) -> tuple[str, str, str]:
+    """(semester, section, campus): the rows of one section share it, one row per
+    meeting time, as linkOfferingGroups in js/data.js reads them."""
+    return (offering.get("semester_code") or "", offering.get("section") or "", offering.get("campus") or "")
+
+
+def _is_lecture(offering: dict) -> bool:
+    # As isLectureSection in js/data.js: "Lec", "Lec 1", "Lec 12".
+    return str(offering.get("section") or "").strip().lower().startswith("lec")
+
+
+def _merge_scope(mine: list[dict], theirs: list[dict]) -> list[dict]:
+    """The rows of one semester and campus from two numbers in one list.
+
+    The app links a section to the nearest lecture listed before it in the same
+    semester and campus, so theirs go after mine unless a section at the start
+    of theirs would then join my last lecture.
+    """
+    if not theirs or _is_lecture(theirs[0]) or not any(_is_lecture(o) for o in mine):
+        return mine + theirs
+    if not any(_is_lecture(o) for o in theirs) or _is_lecture(mine[0]):
+        return theirs + mine
+    return mine + theirs  # both lists start with a lone section and both have lectures
+
+
+def merge_offerings(target: dict, old_row: dict) -> int:
+    """Give target the SOC sections old_row lists that target lacks; returns the rows added.
+
+    A section counts once by offering_key: soc.json can list one section under
+    both numbers (85-294 A and 85-501 A in F25 and F26). The merged list keeps
+    the newest semester first, as reconcile writes it, and the lecture then
+    section order of each semester and campus; offered_qatar, offered_pitts and
+    soc_sections follow the merged list (reconcile_course).
+    """
+    have = {offering_key(o) for o in target.get("offerings") or [] if isinstance(o, dict)}
+    new = [o for o in old_row.get("offerings") or [] if isinstance(o, dict) and offering_key(o) not in have]
+    if not new:
+        return 0
+    mine: dict[tuple, list[dict]] = {}
+    theirs: dict[tuple, list[dict]] = {}
+    scopes: list[tuple] = []
+    for rows, bucket in ((target.get("offerings") or [], mine), (new, theirs)):
+        for o in rows:
+            scope = (o.get("semester_code") or "", o.get("campus") or "")
+            if scope not in mine and scope not in theirs:
+                scopes.append(scope)
+            bucket.setdefault(scope, []).append(o)
+    scopes.sort(key=lambda s: _semester_key(s[0]), reverse=True)  # stable: campus order kept
+    reconcile_course(target, [o for s in scopes for o in _merge_scope(mine.get(s, []), theirs.get(s, []))])
+    return len(new)
+
+
+def merge_offered(target: dict, old_row: dict) -> list[str]:
+    """Add old_row's offered semesters that target lacks (oldest first, each once); returns them."""
+    have = set(target.get("offered") or [])
+    add = sorted({s for s in old_row.get("offered") or [] if isinstance(s, str) and s} - have, key=_semester_key)
+    if add:
+        target["offered"] = sorted(have | set(add), key=_semester_key)
+    return add
+
+
 def create_missing_rows(courses: list[dict], by_code: dict[str, dict], ren: Renumbering) -> list[str]:
     """Step 1 of the daily step: a row from the list for every new number without one."""
     retired = set(ren.retired)
@@ -254,8 +317,10 @@ def create_missing_rows(courses: list[dict], by_code: dict[str, dict], ren: Renu
 
 def retire_old_rows(courses: list[dict], by_code: dict[str, dict], ren: Renumbering) -> dict:
     """Step 2 of the daily step: a retired code's row gives its requirement rows
-    (not rule rows) and empty text fields to its new number and is deleted."""
+    (not rule rows), empty text fields, SOC sections and offered semesters to
+    its new number and is deleted."""
     moved = 0
+    sections = 0
     removed = []
     for old in ren.retired:
         row = by_code.get(old)
@@ -266,13 +331,15 @@ def retire_old_rows(courses: list[dict], by_code: dict[str, dict], ren: Renumber
             rows = [r for r in reqs or [] if not is_rule_row(r)]
             moved += merge_requirement_rows(target, program, rows)
         fill_text(target, row)
+        sections += merge_offerings(target, row)
+        merge_offered(target, row)
         removed.append(old)
     if removed:
         gone = set(removed)
         courses[:] = [c for c in courses if c.get("course_code") not in gone]
         for code in gone:
             by_code.pop(code, None)
-    return {"moved": moved, "removed": removed}
+    return {"moved": moved, "sections": sections, "removed": removed}
 
 
 def apply_renumbering(courses: list[dict], ren: Renumbering) -> dict:
@@ -285,6 +352,7 @@ def apply_renumbering(courses: list[dict], ren: Renumbering) -> dict:
         "renumbering_created": created,
         "renumbering_removed": retired["removed"],
         "renumbering_rows_moved": retired["moved"],
+        "renumbering_sections_moved": retired["sections"],
     }
 
 

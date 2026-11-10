@@ -8322,13 +8322,6 @@
             "type": false,
             "major": "BS"
           }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI"
-          }
         ]
       },
       "soc_sections": [],
@@ -18333,7 +18326,15 @@
         ],
         "IS": [],
         "BA": [],
-        "BS": []
+        "BS": [],
+        "AI": [
+          {
+            "requirement": "BS in Artificial Intelligence---School of Computer Science Electives",
+            "type": false,
+            "major": "AI",
+            "source": "rule"
+          }
+        ]
       },
       "soc_sections": [
         {
@@ -216991,6 +216992,16 @@
       "description": "The world is a crazy, confusing place. Much of what we encounter is ambiguous, dynamic, and misleading. Somehow, we have to make sense of it. This class is about how we do that. The course provides an overview of the major areas of scientific psychology, exploring the models of our mind, brain, and behavior that explain wide areas of human and nonhuman functioning. Topics range from neuroscience and the biological basis of behavior, to memory and thought, to social interaction and psychological development over the lifespan, to abnormal psychology, psychopathology, and treatment. Tuesday and Thursday lectures provide a broad survey of topics and findings in psychology. In recitation sections students get hands on experiencing thinking about psychological science by designing and running psychological studies and discussing the real world implications of the concepts they have investigated.  While all sections will be completing the same activities, some of the sections are themed.  Themed sections will frame the discussion in the context of the theme, thus allowing students in those sections to better appreciate the links between the work being done in the class and the theme of that section.  However, the core material will be the same and all sections will prepare students equally well for exams and upper division courses.  General unthemed sections will sample across themes and topics, rather than being focused on a single theme.  At the end of this course, students will not only be more knowledgeable about psychology, but be able to apply their knowledge about psychology to be better thinkers, learners, and consumers of information in general.   Themed sections     Design  Register through Design     Medicine, health, and Biosciences  Section I     Decision Science, business, and economics  Section A",
       "prerequisites": "None",
       "offered": [
+        "S18",
+        "S19",
+        "M20",
+        "M22",
+        "M23",
+        "F23",
+        "S24",
+        "F24",
+        "S25",
+        "M25",
         "F25"
       ],
       "offered_qatar": false,
@@ -218935,12 +218946,14 @@
       "description": "This course is designed to provide students with the necessary knowledge to evaluate research, make transitions between theory and the operations that test the theory, and to design and carry out original research. Topics will include the nature of proof and causal inference, manipulation of independent variables, measurement of dependent variables, questionnaire design, experimental ,and quasiexperimental, design and ethical issues involved in doing research. Survey, observational and experimental techniques as applied in both field and laboratory settings will be covered. Students will be expected to criticize completed research. They are also expected to design measures and complete their own original studies. During the course of the semester students will also be expected to design and carry out an original research project as well.",
       "prerequisites": "((85-150 [] at least D) or (85-241 [] at least D)) and ((85-309 [] at least D) or (36-309 [] at least D)) and (85-300 [] at least D)",
       "offered": [
-        "S24",
-        "M23",
+        "S16",
+        "S17",
+        "S18",
+        "S23",
         "F23",
-        "M24",
+        "S24",
         "F24",
-        "M25"
+        "S25"
       ],
       "offered_qatar": false,
       "offered_pitts": true,
@@ -219256,16 +219269,11 @@
       "description": "This is a handson laboratory course designed to foster basic skills in the empirical approaches used in cognitive neuroscience research. Students will learn how to evaluate which cognitive neuroscience method is best suited to a research question, basic experimental design and analysis, and how to formally present empirical results. The course will focus on functional MRI, but will also cover structural MRI diffusion imaging and EEG, and survey various other methods. Students will work with actual datasets using the current software used by cognitive neuroscience researchers.",
       "prerequisites": "None",
       "offered": [
-        "F20",
-        "F21",
-        "F22",
-        "F23",
-        "F24",
-        "F20",
-        "F21",
-        "F22",
-        "F23",
-        "F24"
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25"
       ],
       "offered_qatar": false,
       "offered_pitts": true,
@@ -219537,15 +219545,6 @@
       "description": "Advances in artificial intelligence and internetscale datasets have transformed our everyday lives. In this course, we will learn about ways that AI and large datasets are also transforming what we know about the human mind and brain. We will discuss recent research that uses tools like deep convolutional neural networks and large language models as model systems for investigating human cognition, and what we can learn by comparing model outputs against real human data. We will also examine the rise of big datasets in neuroscience and psychology research, and how these datasets are enabling powerful applications of machine learning to the study of human cognition. Compared to traditional approaches, these advances are making it possible to conduct more naturalistic psychology experiments, where tasks and stimuli more closely match the complexity of our realworld experiences. Throughout the course, we will consider how these tools are opening up progress on questions that have historically been challenging to study, such as how perception unfolds within complex natural environments, how we comprehend language, and how we learn about the world through experience. The course format will involve weekly readings and discussion.",
       "prerequisites": "((85-219 [] at least D) or (85-102 [] at least D) or (85-241 [] at least D) or (85-213 [] at least D) or (85-211 [] at least D) or (85-100 [] at least D) or (85-104 [] at least D) or (85-170 [] at least D) or (85-190 [] at least D) or (85-130 [] at least D) or (85-221 [] at least D) or (85-110 [] at least D)) and ((15-110 [] at least D) or (15-112 [] at least D))",
       "offered": [
-        "S18",
-        "S19",
-        "F20",
-        "F21",
-        "F22",
-        "F19",
-        "F21",
-        "F23",
-        "F24",
         "F25"
       ],
       "offered_qatar": true,
@@ -241689,6 +241688,14 @@
       "description": "This course focuses on the fascinating way that the brain processes the world and allows us to interact with it. Aside from covering the major topics in cognitive psychology language, memory, visual processing, attention and cognitive control, it includes an introduction to some of the most recent approaches to studying human cognition. The course is set up to highlight the connection between cognitive studies and skills in various majors such as computer science, math, statistics, and medicine. It is also structured to foster the necessary skills for the critical analysis of complex problems.",
       "prerequisites": "None",
       "offered": [
+        "F20",
+        "F21",
+        "F22",
+        "S23",
+        "F23",
+        "S24",
+        "F24",
+        "S25",
         "F25",
         "S26",
         "F26",
@@ -241932,6 +241939,15 @@
       "description": "This course is about normal development from conception through adolescence. Topics include physical, perceptual, cognitive, emotional and social development. Students will learn facts about children at various points in development, theories about how development works, and research methods for studying development in infants and children. Students will be encouraged to relate the facts, theories and methods of developmental psychology to everyday problems, social issues and real world concerns.",
       "prerequisites": "None",
       "offered": [
+        "M20",
+        "F20",
+        "F21",
+        "F22",
+        "S23",
+        "F23",
+        "S24",
+        "F24",
+        "S25",
         "F25",
         "S26",
         "F26",
@@ -242141,6 +242157,14 @@
       "description": "This course provides a general introduction to the neural foundations of behavior. Topics will cover cognitive, perceptual, motor, social, and affective aspects of behavior. Each topic will be addressed at multiple scales, from single neurons and their interactions, to brain systems, to computational principles, and to realworld behaviors. While the focus will be on foundational principles and mechanisms including some pretty cool case studies, illusions, anecdotes, etc., there will also be some effort given to integrating current advances in computational cognitive neuroscience, including both the applications of modern AI to understanding biological systems and how principles drawn from biological systems might inform or improve artificial systems. Students are expected to regularly attend and participate in class.",
       "prerequisites": "None",
       "offered": [
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "F23",
+        "S24",
+        "F24",
+        "S25",
         "F25",
         "S26",
         "F26",
@@ -242360,6 +242384,13 @@
       "description": "This advanced undergraduate course will focus on the topic of attitude change and how various persuasive techniques are used to shape human response. The dynamics of propaganda and what makes the techniques effective on social and consumer decisions will be addressed.  The primary goals of the course are to 1 understand the dynamics of attitude change 2 explore the mechanism by which attitude change techniques operate and 3 examine relevant theories and research in persuasion.  Examples of topics covered include the origins of attitudes, how attitudes influence judgments, social power and attitude change, and how individual decisions are influenced by the mass media.   Classic and contemporary research in the area of persuasion will be examined in the form of course readings and assignments.",
       "prerequisites": "85-241 [] at least D",
       "offered": [
+        "F20",
+        "M21",
+        "S22",
+        "F22",
+        "F23",
+        "F24",
+        "S25",
         "F25",
         "S26",
         "F26"
@@ -739609,6 +739640,14 @@
       "description": "The focus of this course will be on how peoples behavior, feelings and thoughts are influenced or determined by their social environment. The course will begin with lectures and readings on how social psychologists go about studying social behavior. Next, various topics on which social psychologists have done research will be covered. These topics will include person perception, prejudice and discrimination, the nature of attitudes and how attitudes are formed and changed, interpersonal attraction, conformity, compliance, altruism, aggression, group behavior, and applications of psychology to problems in health care, law, politics, and the environment. Through readings and lectures on these topics, students will also be exposed to social psychological theories.",
       "prerequisites": "None",
       "offered": [
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "M24",
+        "F24",
+        "S25",
         "F25",
         "S26",
         "M26",
@@ -739867,6 +739906,18 @@
       "description": "This course provides an introduction to the science and practice of psychopathology. Students will examine definitions of psychopathology in a historical and contemporary context, explore issues relevant to diagnosis and patient care, and be introduced to various diagnostic categories for psychological disorders. Students will also learn about potential determinants of and treatments for psychological disorders in the context of major theories and empirical findings in the field. Emphasis will be placed on three major paradigms in psychopathology genetics, neuroscience, and cognitive behavioral. An assigned memoir, case studies, and short video clips will be used to illustrate the human side of mental illness.",
       "prerequisites": "None",
       "offered": [
+        "F15",
+        "F16",
+        "F17",
+        "F18",
+        "S20",
+        "F20",
+        "M21",
+        "S22",
+        "F22",
+        "F23",
+        "F24",
+        "S25",
         "F25",
         "F26",
         "S27"
@@ -741428,6 +741479,11 @@
       "description": "This course explores the roles of cognitive processes in the experience of music with a focus on carrying out a collaborative laboratory project in order to understand firsthand the challenges of the experimental study of music. In readings, lectures, discussions, and demonstrations we will become acquainted with the relevant psychological theories of perception, memory and learning, and review and critically analyze selected experimental findings on the psychology of music. We will examine the use of psychological principles e.g. Gestalt laws of perception, limitations on working memory, categorical perception, chunking, schemas, modularity to explain musical phenomena. The emphasis will be on applying an experimental approach to music perception and cognition, but we will also consider ongoing debates about larger issues such as musics adaptive value to the human species, and the determinants of musical taste. Prerequisite either Harmony 1 or Cognitive Psychology or introduction to psychology or an intro level statistics or by instructor permission.",
       "prerequisites": "((85-102 [] at least D) and (36-200 [] at least D)) or ((85-211 [] at least D) and (36-200 [] at least D))",
       "offered": [
+        "S16",
+        "F19",
+        "S22",
+        "F23",
+        "F24",
         "F26"
       ],
       "offered_qatar": false,
@@ -741509,6 +741565,11 @@
       "description": "",
       "prerequisites": "",
       "offered": [
+        "F20",
+        "F21",
+        "F22",
+        "F23",
+        "F24",
         "F25",
         "S26",
         "F26",
@@ -741669,6 +741730,11 @@
       "description": "",
       "prerequisites": "",
       "offered": [
+        "M23",
+        "F23",
+        "S24",
+        "M24",
+        "F24",
         "F25",
         "M26",
         "F26"
@@ -741920,6 +741986,14 @@
       "description": "",
       "prerequisites": "",
       "offered": [
+        "S18",
+        "S19",
+        "F19",
+        "F20",
+        "F21",
+        "F22",
+        "F23",
+        "F24",
         "F25",
         "F26"
       ],
@@ -742239,95 +742313,6 @@
       "prerequisites": "",
       "offered": [
         "F25",
-        "F26"
-      ],
-      "offered_qatar": false,
-      "offered_pitts": true,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [
-          {
-            "requirement": "GenEd---University Core---Scientific Reasoning",
-            "type": true,
-            "major": "BA",
-            "source": "rule"
-          }
-        ],
-        "BS": [
-          {
-            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
-            "type": true,
-            "major": "BS",
-            "source": "rule"
-          }
-        ]
-      },
-      "soc_sections": [
-        {
-          "section": "A",
-          "days": "TBA",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "In-person only",
-          "campus": "Pittsburgh",
-          "modality": "In Person",
-          "semester_code": "F26",
-          "semester": "Fall 2026"
-        },
-        {
-          "section": "A",
-          "days": "TBA",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "In-person only",
-          "campus": "Pittsburgh",
-          "modality": "In Person",
-          "semester_code": "F25",
-          "semester": "Fall 2025"
-        }
-      ],
-      "offerings": [
-        {
-          "semester": "Fall 2026",
-          "semester_code": "F26",
-          "campus": "Pittsburgh",
-          "section": "A",
-          "modality": "In Person",
-          "units": "VAR",
-          "days_times": "TBA",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "In-person only"
-        },
-        {
-          "semester": "Fall 2025",
-          "semester_code": "F25",
-          "campus": "Pittsburgh",
-          "section": "A",
-          "modality": "In Person",
-          "units": "VAR",
-          "days_times": "TBA",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "In-person only"
-        }
-      ],
-      "soc_title": "Teaching Assistantship",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
-      "course_code": "85-503",
-      "course_name": "Internship in Psychology",
-      "department": "85",
-      "units": 0,
-      "description": "",
-      "prerequisites": "",
-      "offered": [
-        "F25",
         "S26",
         "F26",
         "S27"
@@ -742361,6 +742346,161 @@
           "begin_time": "",
           "end_time": "",
           "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode": "In-person Expectation",
+          "campus": "Pittsburgh",
+          "modality": "In Person",
+          "semester_code": "S27",
+          "semester": "Spring 2027"
+        },
+        {
+          "section": "A",
+          "days": "TBA",
+          "begin_time": "",
+          "end_time": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode": "In-person only",
+          "campus": "Pittsburgh",
+          "modality": "In Person",
+          "semester_code": "F26",
+          "semester": "Fall 2026"
+        },
+        {
+          "section": "A",
+          "days": "TBA",
+          "begin_time": "",
+          "end_time": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode": "In-person Expectation",
+          "campus": "Pittsburgh",
+          "modality": "In Person",
+          "semester_code": "S26",
+          "semester": "Spring 2026"
+        },
+        {
+          "section": "A",
+          "days": "TBA",
+          "begin_time": "",
+          "end_time": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode": "In-person only",
+          "campus": "Pittsburgh",
+          "modality": "In Person",
+          "semester_code": "F25",
+          "semester": "Fall 2025"
+        }
+      ],
+      "offerings": [
+        {
+          "semester": "Spring 2027",
+          "semester_code": "S27",
+          "campus": "Pittsburgh",
+          "section": "A",
+          "modality": "In Person",
+          "units": "VAR",
+          "days_times": "TBA",
+          "instructor": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode_raw": "In-person Expectation"
+        },
+        {
+          "semester": "Fall 2026",
+          "semester_code": "F26",
+          "campus": "Pittsburgh",
+          "section": "A",
+          "modality": "In Person",
+          "units": "VAR",
+          "days_times": "TBA",
+          "instructor": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode_raw": "In-person only"
+        },
+        {
+          "semester": "Spring 2026",
+          "semester_code": "S26",
+          "campus": "Pittsburgh",
+          "section": "A",
+          "modality": "In Person",
+          "units": "VAR",
+          "days_times": "TBA",
+          "instructor": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode_raw": "In-person Expectation"
+        },
+        {
+          "semester": "Fall 2025",
+          "semester_code": "F25",
+          "campus": "Pittsburgh",
+          "section": "A",
+          "modality": "In Person",
+          "units": "VAR",
+          "days_times": "TBA",
+          "instructor": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode_raw": "In-person only"
+        }
+      ],
+      "soc_title": "Teaching Assistantship",
+      "soc_department": "Psychology",
+      "soc_ingested": true
+    },
+    {
+      "course_code": "85-503",
+      "course_name": "Internship in Psychology",
+      "department": "85",
+      "units": 0,
+      "description": "",
+      "prerequisites": "",
+      "offered": [
+        "F25",
+        "S26",
+        "M26",
+        "F26",
+        "S27"
+      ],
+      "offered_qatar": false,
+      "offered_pitts": true,
+      "requirements": {
+        "CS": [
+          {
+            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
+            "type": true,
+            "major": "CS",
+            "source": "rule"
+          }
+        ],
+        "IS": [],
+        "BA": [
+          {
+            "requirement": "GenEd---University Core---Scientific Reasoning",
+            "type": true,
+            "major": "BA",
+            "source": "rule"
+          }
+        ],
+        "BS": [
+          {
+            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
+            "type": true,
+            "major": "BS",
+            "source": "rule"
+          }
+        ],
+        "AI": [
+          {
+            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
+            "type": true,
+            "major": "AI",
+            "source": "rule"
+          }
+        ]
+      },
+      "soc_sections": [
+        {
+          "section": "A",
+          "days": "TBA",
+          "begin_time": "",
+          "end_time": "",
+          "location": "Pittsburgh, Pennsylvania",
           "delivery_mode": "In-person only",
           "campus": "Pittsburgh",
           "modality": "In Person",
@@ -742378,6 +742518,18 @@
           "modality": "In Person",
           "semester_code": "F26",
           "semester": "Fall 2026"
+        },
+        {
+          "section": "I",
+          "days": "TBA",
+          "begin_time": "",
+          "end_time": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode": "In-person Expectation",
+          "campus": "Pittsburgh",
+          "modality": "In Person",
+          "semester_code": "M26",
+          "semester": "Summer 2026"
         },
         {
           "section": "A",
@@ -742424,6 +742576,18 @@
           "section": "A",
           "modality": "In Person",
           "units": "VAR",
+          "days_times": "TBA",
+          "instructor": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode_raw": "In-person Expectation"
+        },
+        {
+          "semester": "Summer 2026",
+          "semester_code": "M26",
+          "campus": "Pittsburgh",
+          "section": "I",
+          "modality": "In Person",
+          "units": "3-12",
           "days_times": "TBA",
           "instructor": "",
           "location": "Pittsburgh, Pennsylvania",
@@ -936454,6 +936618,13 @@
       "description": "This course is concerned with how behavior and psychological states influence the development of and recovery from disease.  The class provides an overview of existing psychological and epidemiological data on the relationship between behavior and disease and addresses the issue of how behavior, emotion and cognition can influence the disease processes.  Topics include measures and concepts, stress and disease, stress and coping, personal control, helplessness and disease, social support and health, reactivity to stress, behavior and hypertension, coronary heart disease, infectious diseases and immune function, and the effectiveness of behavioral interventions in health.",
       "prerequisites": "(36-200 [] at least D) and ((85-211 [] at least D) or (85-104 [] at least D) or (85-221 [] at least D) or (85-241 [] at least D) or (85-251 [] at least D) or (85-102 [] at least D) or (85-219 [] at least D))",
       "offered": [
+        "S18",
+        "M18",
+        "F19",
+        "F20",
+        "F22",
+        "F23",
+        "F24",
         "F25",
         "S27"
       ],
@@ -982045,10 +982216,11 @@
         "M23",
         "S24",
         "M24",
-        "M25"
+        "M25",
+        "M26"
       ],
       "offered_qatar": false,
-      "offered_pitts": false,
+      "offered_pitts": true,
       "requirements": {
         "CS": [
           {
@@ -982085,8 +982257,34 @@
           }
         ]
       },
-      "soc_sections": [],
-      "offerings": [],
+      "soc_sections": [
+        {
+          "section": "A6",
+          "days": "MTWRF",
+          "begin_time": "",
+          "end_time": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode": "Remote only",
+          "campus": "Pittsburgh",
+          "modality": "Remote",
+          "semester_code": "M26",
+          "semester": "Summer 2026"
+        }
+      ],
+      "offerings": [
+        {
+          "semester": "Summer 2026",
+          "semester_code": "M26",
+          "campus": "Pittsburgh",
+          "section": "A6",
+          "modality": "Remote",
+          "units": "9",
+          "days_times": "MTWRF 09:30AM-10:50AM",
+          "instructor": "",
+          "location": "Pittsburgh, Pennsylvania",
+          "delivery_mode_raw": "Remote only"
+        }
+      ],
       "source": "Psychology renumbering list"
     },
     {
@@ -982736,18 +982934,5 @@
       "offerings": [],
       "source": "Psychology renumbering list"
     }
-  ],
-  "_meta": {
-    "last_campus_flag_update": "2026-05-21T09:20:30.936852+00:00",
-    "scrape_source": "https://enr-apps.as.cmu.edu/open/SOC/SOCServlet",
-    "semesters_considered": [
-      "M25",
-      "F25",
-      "S26",
-      "M26",
-      "F26"
-    ],
-    "pitts_courses_found": 5264,
-    "qatar_courses_found": 305
-  }
+  ]
 }

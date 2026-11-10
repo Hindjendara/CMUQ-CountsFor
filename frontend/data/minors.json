@@ -1299,7 +1299,7 @@
             "max_number": 499,
             "exclude": [
               "85-590", "85-503", "85-530", "85-505", "85-506", "85-507", "85-508", "85-509",
-              "85-510"
+              "85-510", "85-350", "85-370"
             ],
             "exclude_ranges": [],
             "min_units_per_course": null
@@ -1307,6 +1307,7 @@
           "children": [],
           "notes": [
             "Any 2 psychology courses numbered 85-350 to 85-499, except a few listed exclusions.",
+            "The official file uses the course numbers from before Fall 2025. 85-350 and 85-370 are research methods courses now, and their old numbers (85-340 and 85-314) were below this range, so they do not count here.",
             "Old numbers in the official file are shown as their current numbers: 85-480 is now 85-590, 85-482 is now 85-503 and 85-484 is now 85-530."
           ]
         },
