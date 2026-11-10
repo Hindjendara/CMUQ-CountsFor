@@ -3594,13 +3594,23 @@ const App = {
     const courseCount = new Set(allItems.map(i => i.course_code)).size;
     const filteredCourses = this._countPlannedCourses(semesterCode || this.activeSemester, plan.id);
     const units = this._planUnitsTotal(items.length ? items : allItems);
-    const conflicts = countPlanConflictPairs(items.length ? items : allItems);
+    const conflicts = countPlanConflictPairs(items.length ? items : allItems, this._planOfferingKeyOf());
     return { courseCount, filteredCourses, units, conflicts, itemCount: allItems.length };
   },
 
   /** Planned meetings as one entry per offering: a lecture and its planned section together. */
   _groupPlanItems(items) {
     return groupPlanItemsByOffering(items, code => this._offeringGroups(code));
+  },
+
+  /**
+   * The offering of a planned meeting, for the conflict check: the meetings of
+   * a lecture and its section (or of one section) never conflict with each
+   * other, whatever their times (planConflictPairs()).
+   */
+  _planOfferingKeyOf() {
+    const offeringOf = planItemOfferingGroups(code => this._offeringGroups(code));
+    return item => offeringOf(item).key;
   },
 
   _planUnitsTotal(items) {
@@ -3943,11 +3953,12 @@ const App = {
     if (!el) return;
 
     const items = this._getPlanItemsForSemester(this.activeSemester, planId);
-    const conflicts = findPlanConflicts(items);
+    const offeringOf = this._planOfferingKeyOf();
+    const conflicts = findPlanConflicts(items, offeringOf);
     const units = this._planUnitsTotal(items);
     const courseCount = this._countPlannedCourses(this.activeSemester, planId);
     const semLabel = semesterLabel(this.activeSemester);
-    const conflictPairs = countPlanConflictPairs(items);
+    const conflictPairs = countPlanConflictPairs(items, offeringOf);
     const conflictNote = conflictPairs
       ? `<span class="plan-stat plan-stat-warn">${conflictPairs} time conflict${conflictPairs === 1 ? '' : 's'}</span>`
       : '';

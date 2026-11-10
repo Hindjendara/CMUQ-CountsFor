@@ -1179,31 +1179,6 @@ function offeringDaysTimes(o) {
   return 'TBA';
 }
 
-function groupOfferingsBySection(offerings) {
-  const groups = [];
-  const index = new Map();
-  for (const o of offerings || []) {
-    const key = [
-      o.semester_code || '',
-      o.section || '',
-      o.campus || '',
-    ].join('::');
-    if (!index.has(key)) {
-      const g = {
-        semester_code: o.semester_code,
-        section: o.section,
-        campus: o.campus,
-        modality: o.modality || o.delivery_mode || '',
-        meetings: [],
-      };
-      index.set(key, g);
-      groups.push(g);
-    }
-    index.get(key).meetings.push(o);
-  }
-  return groups;
-}
-
 // ── Offering groups: a lecture with its sections ─────────────
 // The Schedule of Classes lists each lecture ("Lec 1") followed by its own
 // sections (recitations, labs: "A", "B", ...). A student takes the lecture
@@ -1229,9 +1204,9 @@ function planSectionLabel(section) {
  * list order counts, never alphabetical order.
  *
  * Returns offering groups in list order, { semester_code, campus, lecture,
- * sections }: lecture (or null) and each entry of sections are section groups
- * shaped like groupOfferingsBySection() ones, so a section that meets at
- * several times is one entry with several meetings.
+ * sections }: lecture (or null) and each entry of sections are section groups,
+ * { semester_code, section, campus, modality, meetings }, so a section that
+ * meets at several times is one entry with several meetings (its rows).
  */
 function linkOfferingGroups(offerings) {
   const groups = [];
@@ -1334,6 +1309,19 @@ function planItemOfferingGroup(item, groups) {
 }
 
 /**
+ * planItemOfferingGroup() for planned meetings of any course: returns a
+ * function item => { key, group, part }. groupsFor(code) returns a course's
+ * linkOfferingGroups(); each course is linked once.
+ */
+function planItemOfferingGroups(groupsFor) {
+  const groupsByCourse = new Map();
+  return item => {
+    if (!groupsByCourse.has(item.course_code)) groupsByCourse.set(item.course_code, groupsFor(item.course_code) || []);
+    return planItemOfferingGroup(item, groupsByCourse.get(item.course_code));
+  };
+}
+
+/**
  * Planned meetings as one entry per offering group, so a lecture and the
  * section planned with it are one entry ("Lec 2 + Sec W"). groupsFor(code)
  * returns a course's linkOfferingGroups(). Entries keep the plan order:
@@ -1342,10 +1330,9 @@ function planItemOfferingGroup(item, groups) {
  */
 function groupPlanItemsByOffering(items, groupsFor) {
   const entries = new Map();
-  const groupsByCourse = new Map();
+  const offeringOf = planItemOfferingGroups(groupsFor);
   for (const item of items || []) {
-    if (!groupsByCourse.has(item.course_code)) groupsByCourse.set(item.course_code, groupsFor(item.course_code) || []);
-    const ref = planItemOfferingGroup(item, groupsByCourse.get(item.course_code));
+    const ref = offeringOf(item);
     let entry = entries.get(ref.key);
     if (!entry) {
       entry = { key: ref.key, course_code: item.course_code, semester_code: item.semester_code, campus: item.campus, parts: [], meetings: [] };
@@ -1376,27 +1363,44 @@ function planEntriesOverlap(a, b) {
   return pa.startMin < pb.endMin && pb.startMin < pa.endMin;
 }
 
-function findPlanConflicts(items) {
-  const conflicts = new Set();
-  for (let i = 0; i < items.length; i++) {
-    for (let j = i + 1; j < items.length; j++) {
-      if (planEntriesOverlap(items[i], items[j])) {
-        conflicts.add(items[i].id);
-        conflicts.add(items[j].id);
-      }
+/**
+ * The pairs of planned meetings that meet at the same time, as [a, b] in plan
+ * order. Meetings of one offering never conflict with each other: a student
+ * takes a lecture with its section, and the Schedule of Classes itself lists
+ * some lectures inside their lab's time (03-117 Lec 1 TR 1:00 PM to 1:50 PM,
+ * lab A TR 1:00 PM to 4:00 PM) and some sections with overlapping rows of their
+ * own (09-207 Pittsburgh A). offeringKeyOf(item) names an item's offering
+ * (planItemOfferingGroups()(item).key: same course, semester, campus and
+ * lecture); without it, an item's offering is its section (planSectionKey()).
+ * Meetings of different courses, or of two offerings of one course, still
+ * conflict when their times overlap.
+ */
+function planConflictPairs(items, offeringKeyOf) {
+  const list = items || [];
+  const keyOf = offeringKeyOf || (item => planSectionKey(item.course_code, item));
+  const keys = list.map(keyOf);
+  const pairs = [];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      if (keys[i] !== keys[j] && planEntriesOverlap(list[i], list[j])) pairs.push([list[i], list[j]]);
     }
+  }
+  return pairs;
+}
+
+/** Ids of the planned meetings that are in a conflict (planConflictPairs()). */
+function findPlanConflicts(items, offeringKeyOf) {
+  const conflicts = new Set();
+  for (const [a, b] of planConflictPairs(items, offeringKeyOf)) {
+    conflicts.add(a.id);
+    conflicts.add(b.id);
   }
   return conflicts;
 }
 
-function countPlanConflictPairs(items) {
-  let pairs = 0;
-  for (let i = 0; i < items.length; i++) {
-    for (let j = i + 1; j < items.length; j++) {
-      if (planEntriesOverlap(items[i], items[j])) pairs++;
-    }
-  }
-  return pairs;
+/** How many pairs of planned meetings conflict (planConflictPairs()). */
+function countPlanConflictPairs(items, offeringKeyOf) {
+  return planConflictPairs(items, offeringKeyOf).length;
 }
 
 function planBlocksTimeOverlap(a, b) {

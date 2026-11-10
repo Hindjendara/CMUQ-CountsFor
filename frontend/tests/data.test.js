@@ -530,23 +530,12 @@ test('planEntriesOverlap: detects same-day time overlap in one semester', () => 
 
 test('countPlanConflictPairs: counts unique overlapping pairs', () => {
   const items = [
-    { id: 'a', semester_code: 'F26', days_times: 'UTR 08:30AM-09:45AM' },
-    { id: 'b', semester_code: 'F26', days_times: 'UTR 09:00AM-10:15AM' },
-    { id: 'c', semester_code: 'F26', days_times: 'MWF 08:30AM-09:45AM' },
+    { id: 'a', course_code: '15-112', semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'UTR 08:30AM-09:45AM' },
+    { id: 'b', course_code: '15-122', semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'UTR 09:00AM-10:15AM' },
+    { id: 'c', course_code: '21-120', semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'MWF 08:30AM-09:45AM' },
   ];
   assertEqual(countPlanConflictPairs(items), 1);
-});
-
-test('groupOfferingsBySection: merges multi-meeting rows under one section', () => {
-  const offerings = [
-    { semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'MW 10:00AM-10:50AM' },
-    { semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'UT 10:00AM-11:15AM' },
-    { semester_code: 'F26', section: 'A', campus: 'Qatar', days_times: 'TR 09:00AM-09:50AM' },
-  ];
-  const groups = groupOfferingsBySection(offerings);
-  assertEqual(groups.length, 2);
-  assertEqual(groups[0].section, 'W');
-  assertEqual(groups[0].meetings.length, 2);
+  assertEqual([...findPlanConflicts(items)].sort(), ['a', 'b']);
 });
 
 test('layoutPlanDayBlocks: places overlapping blocks side by side', () => {
@@ -772,16 +761,61 @@ test('groupPlanItemsByOffering: a lecture and its planned section are one entry,
   assertEqual(entries[2].key, planSectionKey('09-207', { semester_code: 'F26', section: 'Z', campus: 'Qatar' }), 'a section the catalog no longer lists keeps its own entry');
 });
 
-test('conflicts: a lecture does not conflict with its own section unless their times overlap', () => {
-  const lecture = { id: 'l', semester_code: 'F26', days_times: 'U 04:00PM-04:50PM' };
-  const section = { id: 'w', semester_code: 'F26', days_times: 'MW 02:30PM-05:30PM' };
-  assertEqual(countPlanConflictPairs([lecture, section]), 0);
-  assertEqual(findPlanConflicts([lecture, section]).size, 0);
-  const lab = [
-    { id: 'l1', semester_code: 'F26', days_times: 'TR 01:00PM-01:50PM' },
-    { id: 'a', semester_code: 'F26', days_times: 'TR 01:00PM-04:00PM' },
-  ];
-  assertEqual(countPlanConflictPairs(lab), 1, 'times that truly overlap are still a conflict');
+// A planned meeting of an offering row, as togglePlanSection() stores it.
+function planMeeting(code, row) {
+  return { id: planOfferingKey(code, row), course_code: code, semester_code: row.semester_code, section: row.section,
+    campus: row.campus, days_times: row.days_times };
+}
+
+// 03-117 Fall 2026 Pittsburgh as the Schedule of Classes lists it: the lecture meets inside its lab's time.
+const ROWS_03_117 = [
+  socRow('F26', 'Pittsburgh', 'Lec 1', 'TR 01:00PM-01:50PM'),
+  socRow('F26', 'Pittsburgh', 'A', 'TR 01:00PM-04:00PM'),
+  socRow('F26', 'Pittsburgh', 'B', 'MW 01:00PM-04:00PM'),
+];
+
+// The offering key the plan views use (App._planOfferingKeyOf()), over these rows.
+function offeringKeys() {
+  const groups = { '03-117': linkOfferingGroups(ROWS_03_117), '09-207': linkOfferingGroups(ROWS_09_207) };
+  const offeringOf = planItemOfferingGroups(code => groups[code] || []);
+  return item => offeringOf(item).key;
+}
+
+test('conflicts: the meetings of one offering never conflict, even where the SOC lists overlapping times', () => {
+  const keyOf = offeringKeys();
+  // Lec 1 (TR 1:00 PM to 1:50 PM) inside lab A (TR 1:00 PM to 4:00 PM): one offering.
+  const bio = ROWS_03_117.slice(0, 2).map(r => planMeeting('03-117', r));
+  assertTrue(planEntriesOverlap(bio[0], bio[1]), 'the SOC times overlap');
+  assertEqual(countPlanConflictPairs(bio, keyOf), 0);
+  assertEqual(findPlanConflicts(bio, keyOf).size, 0);
+  assertEqual(keyOf(bio[0]), keyOf(bio[1]), 'the lecture and its lab share the offering key');
+  assertEqual(countPlanConflictPairs(bio), 1, 'without offering keys each section is its own offering');
+  // 09-207 Pittsburgh A meets MW 2:00 PM to 4:20 PM and MW 2:00 PM to 2:50 PM: rows of one section.
+  const rowsA = ROWS_09_207.filter(r => r.semester_code === 'F26' && r.section === 'A').map(r => planMeeting('09-207', r));
+  assertEqual(rowsA.length, 2);
+  assertTrue(planEntriesOverlap(rowsA[0], rowsA[1]), 'the SOC rows overlap');
+  assertEqual(countPlanConflictPairs(rowsA), 0, "a section's own rows, without offering keys");
+  assertEqual(countPlanConflictPairs(rowsA, keyOf), 0);
+  // A lecture and a section that meet at other times of the week are no conflict either way.
+  const qatar = ROWS_09_207.filter(r => r.semester_code === 'F26' && r.campus === 'Qatar').map(r => planMeeting('09-207', r));
+  assertEqual(countPlanConflictPairs(qatar, keyOf), 0);
+});
+
+test('conflicts: other courses and other offerings of one course still conflict when their times overlap', () => {
+  const keyOf = offeringKeys();
+  const bio = ROWS_03_117.slice(0, 2).map(r => planMeeting('03-117', r));
+  // Another course on Tuesdays at 1:30 PM overlaps the lecture and the lab: two conflicts.
+  const other = { id: 'x', course_code: '15-112', semester_code: 'F26', section: 'A', campus: 'Pittsburgh', days_times: 'T 01:30PM-02:20PM' };
+  assertEqual(countPlanConflictPairs(bio.concat(other), keyOf), 2);
+  assertEqual([...findPlanConflicts(bio.concat(other), keyOf)].sort(), [bio[0].id, bio[1].id, 'x'].sort());
+  // 09-207 Pittsburgh A (MW from 2:00 PM) next to 09-207 Qatar W (MW from 2:30 PM): two offerings of one course.
+  const pitt = ROWS_09_207.filter(r => r.semester_code === 'F26' && r.campus === 'Pittsburgh' && r.section === 'A').map(r => planMeeting('09-207', r));
+  const qatarW = ROWS_09_207.filter(r => r.semester_code === 'F26' && r.section === 'W').map(r => planMeeting('09-207', r));
+  assertTrue(keyOf(pitt[0]) !== keyOf(qatarW[0]), 'two offerings');
+  assertEqual(countPlanConflictPairs(pitt.concat(qatarW), keyOf), 2, "each row of A overlaps W; A's own rows do not count");
+  // A meeting whose section the catalog no longer lists is an offering of its own.
+  const gone = planMeeting('03-117', socRow('F26', 'Pittsburgh', 'Z', 'TR 01:00PM-02:00PM'));
+  assertEqual(countPlanConflictPairs(bio.concat(gone), keyOf), 2);
 });
 
 // ── normalizeCmuEmail (js/utils.js) ──────────────────────

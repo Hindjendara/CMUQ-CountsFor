@@ -785,6 +785,42 @@ test('plan view: a lecture is not in conflict with its own section; a real overl
   assertEqual((html.match(/class="plan-list-row is-conflict"/g) || []).length, 2);
 });
 
+test('plan view: an offering whose own times overlap in the SOC is no conflict; another course at that time is', async () => {
+  const { App, ctx, document } = loadPlanApp();
+  // 03-117 as the Schedule of Classes lists it: Lec 1 meets inside the time of its lab A.
+  App.courses.push({ course_code: '03-117', course_name: 'Frontiers, Analysis, and Discovery in Biological Sciences', units: 6,
+    requirements: { CS: [], IS: [], BA: [], BS: [] }, offered: ['F26'], offerings: [
+      planRow('F26', 'Pittsburgh', 'Lec 1', 'TR 01:00PM-01:50PM'),
+      planRow('F26', 'Pittsburgh', 'A', 'TR 01:00PM-04:00PM'),
+    ] });
+  App.courseIndex = vm.runInContext('buildCourseIndex', ctx)(App.courses);
+  const plan = App._ensureActivePlan(true);
+  const view = () => {
+    App.openPlanDetail(plan.id);
+    const html = leftBodyHtml(document);
+    return { html, warn: (html.match(/<span class="plan-stat plan-stat-warn">([^<]*)</) || [])[1] || '',
+      rows: (html.match(/class="plan-list-row is-conflict"/g) || []).length };
+  };
+  App.togglePlanSection('03-117', 'F26', 'A', 'Pittsburgh');
+  let v = view();
+  assertEqual([v.warn, v.rows], ['', 0], 'Lec 1 inside lab A is one offering');
+  assertFalse(v.html.includes('Time conflict'));
+  assertEqual(App._planSummary(App._getPlanRecord(plan.id), 'F26').conflicts, 0);
+  await App.showPlanView();
+  assertTrue(leftBodyHtml(document).includes('<span class="plan-card-meta">1 course · 6 units</span>'), 'no conflict on the library card');
+
+  // 09-207 Pittsburgh A meets MW 2:00 PM to 4:20 PM and MW 2:00 PM to 2:50 PM, and its Lec 1 meets
+  // T 3:30 PM to 4:50 PM, inside the time of 03-117 lab A: one real conflict, between the two courses.
+  App.togglePlanSection('09-207', 'F26', 'A', 'Pittsburgh');
+  v = view();
+  assertEqual([v.warn, v.rows], ['1 time conflict', 2]);
+  await App.showPlanView();
+  assertTrue(leftBodyHtml(document).includes('2 courses · 15 units · 1 conflict'));
+  App.togglePlanSection('03-117', 'F26', 'A', 'Pittsburgh');
+  v = view();
+  assertEqual([v.warn, v.rows], ['', 0], 'the overlapping rows of 09-207 A are not a conflict');
+});
+
 test('planner: a shared snapshot and the imported plan keep the lecture and section together', () => {
   const { App } = loadPlanApp();
   App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
