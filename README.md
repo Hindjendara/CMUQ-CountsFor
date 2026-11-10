@@ -151,7 +151,7 @@ This is the CMU-Q server setup (section 15). Until the cutover the live site sti
 ### 3.2 Key ideas
 
 1. **Zero-build frontend.** Plain HTML, CSS and JavaScript. No npm, no bundler, no framework. Files are loaded with `<script>` tags in a fixed order and share globals. What is in the repo is exactly what is served.
-2. **The course catalog is a static file.** `frontend/data/courses.json` (6,784 courses, about 30 MB, about 1.2 MB gzipped) is downloaded by the browser on every app load (Apache answers 304 when it has not changed). The API does not serve course data. On the server the daily update rewrites this file in place (14.2); nothing commits it to git any more.
+2. **The course catalog is a static file.** `frontend/data/courses.json` (6,791 courses, about 30 MB, about 1.2 MB gzipped) is downloaded by the browser on every app load (Apache answers 304 when it has not changed). The API does not serve course data. On the server the daily update rewrites this file in place (14.2); nothing commits it to git any more.
 3. **The backend stores people and their activity**: users, roles, directory, flags, saved courses, shared plans, search counts, admin catalog edits and the audit log.
 4. **Admin catalog edits are layered on top of the static file in the browser** (`applyCourseOverrides()` in `js/data.js`), because the scrape would overwrite any edit made directly in `frontend/data/courses.json`. See [section 12](#12-course-overrides-admin-catalog-edits).
 5. **Security lives on the backend.** The UI hides buttons based on role, but every protected route checks the role group server side.
@@ -235,7 +235,7 @@ CountsFor/
 | `frontend/css/styles.css` | yes | App styles, about 4,500 lines, light and dark tokens at the top. | Live |
 | `frontend/css/landing.css` | yes | Landing page styles. | Live |
 | `frontend/assets/img/` | yes | Scotty and CMU artwork used by the landing and navbar, plus the two favicons (`scotty-portrait.png` for the landing, `scotty-standing.png` for the app). | Live |
-| `frontend/data/` | yes | Served catalog: `courses.json` (6,784 courses, about 31 MB), `minors.json` (minor requirements) and `requirement_buckets.json` (every requirement bucket per program, for the admin course editor). On the server the daily update rewrites `courses.json` and `requirement_buckets.json` and adds `courses.json.gz` and `courses.json.prev` (both gitignored or never committed). See [4.4](#44-backenddata-and-backendscraper). | Live |
+| `frontend/data/` | yes | Served catalog: `courses.json` (6,791 courses, about 31 MB), `minors.json` (minor requirements) and `requirement_buckets.json` (every requirement bucket per program, for the admin course editor). On the server the daily update rewrites `courses.json` and `requirement_buckets.json` and adds `courses.json.gz` and `courses.json.prev` (both gitignored or never committed). See [4.4](#44-backenddata-and-backendscraper). | Live |
 | `frontend/tests/` | yes | Browser test page (`test.html`) and JS unit tests. Not deployed (the rsync in 15.4 skips it, and Apache denies `/tests/`). | Live |
 | `backend/` | yes | Flask API, private data and the scraper. See [4.2](#42-backend) and [section 9](#9-backend-walkthrough). | Live |
 | `deploy/` | yes | Everything the CMU-Q server needs besides the code. No secrets. See [4.3](#43-deploy). | Live |
@@ -524,8 +524,8 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 | Where | What |
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
-| `<meta name="cf-build">` in `app.html` | Cache tag appended to `frontend/data/courses.json`. Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=wave-a-2026-11-10`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `<meta name="cf-build">` in `app.html` | Cache tag appended to the data files (`data/courses.json`, `data/minors.json`, and `data/requirement_buckets.json` for the admin course editor). Bumped by `scripts/bump_cf_build.py`. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=final-2026-11-10`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
@@ -630,7 +630,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | `downloadExcelSheet(filename, sheetName, headers, rows, metaRows)` | Despite the name, writes a UTF-8 CSV (with BOM). |
 | `slugifyFilename(text)` | Safe file names for exports. |
 
-### 8.3 `js/data.js` (about 1,820 lines): catalog logic, pure functions
+### 8.3 `js/data.js` (about 2,120 lines): catalog logic, pure functions
 
 | Lines (approx.) | Item | Purpose |
 |---|---|---|
@@ -667,7 +667,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | `computeViewMode()`, `validateProfile()` | Which programs to show for a profile. Students always get `focused-single` (their own major; their minors are sections of that tree). The old `focused-dual` mode, where a minor borrowed another major's tree, is gone. |
 | `saveProfile()`, `loadProfile()`, `clearProfile()` | Persist the local profile in localStorage keys `cf_role`, `cf_primary`, `cf_secondary`, `cf_minors`, `cf_scope`. `loadProfile()` drops minors the app does not offer or the major may not take, and saves the cleaned list. |
 
-### 8.5 `js/api.js` (about 360 lines): all network calls
+### 8.5 `js/api.js` (about 390 lines): all network calls
 
 `apiFetch(path, opts)` is the single wrapper. It requests `CF_BACKEND_URL + path` (normally just the relative path), always sends `credentials: 'include'` and the bearer token, times out after 20 s by default (`opts.timeoutMs`), never throws on HTTP errors, saves any `auth_token` it sees in a response, and returns `{ ok, status, data, error, message }`. `status: 0` means the API could not be reached: network failure, timeout, or a 502/503/504 without a JSON body (the proxy, Apache or `scripts/dev_server.py`, reporting the API down). Flask's own JSON error responses pass through unchanged.
 
@@ -696,9 +696,9 @@ One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "C
 
 `js/app.js` has no sign-in screens of its own (the old in-app copy was removed in November 2026). It redirects to `index.html` whenever a sign-in is needed.
 
-### 8.7 `js/app.js` (about 6,610 lines): the `App` object
+### 8.7 `js/app.js` (about 7,560 lines): the `App` object
 
-Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for the `cleanup` branch after the wave A merges (final data, Psychology renumbering, semesters from the SOC, minors dropdown; November 10, 2026); they will drift as the file is edited. Search for the function name.
+Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for the `cleanup` branch after the wave A merges (final data, Psychology renumbering, semesters from the SOC, minors dropdown) and the admin editor merge (November 10, 2026); they will drift as the file is edited. Search for the function name.
 
 | Lines (approx.) | Section | Key functions |
 |---|---|---|
@@ -784,7 +784,7 @@ Note: course statuses live only in the browser too; saving them on the account c
 
 Tests: `tests/minors.test.js` (selection rules, trees, progress, double counting), `tests/minors-file.test.js` (the real file through `fetchMinors()`, the fallback list, every category's rule) and the minors part of `tests/app-views.test.js` (the student tree, statuses, a warning, the Minors tab dropdown for faculty and for a student, Product Management, no campus note, guest changes, the save queue, a missing file).
 
-**Admin edits** (12.2, 12.6). Two kinds of admin edits change the minors without touching the file. Which courses fill a category is a course edit: the course editor's Minors section and the category view save a `MINOR:<code>` key with the category paths to add or remove. `applyCourseOverrides()` puts them on `course._minorEdits`, `collectMinorEdits()` gathers them, and `buildMinorTree()` applies them after the file's list and select rule: a removed code leaves the category, an added code joins it when it has a catalog row and is not hidden. The codes an edit changed are on the node (`adminAdded`, `adminRemoved`) and named under the category for admins only; a listed code the admin archived is named "Archived on the admin page" instead of missing. `minorLeafCategories()` lists a minor's categories that hold courses (the editor's picker) and `minorFileCategories()` the ones that take a course by the file alone. The minor settings are applied by `applyMinorOverrides()` to a copy of the file before the index is built: the unit total, a note from CMU-Q in the header, and the double counting limits. When an admin sets `max_with_major` and `max_with_other_minors` to different values, each applies on its own (`minorDoubleCountRules().separate`: courses shared with the major, and courses shared with another minor); equal values stay one shared limit, as in the files. The header then says that CMU-Q set the limit and that it replaces the quoted audit rule. Admins also get an Edit minor settings button in the Minors tab. Tests: `tests/course-edits.test.js` and `tests/admin-editor.test.js`.
+**Admin edits** (12.2, 12.6). Two kinds of admin edits change the minors without touching the file. Which courses fill a category is a course edit: the course editor's Minors section and the category view save a `MINOR:<code>` key with the category paths to add or remove. `applyCourseOverrides()` puts them on `course._minorEdits`, `collectMinorEdits()` gathers them, and `buildMinorTree()` applies them after the file's list and select rule: a removed code leaves the category, an added code joins it when it has a catalog row and is not hidden. The codes an edit changed are on the node (`adminAdded`, `adminRemoved`) and named under the category for admins only; a listed code the admin archived is named "Archived on the admin page" instead of missing. `minorLeafCategories()` lists a minor's categories that hold courses (the editor's picker) and `minorFileCategories()` the ones that take a course by the file alone. The minor settings are applied by `applyMinorOverrides()` to a copy of the file before the index is built: the unit total, a note from CMU-Q in the header, and the double counting limits. When an admin sets `max_with_major` and `max_with_other_minors` to different values, each applies on its own (`minorDoubleCountRules().separate`: courses shared with the major, and courses shared with another minor); equal values stay one shared limit, as in the files. The header then says that CMU-Q set the limit and that it replaces the quoted rule (the audit rule, or the catalog rule for Product Management). Admins also get an Edit minor settings button in the Minors tab. Tests: `tests/course-edits.test.js` and `tests/admin-editor.test.js`.
 
 ---
 
@@ -1023,7 +1023,7 @@ The overrides are applied after the pipeline output, so the daily update needs n
 
 Admin page, **Courses** tab, **Courses** view: search by number or title, filter (all, Edited, Added here, Check these, Archived), open a course (or press **Edit course data** on its course card), edit the fields and what it counts for, then Save. Under each edited course the list says what changed, for example "Units · Computer Science: 1 added, 1 removed · Psychology minor: 1 added".
 
-- **What it counts for**, one group per major. The pick list is the 2026-27 catalog: the categories of the scraped catalog before any edit, plus the empty buckets of `data/requirement_buckets.json` when the pipeline wrote it (without it, the scraped categories only). A category under another program's root is refused. A category that is not in the list is added only after a confirmation and is tagged **Not in the 2026-27 catalog**; the **Check these** filter lists every course whose edits use one (or a minor category the minor file does not have, or a list saved before the change). A category typed into a "Pick or type" box but never added with its Add button is added on save when it is in the list; otherwise the save stops with a notice.
+- **What it counts for**, one group per major. The pick list is the 2026-27 catalog: the categories of the scraped catalog before any edit, plus the empty buckets of `data/requirement_buckets.json` (tracked in git and rewritten by every pipeline run, 14.5.1; the editor loads it when the Courses tab opens, and without it offers the scraped categories only). A category under another program's root is refused. A category that is not in the list is added only after a confirmation and is tagged **Not in the 2026-27 catalog**; the **Check these** filter lists every course whose edits use one (or a minor category the minor file does not have, or a list saved before the change). A category typed into a "Pick or type" box but never added with its Add button is added on save when it is in the list; otherwise the save stops with a notice.
 - A row the admin added says **Added here**. A catalog row the admin removed stays listed, struck through, as **Removed here**, with **Put back**. An edited group says **Edited here** and has **Reset to the catalog**. When CS and AI list the same Gen Ed category (AI's general education rows are copies of the SCS rows CS uses), the editor reminds you to change it in both.
 - **Minors**: the minor categories the course fills (From the minor file, or Added here), the removed ones with Put back, and a picker of every minor category that holds courses.
 - Save sends, per program and per minor, only the change from the catalog, and only for the keys that differ from what is stored; a group set back to the catalog sends null. A list saved before the change shows a notice ("These categories were saved before the 2026-27 catalog names.") and saving turns it into a change against today's catalog.
@@ -2019,13 +2019,13 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 10, 2026 (`cleanup` branch, after the wave A merges)
+### 16.2 Results on November 10, 2026 (`cleanup` branch, after the wave A merges and the admin editor merge)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **201 passed, 6 failed** (the known failures below) |
+| `python -m pytest backend/tests` | **222 passed, 6 failed** (the known failures below) |
 | `python -m pytest backend/scraper/tests` | 262 passed |
-| `node scripts/run-data-tests.js` | 193 passed (profile 51/51, data 70/70, minors 26/26, utils 5/5, dash guard 3/3, minors file 8/8, app views 22/22, catalog data 8/8) |
+| `node scripts/run-data-tests.js` | 220 passed (profile 51/51, data 70/70, minors 26/26, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 22/22, admin editor 13/13, catalog data 8/8) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
