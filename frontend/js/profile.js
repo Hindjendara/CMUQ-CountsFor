@@ -76,31 +76,87 @@ function isProgramDataPending(programId) {
   return !!(meta && meta.dataPending);
 }
 
-// ── Centralized minor list (alphabetical) ──────────────────
+// ── Minors (alphabetical by name) ──────────────────────────
+// The minors and their names come from frontend/data/minors.json:
+// applyMinorsCatalog() rebuilds MINOR_LIST and MINOR_BLOCKED_MAJORS from it
+// once the app loads the file. The values below are the fallback for the
+// screens that show before that (onboarding) and must match the file;
+// tests/minors-file.test.js checks that they do. The backend keeps the same
+// codes in VALID_MINORS_FOR_PATCH and the same blocks in MAJOR_MINOR_COLLISION
+// (backend/auth.py).
 const MINOR_LIST = [
-  { code: 'arabic',        label: 'Arabic Studies' },
-  { code: 'biology',       label: 'Biological Sciences' },
-  { code: 'business',      label: 'Business Administration' },
-  { code: 'cs',            label: 'Computer Science' },
-  { code: 'economics',     label: 'Economics' },
-  { code: 'finance',       label: 'Financial Management' },
-  { code: 'history',       label: 'History' },
-  { code: 'math',          label: 'Mathematical Sciences' },
-  { code: 'neuroscience',  label: 'Neuroscience' },
-  { code: 'product',       label: 'Product Management' },
-  { code: 'writing',       label: 'Professional Writing' },
-  { code: 'psychology',    label: 'Psychology' },
-  { code: 'sociology',     label: 'Sociology' },
-  { code: 'self_defined',  label: 'Student-defined' },
-  { code: 'tech_entre',    label: 'Tech Entrepreneurship' },
+  { code: 'arabic',             label: 'Arabic Studies' },
+  { code: 'biology',            label: 'Biological Sciences' },
+  { code: 'business',           label: 'Business Administration' },
+  { code: 'business_analytics', label: 'Business Analytics and Optimization' },
+  { code: 'comp_bio',           label: 'Computational Biology' },
+  { code: 'cs',                 label: 'Computer Science' },
+  { code: 'economics',          label: 'Economics' },
+  { code: 'finance',            label: 'Financial Management' },
+  { code: 'history',            label: 'History' },
+  { code: 'math',               label: 'Mathematical Sciences' },
+  { code: 'neuroscience',       label: 'Neuroscience' },
+  { code: 'writing',            label: 'Professional Writing' },
+  { code: 'psychology',         label: 'Psychology' },
+  { code: 'sociology',          label: 'Sociology' },
+  { code: 'self_defined',       label: 'Student-defined' },
+  { code: 'tech_entre',         label: 'Tech Entrepreneurship' },
 ];
 
-// Major code ↔ analogous minor code, so a student picking a same-field
-// major+minor combo is silently disallowed.
-const MAJOR_TO_MINOR_CODE = { CS: 'cs', BS: 'biology', BA: 'business' };
+// Majors that may not declare a minor (blocked_majors in minors.json): the
+// minor in their own field, and for BA also the two other Tepper minors.
+const MINOR_BLOCKED_MAJORS = {
+  biology: ['BS'],
+  business: ['BA'],
+  business_analytics: ['BA'],
+  cs: ['CS'],
+  finance: ['BA'],
+};
 
-// Inverse — minors whose requirements we already track as a major.
-const MINOR_CODE_TO_MAJOR = { cs: 'CS', biology: 'BS', business: 'BA' };
+/** { list, blocked } from a parsed minors.json, in the shape of the two constants above. */
+function minorListFromData(data) {
+  const minors = (data && data.minors && typeof data.minors === 'object') ? data.minors : {};
+  const list = [];
+  const blocked = {};
+  for (const [code, def] of Object.entries(minors)) {
+    if (!def || typeof def !== 'object') continue;
+    list.push({ code, label: String(def.name || code) });
+    const majors = Array.isArray(def.blocked_majors) ? def.blocked_majors.filter(Boolean) : [];
+    if (majors.length) blocked[code] = majors.slice();
+  }
+  list.sort((a, b) => a.label.localeCompare(b.label));
+  return { list, blocked };
+}
+
+/** Rebuild MINOR_LIST and MINOR_BLOCKED_MAJORS in place from minors.json. */
+function applyMinorsCatalog(data) {
+  const { list, blocked } = minorListFromData(data);
+  if (!list.length) return false;
+  MINOR_LIST.splice(0, MINOR_LIST.length, ...list);
+  for (const k of Object.keys(MINOR_BLOCKED_MAJORS)) delete MINOR_BLOCKED_MAJORS[k];
+  Object.assign(MINOR_BLOCKED_MAJORS, blocked);
+  return true;
+}
+
+function isKnownMinor(code) {
+  return MINOR_LIST.some(m => m.code === code);
+}
+
+/** True when students of this major may not declare this minor. */
+function isMinorBlockedForMajor(minorCode, majorCode) {
+  const majors = MINOR_BLOCKED_MAJORS[minorCode];
+  return !!(majorCode && Array.isArray(majors) && majors.includes(majorCode));
+}
+
+/** A student's minors without unknown codes, minors blocked for the major, or repeats. */
+function cleanProfileMinors(primary, codes) {
+  const out = [];
+  for (const mc of codes || []) {
+    if (!mc || out.includes(mc) || !isKnownMinor(mc) || isMinorBlockedForMajor(mc, primary)) continue;
+    out.push(mc);
+  }
+  return out;
+}
 
 function getMinorLabel(code) {
   if (!code) return null;
@@ -116,14 +172,6 @@ function getProfileMinors(profile) {
   }
   if (profile.secondary) return [profile.secondary];
   return [];
-}
-
-function getMinorAsMajorCode(profile) {
-  if (!profile || profile.role !== 'student') return null;
-  for (const mc of getProfileMinors(profile)) {
-    if (MINOR_CODE_TO_MAJOR[mc]) return MINOR_CODE_TO_MAJOR[mc];
-  }
-  return null;
 }
 
 // ── Roles ──────────────────────────────────────────────────
@@ -204,9 +252,8 @@ function computeViewMode(profile) {
     return 'cross-program';
   }
 
-  // Student-with-minor goes "dual" only if the minor maps to a major we have
-  // requirement-tree data for (CS / BA / BS). Other minors are role-badge only.
-  if (profile.role === 'student' && getMinorAsMajorCode(profile)) return 'focused-dual';
+  // Students see their own major; their minors are sections of the same tree
+  // (built from minors.json), not other majors' trees.
   return 'focused-single';
 }
 
@@ -221,8 +268,8 @@ function validateProfile(profile) {
     for (const mc of minors) {
       if (seen.has(mc)) return false;
       seen.add(mc);
-      if (!MINOR_LIST.some(m => m.code === mc)) return false;
-      if (MAJOR_TO_MINOR_CODE[profile.primary] === mc) return false;
+      if (!isKnownMinor(mc)) return false;
+      if (isMinorBlockedForMajor(mc, profile.primary)) return false;
     }
     return true;
   }
@@ -243,7 +290,7 @@ function validateProfile(profile) {
     if (profile.scope === 'all_programs')  return true;
     if (profile.scope === 'arts_sciences') return true;
     if (profile.scope === 'major')         return MAJOR_LIST.includes(profile.primary);
-    if (profile.scope === 'minor')         return MINOR_LIST.some(m => m.code === profile.primary);
+    if (profile.scope === 'minor')         return isKnownMinor(profile.primary);
     return false;
   }
 
@@ -297,12 +344,24 @@ function loadProfile() {
     if (LEGACY_MAJOR_MINOR[secondary]) {
       secondary = LEGACY_MAJOR_MINOR[secondary];
       try { localStorage.setItem('cf_secondary', secondary); } catch {}
-    } else if (!MINOR_LIST.some(m => m.code === secondary)) {
+    } else if (!isKnownMinor(secondary)) {
       secondary = null;
       try { localStorage.setItem('cf_secondary', ''); } catch {}
     }
   }
   if (!secondaries.length && secondary) secondaries = [secondary];
+  // Drop minors the app no longer offers (product, November 2026) or that the
+  // major may not take, so the rest of the profile still loads.
+  if (role === 'student') {
+    const kept = cleanProfileMinors(primary, secondaries);
+    if (kept.length !== secondaries.length) {
+      try {
+        localStorage.setItem('cf_minors', JSON.stringify(kept));
+        localStorage.setItem('cf_secondary', kept[0] || '');
+      } catch {}
+    }
+    secondaries = kept;
+  }
 
   const profile = {
     role,

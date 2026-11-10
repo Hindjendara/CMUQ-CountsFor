@@ -1,10 +1,12 @@
 // ============================================================
 // CountsFor — API Client
 // Course data comes only from the catalog bundled with the frontend
-// (data/courses.json, refreshed by the scraper).
+// (data/courses.json, refreshed by the scraper); minor requirements come
+// from data/minors.json, built by hand from the official minor files.
 // ============================================================
 
 const LOCAL_DATA = 'data/courses.json';
+const MINORS_DATA = 'data/minors.json';
 
 function _bundledDataUrl(path) {
   const meta = typeof document !== 'undefined'
@@ -42,6 +44,22 @@ async function fetchAllCourses() {
   const courses = (data && data.courses) || [];
   if (courses.length === 0) throw new Error(`${LOCAL_DATA} has no courses.`);
   return courses;
+}
+
+// The minor requirements (data/minors.json). Throws when the file cannot be
+// loaded or has no minors; App._prepareCatalog() catches it and the app runs
+// without minor requirements (each minor section then says so).
+async function fetchMinors() {
+  let data;
+  try {
+    data = await _get(_bundledDataUrl(MINORS_DATA));
+  } catch (e) {
+    throw new Error(`Could not load ${MINORS_DATA} (${e.message})`);
+  }
+  if (!data || !data.minors || typeof data.minors !== 'object' || !Object.keys(data.minors).length) {
+    throw new Error(`${MINORS_DATA} has no minors.`);
+  }
+  return data;
 }
 
 // ============================================================
@@ -287,16 +305,6 @@ async function apiRevokeDirectoryAccess(body) {
 }
 async function apiDeleteDirectoryEntry(id) {
   return apiFetch('/api/directory/entries/' + encodeURIComponent(id), { method: 'DELETE' });
-}
-
-async function fetchMinorCourses() {
-  try {
-    const res = await fetch('data/minor_courses.json');
-    if (!res.ok) throw new Error('minor courses missing');
-    return await res.json();
-  } catch {
-    return {};
-  }
 }
 
 // ── Flags ────────────────────────────────────────────────────

@@ -1,71 +1,78 @@
-// ── annotateDoubleCounters ───────────────────────────────
+// ── annotateDoubleCounters (major + minors.json minors) ─────
 
 function makeCourse(code, requirementsByMajor) {
   const requirements = {};
   for (const m of Object.keys(requirementsByMajor)) {
     requirements[m] = requirementsByMajor[m].map(r => ({ requirement: r, type: false }));
   }
-  return { course_code: code, course_name: code, requirements };
+  return { course_code: code, course_name: code, units: 9, requirements };
 }
 
-test('annotateDoubleCounters: focused-dual marks courses fulfilling both programs', () => {
+// A one-category Business minor (70-311 or 73-100), built like minors.json.
+function businessMinorIndex(courses) {
+  const data = { minors: { business: {
+    name: 'Business Administration', blocked_majors: ['BA'],
+    double_count: { text: null, max_with_major: null },
+    categories: [{ id: 'core', name: 'Core', rule: { type: 'pick', n: 1, units: null },
+      courses: ['70-311', '73-100'], select: null, children: [], notes: [] }],
+  } } };
+  return buildMinorIndex(data, courses, buildCourseIndex(courses));
+}
+
+test('annotateDoubleCounters: marks a course of the major and a chosen minor', () => {
   const courses = [
     makeCourse('15-122', { CS: ['CS---Core'], BA: ['BA---Tech'] }),
     makeCourse('21-127', { CS: ['CS---Math'] }),
-    makeCourse('70-311', { BA: ['BA---Core'] }),
+    makeCourse('70-311', { CS: ['CS---Electives'], BA: ['BA---Core'] }),
+    makeCourse('73-100', { BA: ['BA---Core'] }),
   ];
-  const profile = { role: 'student', primary: 'CS', secondary: 'business' };
-  const minorList = { business: ['70-311', '73-100'] };
+  const profile = { role: 'student', primary: 'CS', secondaries: ['business'] };
+  annotateDoubleCounters(courses, profile, businessMinorIndex(courses));
 
-  annotateDoubleCounters(courses, profile, minorList);
-
-  assertEqual(courses[0]._doubleCounter, false);
-  assertEqual(courses[1]._doubleCounter, false);
-  assertEqual(courses[2]._doubleCounter, true);
+  assertEqual(courses.map(c => c._doubleCounter), [false, false, true, false]);
+  assertEqual(courses[2]._minorMatches, ['business']);
+  assertEqual(courses[2]._majorKind, 'degree');
+  assertEqual(courses[3]._minorMatches, ['business'], 'counts for the minor only');
+  assertEqual(courses[3]._majorKind, null);
 });
 
-test('annotateDoubleCounters: 15-122 not a false minor double counter (T5)', () => {
+test('annotateDoubleCounters: a General Education overlap is marked as gened', () => {
+  const courses = [{ course_code: '73-100', course_name: 'Principles of Economics', units: 9,
+    requirements: { CS: [{ requirement: 'GenEd---Category 2', type: true, major: 'CS' }] } }];
+  annotateDoubleCounters(courses, { role: 'student', primary: 'CS', secondaries: ['business'] }, businessMinorIndex(courses));
+  assertEqual(courses[0]._doubleCounter, true);
+  assertEqual(courses[0]._majorKind, 'gened');
+});
+
+test('annotateDoubleCounters: 15-122 is not a false minor double counter', () => {
   const courses = [makeCourse('15-122', { CS: ['CS---Core'], BA: ['BA---Tech'] })];
-  const profile = { role: 'student', primary: 'CS', secondary: 'business' };
-  const minorList = { business: ['70-311'] };
-  annotateDoubleCounters(courses, profile, minorList);
+  annotateDoubleCounters(courses, { role: 'student', primary: 'CS', secondaries: ['business'] }, businessMinorIndex(courses));
   assertEqual(courses[0]._doubleCounter, false);
 });
 
-test('annotateDoubleCounters: focused-single clears any prior annotations', () => {
-  const courses = [makeCourse('15-122', { CS: ['CS---Core'], BA: ['BA---Tech'] })];
-  courses[0]._doubleCounter = true;  // simulate stale annotation
-
-  const profile = { role: 'student', primary: 'CS', secondary: null };
-  annotateDoubleCounters(courses, profile, {});
-
-  assertEqual(courses[0]._doubleCounter, false);
+test('annotateDoubleCounters: no minors, faculty or no minor data clear prior annotations', () => {
+  const courses = [makeCourse('70-311', { CS: ['CS---Core'], BA: ['BA---Tech'] })];
+  const index = businessMinorIndex(courses);
+  for (const [profile, idx] of [
+    [{ role: 'student', primary: 'CS', secondary: null }, index],
+    [{ role: 'area_head', primary: null, secondary: null }, index],
+    [{ role: 'professor', primary: 'AS', secondary: null }, index],
+    [{ role: 'student', primary: 'CS', secondaries: ['business'] }, null],
+  ]) {
+    courses[0]._doubleCounter = true;  // stale annotation
+    annotateDoubleCounters(courses, profile, idx);
+    assertEqual(courses[0]._doubleCounter, false, JSON.stringify(profile));
+  }
 });
 
-test('annotateDoubleCounters: cross-program clears annotations', () => {
-  const courses = [makeCourse('15-122', { CS: ['CS---Core'], BA: ['BA---Tech'] })];
-  courses[0]._doubleCounter = true;
-
-  const profile = { role: 'area_head', primary: null, secondary: null };
-  annotateDoubleCounters(courses, profile, {});
-
-  assertEqual(courses[0]._doubleCounter, false);
-});
-
-test('annotateDoubleCounters: empty requirements arrays do not count', () => {
+test('annotateDoubleCounters: empty or missing requirements do not count or crash', () => {
   const courses = [
-    { course_code: '15-122', requirements: { CS: [], BA: [] } },
+    { course_code: '70-311', requirements: { CS: [], BA: [] } },
+    { course_code: '73-100' },  // no requirements at all
   ];
-  annotateDoubleCounters(courses, { role: 'student', primary: 'CS', secondary: 'BA' }, {});
-  assertEqual(courses[0]._doubleCounter, false);
-});
-
-test('annotateDoubleCounters: course with missing requirements key does not crash', () => {
-  const courses = [
-    { course_code: '15-122' },  // no requirements at all
-  ];
-  annotateDoubleCounters(courses, { role: 'student', primary: 'CS', secondary: 'BA' }, {});
-  assertEqual(courses[0]._doubleCounter, false);
+  annotateDoubleCounters(courses, { role: 'student', primary: 'CS', secondaries: ['business'] }, businessMinorIndex(courses));
+  assertEqual(courses.map(c => c._doubleCounter), [false, false]);
+  assertEqual(courses.map(c => c._majorKind), [null, null]);
 });
 
 // ── annotateMultiProgram ─────────────────────────────────
@@ -203,9 +210,11 @@ test('orderCfColumns: faculty get canonical cross-program order', () => {
   assertEqual(orderCfColumns(mappings, { role: 'professor', primary: 'IS' }), ['CS', 'IS', 'BA', 'BS']);
 });
 
-test('orderCfColumns: student leads with major then minor-as-major', () => {
+test('orderCfColumns: student leads with their major, then the canonical order', () => {
   const mappings = { CS: [1], IS: [1], BA: [1], BS: [1] };
-  assertEqual(orderCfColumns(mappings, { role: 'student', primary: 'BA', secondary: 'cs' }), ['BA', 'CS', 'IS', 'BS']);
+  assertEqual(orderCfColumns(mappings, { role: 'student', primary: 'BS', secondary: 'cs' }), ['BS', 'CS', 'IS', 'BA']);
+  assertEqual(orderCfColumns(mappings, { role: 'student', primary: 'IS', secondaries: ['business'] }), ['IS', 'CS', 'BA', 'BS'],
+    'a minor no longer pulls another major forward');
 });
 
 test('orderCfColumns: only includes programs that have mappings', () => {
@@ -589,9 +598,13 @@ test('getAlsoCountsFor and annotateDoubleCounters skip hidden rows', () => {
   assertEqual(getAlsoCountsFor(intro, 'CS'), []);
   assertEqual(getAlsoCountsFor(current, 'CS'), ['BA']);
 
-  const profile = { role: 'student', primary: 'CS', secondary: 'business' };
-  const minorList = { business: ['85-100', '85-110'] };
-  annotateDoubleCounters([intro, current], profile, minorList);
+  const catalog = [current, intro];
+  const index = buildMinorIndex({ minors: { psychology: {
+    name: 'Psychology', double_count: {},
+    categories: [{ id: 'any', name: 'Any Psychology', rule: { type: 'pick', n: 2 }, courses: ['85-100', '85-110'] }],
+  } } }, catalog, buildCourseIndex(catalog));
+  annotateDoubleCounters(catalog, { role: 'student', primary: 'CS', secondaries: ['psychology'] }, index);
   assertEqual(intro._doubleCounter, false);
   assertEqual(current._doubleCounter, true);
+  assertEqual(courseCountsForMinor(intro, 'psychology', index), false, 'a hidden row counts for no minor');
 });

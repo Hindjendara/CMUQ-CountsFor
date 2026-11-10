@@ -636,10 +636,6 @@ function orderCfColumns(mappings, profile) {
       && MAJOR_LIST.includes(profile.primary) && present.includes(profile.primary)) {
     lead.push(profile.primary);
   }
-  const minorMajor = (typeof getMinorAsMajorCode === 'function') ? getMinorAsMajorCode(profile) : null;
-  if (minorMajor && present.includes(minorMajor) && !lead.includes(minorMajor)) {
-    lead.push(minorMajor);
-  }
   const rest = present.filter(m => !lead.includes(m));
   return [...lead, ...rest];
 }
@@ -1119,39 +1115,634 @@ function layoutPlanDayBlocks(entries) {
   return result;
 }
 
-// ── Minor course lists (T5) ──────────────────────────────────
-function courseCountsForMinor(course, minorCode, minorCourseList) {
-  if (!minorCode || !course) return false;
-  const list = minorCourseList && minorCourseList[minorCode];
-  if (Array.isArray(list)) {
-    return list.includes(course.course_code);
+// ── Minors (frontend/data/minors.json) ───────────────────────
+// minors.json describes each minor as a tree of categories; the catalog
+// supplies the course facts (names, units, offerings). Everything in this
+// section is pure (no DOM, no storage) and is tested in tests/minors.test.js.
+//
+// A category lists its courses by code (`courses`), matches them by number
+// (`select`) or holds sub categories (`children`). Its `rule` is one of
+// take_all, required, pick (n courses, or n parts when count is "children",
+// or n courses across its parts when count is "courses"; `units` adds a unit
+// floor), min_units or max_units.
+
+/** The statuses a student can give a course. Not taken is no entry at all. */
+const COURSE_STATUSES = ['in_progress', 'completed'];
+
+/** localStorage key of the student's course statuses: { "15-122": "completed" }. */
+const COURSE_STATUS_KEY = 'cf_course_status';
+
+/** Keep only well formed entries, with canonical course codes. */
+function normalizeCourseStatuses(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [code, status] of Object.entries(raw)) {
+    const key = normalizeCourseCode(code);
+    if (key && COURSE_STATUSES.includes(status)) out[key] = status;
   }
-  const mapped = MINOR_CODE_TO_MAJOR[minorCode];
-  if (!mapped) return false;
-  const reqs = course.requirements || {};
-  return Array.isArray(reqs[mapped]) && reqs[mapped].length > 0;
+  return out;
+}
+
+/** The status control cycles: not taken, in progress, completed, not taken. */
+function nextCourseStatus(status) {
+  if (status === 'in_progress') return 'completed';
+  if (status === 'completed') return '';
+  return 'in_progress';
+}
+
+function courseStatusLabel(status) {
+  if (status === 'completed') return 'Completed';
+  if (status === 'in_progress') return 'In progress';
+  return 'Not taken';
+}
+
+/** "15-122" gives { prefix: "15", number: 122 }; anything else gives null. */
+function parseCourseNumber(code) {
+  const m = /^(\d{2})-(\d{3})$/.exec(normalizeCourseCode(code));
+  return m ? { prefix: m[1], number: Number(m[2]) } : null;
+}
+
+/**
+ * True when a catalog course meets a category's select rule: one of the
+ * prefixes, a number inside [min_number, max_number], not excluded by code or
+ * by an excluded range, and at least min_units_per_course units when set.
+ */
+function courseMatchesSelect(course, select) {
+  if (!course || !select) return false;
+  const code = normalizeCourseCode(course.course_code);
+  const num = parseCourseNumber(code);
+  if (!num) return false;
+  if (!(select.prefixes || []).includes(num.prefix)) return false;
+  const lo = select.min_number == null ? 0 : select.min_number;
+  const hi = select.max_number == null ? 999 : select.max_number;
+  if (num.number < lo || num.number > hi) return false;
+  if ((select.exclude || []).some(x => normalizeCourseCode(x) === code)) return false;
+  for (const r of (select.exclude_ranges || [])) {
+    if (!r || r.prefix !== num.prefix) continue;
+    const rlo = r.min_number == null ? 0 : r.min_number;
+    const rhi = r.max_number == null ? 999 : r.max_number;
+    if (num.number >= rlo && num.number <= rhi) return false;
+  }
+  if (select.min_units_per_course != null && !(Number(course.units) >= select.min_units_per_course)) return false;
+  return true;
+}
+
+/**
+ * The catalog courses of one category: its listed codes that have a catalog
+ * row, plus every course its select rule matches, sorted by code. Listed codes
+ * with no catalog row come back in `missing`. Hidden rows (isCourseHidden)
+ * never count.
+ */
+function expandMinorCategory(cat, courses, courseIndex) {
+  const found = new Map();
+  const missing = [];
+  for (const raw of (cat && cat.courses) || []) {
+    const code = normalizeCourseCode(raw);
+    const course = lookupCourse(courseIndex, code);
+    if (!course) {
+      if (code && !missing.includes(code)) missing.push(code);
+      continue;
+    }
+    if (!isCourseHidden(course)) found.set(normalizeCourseCode(course.course_code), course);
+  }
+  if (cat && cat.select) {
+    for (const course of courses || []) {
+      if (isCourseHidden(course) || !courseMatchesSelect(course, cat.select)) continue;
+      found.set(normalizeCourseCode(course.course_code), course);
+    }
+  }
+  const list = Array.from(found.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(e => e[1]);
+  return { courses: list, missing };
+}
+
+/** The rule chip of a category, in the style of the major chips ("pick 1"). */
+function minorRuleLabel(rule, childCount) {
+  if (!rule) return '';
+  const units = rule.units != null ? `≥${rule.units} units` : '';
+  const withUnits = text => (units ? `${text}, ${units}` : text);
+  switch (rule.type) {
+    case 'take_all': return 'take all';
+    case 'required': return 'required';
+    case 'pick':
+      if (rule.count === 'children') return `pick ${rule.n} of ${childCount}`;
+      if (rule.count === 'courses') return withUnits(`${rule.n} courses`);
+      return withUnits(`pick ${rule.n}`);
+    case 'min_units': return units || 'units';
+    case 'max_units': return rule.units != null ? `≤${rule.units} units` : 'optional';
+    default: return '';
+  }
+}
+
+function _minorLeafCourse(course) {
+  return {
+    code: normalizeCourseCode(course.course_code),
+    name: course.course_name,
+    units: course.units,
+    department: course.department,
+    offered_qatar: course.offered_qatar,
+    offered_pitts: course.offered_pitts,
+    type: false,
+    prerequisites: course.prerequisites,
+    offered: course.offered || [],
+  };
+}
+
+/**
+ * One minor as a requirement tree with the same node shape as the major trees
+ * (label, path, children, courses, rule), so the same tree components render
+ * it. Paths are category ids joined by "---"; tree keys are "minor:<code>".
+ */
+function buildMinorTree(minorCode, def, courses, courseIndex) {
+  const treeKey = 'minor:' + minorCode;
+  function build(cat, parentPath, depth) {
+    const path = parentPath ? parentPath + '---' + cat.id : cat.id;
+    const children = (cat.children || []).map(ch => build(ch, path, depth + 1));
+    const hasList = Array.isArray(cat.courses) && cat.courses.length > 0;
+    const expanded = (hasList || cat.select)
+      ? expandMinorCategory(cat, courses, courseIndex)
+      : { courses: [], missing: [] };
+    const listed = [];
+    for (const raw of cat.courses || []) {
+      const code = normalizeCourseCode(raw);
+      if (code && !listed.includes(code)) listed.push(code);
+    }
+    const node = {
+      label: cat.name,
+      rawLabel: cat.name,
+      path,
+      depth,
+      id: cat.id,
+      isMinor: true,
+      minorCode,
+      treeKey,
+      rule: Object.assign({}, cat.rule || {}, { label: minorRuleLabel(cat.rule, children.length) }),
+      notes: Array.isArray(cat.notes) ? cat.notes.slice() : [],
+      listed,
+      missing: expanded.missing,
+      hasSelect: !!cat.select,
+      selectOnly: !!cat.select && !hasList,
+      courses: expanded.courses.map(_minorLeafCourse),
+      children,
+      isGenEd: false,
+    };
+    node.totalCourses = countTreeCourses(node);
+    return node;
+  }
+  const root = {
+    label: ((def && def.name) || minorCode) + ' minor',
+    rawLabel: (def && def.name) || minorCode,
+    path: '',
+    depth: -1,
+    isMinor: true,
+    minorCode,
+    treeKey,
+    courses: [],
+    children: [],
+  };
+  root.children = ((def && def.categories) || []).map(cat => build(cat, '', 0));
+  root.totalCourses = countTreeCourses(root);
+  return root;
+}
+
+/**
+ * Every minor of minors.json built against the loaded catalog:
+ * { order: [codes sorted by name], byCode: { code: { code, key, def, tree, eligible } } }.
+ * eligible maps a course code to the paths of the categories that accept it.
+ */
+function buildMinorIndex(data, courses, courseIndex) {
+  const index = { order: [], byCode: {} };
+  const minors = (data && data.minors) || {};
+  for (const [code, def] of Object.entries(minors)) {
+    if (!def || typeof def !== 'object') continue;
+    const tree = buildMinorTree(code, def, courses, courseIndex);
+    const eligible = new Map();
+    (function walk(node) {
+      for (const c of node.courses || []) {
+        if (!eligible.has(c.code)) eligible.set(c.code, []);
+        eligible.get(c.code).push(node.path);
+      }
+      for (const ch of node.children || []) walk(ch);
+    })(tree);
+    index.byCode[code] = { code, key: tree.treeKey, def, tree, eligible };
+  }
+  index.order = Object.keys(index.byCode).sort((a, b) =>
+    String(index.byCode[a].def.name || a).localeCompare(String(index.byCode[b].def.name || b)));
+  return index;
+}
+
+/** True when a course can count for a minor (some category lists or matches it). */
+function courseCountsForMinor(course, minorCode, minorIndex) {
+  if (!course || !minorCode || !minorIndex || !minorIndex.byCode) return false;
+  const m = minorIndex.byCode[minorCode];
+  if (!m || isCourseHidden(course)) return false;
+  return m.eligible.has(normalizeCourseCode(course.course_code));
+}
+
+/**
+ * How a course counts for a major: 'degree' when it has a major (core)
+ * requirement row, 'gened' when it only has General Education rows, null when
+ * it has none (or the row is hidden).
+ */
+function majorCountKind(course, majorCode) {
+  if (!course || !majorCode || isCourseHidden(course)) return null;
+  const rows = (course.requirements && course.requirements[majorCode]) || [];
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return rows.some(r => r && !r.type) ? 'degree' : 'gened';
+}
+
+/** "A", "A and B", "A, B and C". */
+function joinWithAnd(items) {
+  const list = (items || []).filter(Boolean);
+  if (list.length <= 1) return list.join('');
+  return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+}
+
+/** Name of a category (any depth) of a minor definition, by id. */
+function minorCategoryName(def, id) {
+  const stack = ((def && def.categories) || []).slice();
+  while (stack.length) {
+    const cat = stack.shift();
+    if (cat && cat.id === id) return cat.name;
+    for (const ch of (cat && cat.children) || []) stack.push(ch);
+  }
+  return null;
+}
+
+/**
+ * A student's progress through one minor, from their course statuses.
+ *
+ * One course fills one category, so every marked course is assigned to at
+ * most one bottom-level category. The categories with the fewest matching
+ * marked courses are filled first (then the narrower lists, then file order),
+ * each with completed courses before in progress ones and only until its rule
+ * is met. Then a group that counts courses or units across its parts
+ * (Sociology Electives, Writing's Core Writing) takes more courses into its
+ * parts until its own total is met; a max_units part never passes its cap.
+ *
+ * A category is "complete" when its completed courses meet its rule,
+ * "in_progress" when its completed and in progress courses meet it,
+ * "remaining" otherwise, and "optional" for a max_units part.
+ *
+ * Returns { byPath: Map(path, status), assigned: Map(code, path), summary }.
+ */
+function computeMinorProgress(tree, statuses) {
+  const st = statuses || {};
+  const nodes = [];
+  (function walk(node) {
+    for (const ch of node.children || []) { nodes.push(ch); walk(ch); }
+  })(tree || { children: [] });
+
+  const unitsOf = new Map();
+  const isMarked = code => st[code] === 'completed' || st[code] === 'in_progress';
+  const rank = code => (st[code] === 'completed' ? 0 : 1);
+  const unitsSum = codes => codes.reduce((n, c) => n + (unitsOf.get(c) || 0), 0);
+
+  const leaves = new Map();
+  nodes.forEach((node, order) => {
+    if ((node.children || []).length) return;
+    const cands = [];
+    for (const c of node.courses || []) {
+      if (!isMarked(c.code) || cands.includes(c.code)) continue;
+      cands.push(c.code);
+      unitsOf.set(c.code, Number(c.units) || 0);
+    }
+    cands.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+    leaves.set(node.path, { node, cands, taken: [], order });
+  });
+
+  function leafMet(node, codes) {
+    const r = node.rule || {};
+    switch (r.type) {
+      case 'take_all':
+      case 'required': {
+        const need = (node.listed && node.listed.length) ? node.listed : (node.courses || []).map(c => c.code);
+        return need.length > 0 && need.every(code => codes.includes(code));
+      }
+      case 'pick':
+        return codes.length >= (r.n || 0) && (r.units == null || unitsSum(codes) >= r.units);
+      case 'min_units':
+        return unitsSum(codes) >= (r.units || 0);
+      case 'max_units':
+        return true;
+      default:
+        return codes.length > 0;
+    }
+  }
+
+  const assigned = new Map();
+  const take = (li, code) => { li.taken.push(code); assigned.set(code, li.node.path); };
+
+  // Phase 1: each category up to its own rule.
+  const firstPass = Array.from(leaves.values())
+    .filter(li => (li.node.rule || {}).type !== 'max_units')
+    .sort((a, b) => a.cands.length - b.cands.length
+      || (a.node.courses || []).length - (b.node.courses || []).length
+      || a.order - b.order);
+  for (const li of firstPass) {
+    for (const code of li.cands) {
+      if (leafMet(li.node, li.taken)) break;
+      if (!assigned.has(code)) take(li, code);
+    }
+  }
+
+  // Phase 2: groups that count courses or units across their parts.
+  const leavesUnder = node => {
+    const out = [];
+    (function walk(n) {
+      if (!(n.children || []).length) { if (leaves.has(n.path)) out.push(leaves.get(n.path)); return; }
+      for (const ch of n.children) walk(ch);
+    })(node);
+    return out;
+  };
+  const groups = nodes.filter(n => (n.children || []).length).reverse();
+  for (const g of groups) {
+    const r = g.rule || {};
+    const byCourses = r.type === 'pick' && r.count === 'courses';
+    if (!byCourses && r.type !== 'min_units') continue;
+    const parts = leavesUnder(g);
+    const groupMet = () => {
+      const taken = parts.flatMap(li => li.taken);
+      if (byCourses) return taken.length >= (r.n || 0) && (r.units == null || unitsSum(taken) >= r.units);
+      return unitsSum(taken) >= (r.units || 0);
+    };
+    for (const li of parts) {
+      const cap = (li.node.rule || {}).type === 'max_units' ? li.node.rule.units : null;
+      for (const code of li.cands) {
+        if (groupMet()) break;
+        if (assigned.has(code)) continue;
+        if (cap != null && unitsSum(li.taken) + (unitsOf.get(code) || 0) > cap) continue;
+        take(li, code);
+      }
+    }
+  }
+
+  // Status of every category, bottom up.
+  const byPath = new Map();
+  function statusOf(node) {
+    const r = node.rule || {};
+    const kids = (node.children || []).map(statusOf);
+    const taken = kids.length ? kids.flatMap(k => k.courses) : ((leaves.get(node.path) || {}).taken || []).slice();
+    const done = taken.filter(c => st[c] === 'completed');
+    const res = {
+      kind: kids.length ? 'group' : 'leaf',
+      rule: r.type || null,
+      courses: taken,
+      done: done.length,
+      inProgress: taken.length - done.length,
+      doneUnits: unitsSum(done),
+      inProgressUnits: unitsSum(taken) - unitsSum(done),
+      state: 'remaining',
+      need: {},
+      left: {},
+    };
+    if (!kids.length) {
+      if (r.type === 'max_units') {
+        res.state = 'optional';
+        res.need = { units: r.units };
+      } else {
+        res.state = leafMet(node, done) ? 'complete' : leafMet(node, taken) ? 'in_progress' : 'remaining';
+        if (r.type === 'take_all' || r.type === 'required') {
+          const need = (node.listed && node.listed.length) ? node.listed.length : (node.courses || []).length;
+          res.need = { courses: need };
+          res.left = { courses: Math.max(0, need - taken.length) };
+        } else if (r.type === 'pick') {
+          res.need = { courses: r.n || 0, units: r.units == null ? null : r.units };
+          res.left = {
+            courses: Math.max(0, (r.n || 0) - taken.length),
+            units: r.units == null ? 0 : Math.max(0, r.units - unitsSum(taken)),
+          };
+        } else if (r.type === 'min_units') {
+          res.need = { units: r.units || 0 };
+          res.left = { units: Math.max(0, (r.units || 0) - unitsSum(taken)) };
+        }
+      }
+    } else {
+      const parts = kids.filter(k => k.state !== 'optional');
+      const nDone = parts.filter(k => k.state === 'complete').length;
+      const nStarted = parts.filter(k => k.state === 'complete' || k.state === 'in_progress').length;
+      res.partsDone = nDone;
+      res.partsTotal = parts.length;
+      if (r.type === 'pick' && r.count === 'children') {
+        const n = r.n || 1;
+        res.need = { parts: n };
+        res.left = { parts: Math.max(0, n - nStarted) };
+        res.state = nDone >= n ? 'complete' : nStarted >= n ? 'in_progress' : 'remaining';
+      } else {
+        let totalDone = true;
+        let totalAll = true;
+        res.need = { parts: parts.length };
+        res.left = { parts: parts.length - nStarted };
+        if (r.type === 'pick' && r.count === 'courses') {
+          totalDone = done.length >= (r.n || 0);
+          totalAll = taken.length >= (r.n || 0);
+          res.need.courses = r.n || 0;
+          res.left.courses = Math.max(0, (r.n || 0) - taken.length);
+        } else if (r.type === 'min_units') {
+          totalDone = res.doneUnits >= (r.units || 0);
+          totalAll = unitsSum(taken) >= (r.units || 0);
+          res.need.units = r.units || 0;
+          res.left.units = Math.max(0, (r.units || 0) - unitsSum(taken));
+        }
+        res.state = (nDone === parts.length && totalDone) ? 'complete'
+          : (nStarted === parts.length && totalAll) ? 'in_progress' : 'remaining';
+      }
+    }
+    byPath.set(node.path, res);
+    return res;
+  }
+  const top = ((tree && tree.children) || []).map(statusOf).filter(s => s.state !== 'optional');
+  const complete = top.filter(s => s.state === 'complete').length;
+  const inProgress = top.filter(s => s.state === 'in_progress').length;
+  const summary = {
+    total: top.length,
+    complete,
+    inProgress,
+    remaining: top.length - complete - inProgress,
+    marked: assigned.size,
+    state: !top.length ? 'none'
+      : complete === top.length ? 'complete'
+      : complete + inProgress === top.length ? 'in_progress' : 'remaining',
+  };
+  return { byPath, assigned, summary };
+}
+
+/**
+ * Short text for a category's status chip: { cls, text } with cls one of
+ * done, ip, left, opt; null when there is nothing to say.
+ */
+function minorStatusText(s) {
+  if (!s) return null;
+  if (s.state === 'complete') return { cls: 'done', text: 'Done' };
+  if (s.state === 'in_progress') return { cls: 'ip', text: 'In progress' };
+  const n = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  if (s.state === 'optional') {
+    const used = s.doneUnits + s.inProgressUnits;
+    return used ? { cls: 'opt', text: `${used} units used` } : null;
+  }
+  const left = s.left || {};
+  const bits = [];
+  if (left.courses) bits.push(n(left.courses, 'course'));
+  if (left.units) bits.push(`${left.units} units`);
+  if (!bits.length && left.parts) bits.push(n(left.parts, 'part'));
+  return { cls: 'left', text: bits.length ? `${joinWithAnd(bits)} left` : 'Not met yet' };
+}
+
+/** One line for a minor header, e.g. "2 of 5 requirements done, 1 in progress, 2 left". */
+function minorSummaryText(summary) {
+  if (!summary || !summary.total) return '';
+  const parts = [`${summary.complete} of ${summary.total} requirement${summary.total === 1 ? '' : 's'} done`];
+  if (summary.inProgress) parts.push(`${summary.inProgress} in progress`);
+  if (summary.remaining) parts.push(`${summary.remaining} left`);
+  return parts.join(', ');
+}
+
+/** Distinct marked courses under a tree node: { done, inProgress }. */
+function countMarkedCourses(node, statuses) {
+  const st = statuses || {};
+  const seen = new Set();
+  let done = 0;
+  let inProgress = 0;
+  (function walk(n) {
+    for (const c of (n && n.courses) || []) {
+      const code = normalizeCourseCode(c.code || c.course_code);
+      if (seen.has(code)) continue;
+      seen.add(code);
+      if (st[code] === 'completed') done++;
+      else if (st[code] === 'in_progress') inProgress++;
+    }
+    for (const ch of (n && n.children) || []) walk(ch);
+  })(node);
+  return { done, inProgress };
+}
+
+/** The double counting rules of a minor for one major (by_major overrides the categories). */
+function minorDoubleCountRules(def, majorCode) {
+  const dc = (def && def.double_count) || {};
+  const forMajor = (dc.by_major && majorCode && dc.by_major[majorCode]) || {};
+  return {
+    limit: typeof dc.max_with_major === 'number' ? dc.max_with_major : null,
+    known: dc.text != null || typeof dc.max_with_major === 'number',
+    genEdExempt: dc.gen_ed_exempt !== false,
+    noLimit: forMajor.no_limit_categories || dc.no_limit_categories || [],
+    noSharing: forMajor.no_sharing_categories || dc.no_sharing_categories || [],
+  };
+}
+
+/** True when a category path is, or sits under, one of the category ids. */
+function pathInCategories(path, ids) {
+  if (!path || !ids || !ids.length) return false;
+  return String(path).split('---').some(seg => ids.includes(seg));
+}
+
+/**
+ * The limit in plain English for a minor header. `whose` is "your" for a
+ * student and "the student's" for everyone else.
+ */
+function minorDoubleCountLimitText(def, majorCode, whose) {
+  const who = whose || 'your';
+  const rules = minorDoubleCountRules(def, majorCode);
+  if (!rules.known) return 'Confirm double counting with your advisor.';
+  const names = ids => joinWithAnd(ids.map(id => minorCategoryName(def, id) || id));
+  const target = `${who} major or another minor`;
+  if (rules.limit === 0) {
+    return `No course may also count toward ${target}`
+      + (rules.noLimit.length ? `, except courses used for ${names(rules.noLimit)}.` : '.');
+  }
+  if (rules.limit != null) {
+    const extra = [];
+    if (rules.noLimit.length) extra.push(`Courses used for ${names(rules.noLimit)} do not count toward this limit.`);
+    if (rules.noSharing.length) extra.push(`Courses used for ${names(rules.noSharing)} may not count toward any other program.`);
+    return `At most ${rules.limit} course${rules.limit === 1 ? '' : 's'} may also count toward ${target}.`
+      + (extra.length ? ' ' + extra.join(' ') : '');
+  }
+  return `Courses may also count toward ${target} without a limit`
+    + (rules.noSharing.length ? `, except courses used for ${names(rules.noSharing)}.` : '.');
+}
+
+/**
+ * Double counting for one minor. A marked course used for this minor is
+ * shared when it also counts toward the student's major (a major requirement;
+ * General Education overlap is free when the file says so) or is used by
+ * another of the student's minors. Shared courses in a no_limit category are
+ * free, in a no_sharing category they are not allowed, and the rest count
+ * toward the limit.
+ *
+ * opts: { majorCode, majorKindOf(code), otherMinors: [{ name, assigned: Map }] }
+ */
+function checkMinorDoubleCounting(def, progress, opts) {
+  const o = opts || {};
+  const rules = minorDoubleCountRules(def, o.majorCode);
+  const shared = [];
+  for (const [code, path] of ((progress && progress.assigned) || new Map())) {
+    const kind = o.majorKindOf ? o.majorKindOf(code) : null;
+    const withMajor = kind === 'degree' || (kind === 'gened' && !rules.genEdExempt);
+    const withMinors = (o.otherMinors || []).filter(m => m.assigned && m.assigned.has(code)).map(m => m.name);
+    if (!withMajor && !withMinors.length) continue;
+    const free = pathInCategories(path, rules.noLimit);
+    const blocked = !free && pathInCategories(path, rules.noSharing);
+    shared.push({ code, path, withMajor, withMinors, free, blocked });
+  }
+  shared.sort((a, b) => a.code.localeCompare(b.code));
+  const counted = shared.filter(s => !s.free && !s.blocked);
+  return {
+    rules,
+    limit: rules.limit,
+    known: rules.known,
+    shared,
+    counted,
+    blocked: shared.filter(s => s.blocked),
+    over: rules.limit != null && counted.length > rules.limit,
+  };
+}
+
+/** Warnings for a minor header, from checkMinorDoubleCounting. */
+function minorDoubleCountWarnings(check, def, majorCode) {
+  const out = [];
+  if (!check) return out;
+  const major = majorCode ? `your ${majorCode} major` : 'your major';
+  if (check.over) {
+    const n = check.counted.length;
+    const codes = joinWithAnd(check.counted.map(s => s.code));
+    const lim = check.limit;
+    out.push(`${n} course${n === 1 ? '' : 's'} you marked ${n === 1 ? 'counts' : 'count'} toward this minor and toward ${major} or another minor (${codes}). `
+      + (lim === 0 ? 'None may.' : `At most ${lim} may.`) + ' Ask your advisor which ones to use.');
+  }
+  for (const s of check.blocked) {
+    const ids = String(s.path).split('---');
+    const name = minorCategoryName(def, ids[ids.length - 1]) || ids[ids.length - 1];
+    const others = [];
+    if (s.withMajor) others.push(major);
+    for (const m of s.withMinors) others.push(`your ${m} minor`);
+    out.push(`${s.code} is used here for ${name}, which may not also count toward another program, and it also counts toward ${joinWithAnd(others)}. Use another course here or confirm with your advisor.`);
+  }
+  return out;
+}
+
+/** Version strings come from the official files; show their " - " separators as commas. */
+function plainDataText(text) {
+  return String(text == null ? '' : text).replace(/\s+[-‒-―]\s+/g, ', ');
 }
 
 // ── Profile-aware annotations ────────────────────────────
 
-function annotateDoubleCounters(courses, profile, minorCourseList) {
-  const viewMode = computeViewMode(profile);
-  if (viewMode !== 'focused-dual') {
-    for (const c of courses) c._doubleCounter = false;
-    return;
-  }
-  const p = profile.primary;
-  const minors = getProfileMinors(profile);
-  if (!minors.length) {
-    for (const c of courses) c._doubleCounter = false;
-    return;
-  }
-  for (const c of courses) {
-    if (isCourseHidden(c)) { c._doubleCounter = false; continue; }
-    const req = c.requirements || {};
-    const hasPrimary = Array.isArray(req[p]) && req[p].length > 0;
-    const hasSecondary = minors.some(mc => courseCountsForMinor(c, mc, minorCourseList));
-    c._doubleCounter = hasPrimary && hasSecondary;
+/**
+ * For a student: _majorKind ('degree', 'gened' or null) for their major,
+ * _minorMatches (their minors the course can count for) and _doubleCounter
+ * (both). Cleared for everyone else.
+ */
+function annotateDoubleCounters(courses, profile, minorIndex) {
+  const student = !!(profile && profile.role === 'student');
+  const minors = student ? getProfileMinors(profile) : [];
+  for (const c of courses || []) {
+    c._majorKind = null;
+    c._minorMatches = [];
+    c._doubleCounter = false;
+    if (!student || isCourseHidden(c)) continue;
+    c._majorKind = majorCountKind(c, profile.primary);
+    c._minorMatches = minors.filter(mc => courseCountsForMinor(c, mc, minorIndex));
+    c._doubleCounter = !!c._majorKind && c._minorMatches.length > 0;
   }
 }
 
