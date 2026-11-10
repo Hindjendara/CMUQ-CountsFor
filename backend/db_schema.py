@@ -14,6 +14,7 @@ REQUIRED_TABLES = frozenset({
     "schedule_plan_share_tokens",
     "admin_audit_events",
     "course_overrides",
+    "minor_overrides",
     "sign_in_events",
     "user_activity_days",
 })

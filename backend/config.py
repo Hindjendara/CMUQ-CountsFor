@@ -165,6 +165,10 @@ class Config:
     # The private SOC scrape (written by backend/scraper/scrape_soc.py). The admin
     # overview reads its last_scrape date. The scraper takes the same variable.
     SOC_JSON_PATH = os.environ.get("SOC_JSON_PATH", str(_BACKEND_DIR / "data" / "soc.json"))
+    # The minor requirements the site serves. The course and minor editors check
+    # minor codes and category paths against it (backend/minors_file.py). A plain
+    # setting, not an environment variable: the file sits next to backend/.
+    MINORS_JSON_PATH = str(_BACKEND_DIR.parent / "frontend" / "data" / "minors.json")
 
     # ── Password reset email ───────────────────────────────────
     RESET_TOKEN_MINUTES = int(os.environ.get("RESET_TOKEN_MINUTES", "30"))

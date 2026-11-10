@@ -82,6 +82,7 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
     from .plans import bp as plans_bp
     from .admin import bp as admin_bp
     from .course_overrides import bp as course_overrides_bp
+    from .minor_overrides import bp as minor_overrides_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(flags_bp)
@@ -92,15 +93,16 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
     app.register_blueprint(plans_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(course_overrides_bp)
+    app.register_blueprint(minor_overrides_bp)
 
-    # Health check for monitoring (not under /api). 503 if Postgres tables are missing.
+    # Health check for monitoring (not under /api). 503 if a required table is missing.
+    # A local SQLite database also lists its table names, to check a bootstrap by eye.
     @app.route("/health")
     def health():
         uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
         db_target = redact_database_url(uri) if uri else ""
-        db_host = database_host(uri) if uri else ""
-        if uri.startswith("sqlite"):
-            return jsonify(status="ok", database="sqlite", db_host="sqlite")
+        sqlite = uri.startswith("sqlite")
+        db_host = "sqlite" if sqlite else (database_host(uri) if uri else "")
         try:
             with app.app_context():
                 db.session.execute(text("SELECT 1"))
@@ -111,16 +113,20 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
                         status="degraded",
                         database="missing_tables",
                         db_host=db_host,
-                        db_target=db_target,
                         missing=sorted(missing),
                     )
+                    if not sqlite:
+                        body["db_target"] = db_target
                     return jsonify(body), 503
-                return jsonify(
+                body = dict(
                     status="ok",
-                    database="connected",
+                    database="sqlite" if sqlite else "connected",
                     db_host=db_host,
                     tables=len(present),
                 )
+                if sqlite:
+                    body["table_names"] = sorted(present)
+                return jsonify(body)
         except Exception as exc:
             body = dict(
                 status="degraded",

@@ -69,8 +69,9 @@ RestartSec=5
 # ── Hardening ──────────────────────────────────────────────────────────────
 # The API writes no files: it logs to the journal and keeps its data in
 # PostgreSQL (reached over /run/postgresql or 127.0.0.1). It only reads
-# backend/ and the JSON files named in the env file (SOC_JSON_PATH,
-# SEED_USERS_PATH). So the whole file system can be read-only for it.
+# backend/, frontend/data/minors.json (to check admin minor edits) and the JSON
+# files named in the env file (SOC_JSON_PATH, SEED_USERS_PATH). So the whole
+# file system can be read-only for it.
 # The daily scraper runs from cron (deploy/countsfor.cron), not from this
 # unit, so these limits do not affect its writes to backend/data/ and
 # frontend/data/. If the API ever needs to write a file, list its folder in
