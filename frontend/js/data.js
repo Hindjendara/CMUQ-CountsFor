@@ -709,15 +709,19 @@ function predictOffering(course, targetSeason /* 'S' | 'M' | 'N' | 'F' */) {
 }
 
 // ── Sort semesters chronologically ────────────────────────────
+// Within a year: spring, summer, fall (semester_rank in backend/semesters.py
+// uses the same order).
+const SEASON_ORDER = { S: 1, M: 2, N: 3, F: 4 };
+
+/** A number that grows with time for a semester ("F26" < "S27"); -1 for anything else. */
+function semesterRank(code) {
+  const c = normalizeSemesterCode(code);
+  return c ? Number(c.slice(1)) * 10 + SEASON_ORDER[c[0]] : -1;
+}
+
 function sortSemesters(semesters) {
   if (!semesters || !Array.isArray(semesters)) return [];
-  const seasonOrder = { 'S': 1, 'M': 2, 'N': 3, 'F': 4 };
-  return [...new Set(semesters)].sort((a, b) => {
-    const yearA = parseInt(a.substring(1));
-    const yearB = parseInt(b.substring(1));
-    if (yearA !== yearB) return yearB - yearA; // newest first
-    return (seasonOrder[b[0]] || 0) - (seasonOrder[a[0]] || 0);
-  });
+  return [...new Set(semesters)].sort((a, b) => semesterRank(b) - semesterRank(a)); // newest first
 }
 
 // ── Department code to name ──────────────────────────────────
@@ -742,14 +746,15 @@ function getDeptName(courseCode) {
   return DEPT_NAMES[prefix] || `Dept ${prefix}`;
 }
 
-// ── Semester / modality filters (Phase 3) ────────────────────
-const SEMESTER_OPTIONS = [
-  { code: 'F26', label: 'Fall 2026' },
-  { code: 'M26', label: 'Summer 2026' },
-  { code: 'S26', label: 'Spring 2026' },
-  { code: 'F25', label: 'Fall 2025' },
-  { code: 'M25', label: 'Summer 2025' },
-];
+// ── Semesters (from the Schedule of Classes) ─────────────────
+// No semester list is kept in code. The daily update scrapes every semester
+// the Schedule of Classes lists into backend/data/soc.json and
+// reconcile_offerings.py copies their sections into each course's
+// `offerings`, so the loaded catalog says which semesters exist: a new one
+// (Spring 2027, a summer) is in the semester picker the day it is scraped.
+const SEMESTER_CODE_RE = /^[FSMN]\d{2}$/;
+// The semester picked last, { code, defaultCode }: see resolveSemesterChoice.
+const SEMESTER_STORE_KEY = 'cf_semester';
 
 const MODALITY_OPTIONS = [
   { id: 'all', label: 'All' },
@@ -758,48 +763,91 @@ const MODALITY_OPTIONS = [
   { id: 'hybrid', label: 'Hybrid' },
 ];
 
+/** True for a semester code: a season letter and two year digits ("S27"). */
+function isSemesterCode(code) {
+  return typeof code === 'string' && SEMESTER_CODE_RE.test(code);
+}
+
+/** "S27", " s27 " or "Spring 2027" → "S27"; anything else → null. */
 function normalizeSemesterCode(raw) {
   if (!raw || typeof raw !== 'string') return null;
-  const code = raw.trim();
-  if (/^[FSMN]\d{2}$/i.test(code)) return code.toUpperCase();
-  const hit = SEMESTER_OPTIONS.find(s => s.label === code || s.code === code);
-  return hit ? hit.code : null;
+  const text = raw.trim();
+  if (SEMESTER_CODE_RE.test(text.toUpperCase())) return text.toUpperCase();
+  const m = text.match(/^([a-z ]+?)\s+20(\d{2})$/i);
+  if (!m) return null;
+  const season = Object.keys(SEASON_NAME).find(k => SEASON_NAME[k].toLowerCase() === m[1].toLowerCase());
+  return season ? season + m[2] : null;
+}
+
+/** "S27" → "Spring 2027"; "all" → "All semesters"; anything else as given. */
+function semesterLabel(code) {
+  if (code === 'all') return 'All semesters';
+  const c = normalizeSemesterCode(code);
+  return c ? `${SEASON_NAME[c[0]]} 20${c.slice(1)}` : (code || '');
 }
 
 /**
- * Semesters that appear in the bundled catalog's live offerings.
- * Summer (M-prefix) is included whenever the SOC scrape provides it.
+ * The semesters the catalog has sections for, newest first (summer
+ * included), and the one the app opens on: the newest fall or spring with a
+ * section in Qatar, so CMU-Q students see the next regular semester as soon
+ * as its Qatar schedule is out. Without a Qatar section it is the newest fall
+ * or spring; a summer is the default only in a catalog with no fall or spring.
+ * pick_default_semester in backend/semesters.py applies the same rule to
+ * soc.json.
+ * Returns { codes: ['S27', 'F26', ...], defaultCode: 'S27' } (null when empty).
  */
-function availableSemesterOptions(courses, alwaysInclude) {
-  const present = new Set();
-  for (const c of courses || []) {
-    for (const o of (c && Array.isArray(c.offerings) ? c.offerings : [])) {
-      const code = normalizeSemesterCode(o.semester_code || o.semesterCode || o.semester);
-      if (code) present.add(code);
+function catalogSemesters(courses) {
+  const found = new Set();
+  const inQatar = new Set();
+  for (const course of courses || []) {
+    for (const o of getCourseOfferings(course)) {
+      const code = o && !o.cancelled && normalizeSemesterCode(o.semester_code || o.semesterCode || o.semester);
+      if (!code) continue;
+      found.add(code);
+      if (o.campus === 'Qatar') inQatar.add(code);
     }
   }
-  const allOption = { code: 'all', label: 'All semesters' };
-  let terms = present.size === 0
-    ? SEMESTER_OPTIONS.slice()
-    : SEMESTER_OPTIONS.filter(s => present.has(s.code));
-  if (alwaysInclude && alwaysInclude !== 'all') {
-    const normalized = normalizeSemesterCode(alwaysInclude) || alwaysInclude;
-    if (normalized && !terms.some(s => s.code === normalized)) {
-      const hit = SEMESTER_OPTIONS.find(s => s.code === normalized);
-      if (hit) terms = [hit, ...terms];
-    }
-  }
-  return [allOption, ...terms];
+  const codes = sortSemesters([...found]);
+  const regular = codes.filter(c => c[0] === 'F' || c[0] === 'S');
+  return { codes, defaultCode: regular.find(c => inQatar.has(c)) || regular[0] || codes[0] || null };
 }
 
-function semesterLabel(code) {
-  if (code === 'all') return 'All semesters';
-  const hit = SEMESTER_OPTIONS.find(s => s.code === code);
-  if (hit) return hit.label;
-  if (!code || code.length < 3) return code || '';
-  const seasonMap = { F: 'Fall', S: 'Spring', M: 'Summer', N: 'Fall mini' };
-  const season = seasonMap[code[0]] || code[0];
-  return `${season} 20${code.slice(1)}`;
+/**
+ * Semester picker options: "All semesters", then each code newest first.
+ * alwaysInclude (the semester on screen) is listed even if codes lack it.
+ */
+function semesterOptions(codes, alwaysInclude) {
+  const list = Array.isArray(codes) ? codes.slice() : [];
+  const extra = normalizeSemesterCode(alwaysInclude);
+  if (extra && !list.includes(extra)) list.push(extra);
+  return [{ code: 'all', label: semesterLabel('all') }]
+    .concat(sortSemesters(list).map(code => ({ code, label: semesterLabel(code) })));
+}
+
+/** semesterOptions for the semesters the catalog's offerings have. */
+function availableSemesterOptions(courses, alwaysInclude) {
+  return semesterOptions(catalogSemesters(courses).codes, alwaysInclude);
+}
+
+/**
+ * The semester to show once the catalog has loaded. semesters is
+ * catalogSemesters(); saved is the stored choice, { code, defaultCode }, where
+ * defaultCode was the default when the choice was made. The choice is kept
+ * while the catalog has that semester, unless a newer default came out after
+ * it (a new semester on the Schedule of Classes): then that new default is
+ * shown. "All semesters" is always kept. Without a usable choice: the default,
+ * or 'all' for a catalog without sections.
+ */
+function resolveSemesterChoice(semesters, saved) {
+  const { codes = [], defaultCode = null } = semesters || {};
+  const choice = saved && typeof saved === 'object' ? saved : { code: saved };
+  if (choice.code === 'all') return 'all';
+  if (!isSemesterCode(choice.code) || !codes.includes(choice.code)) return defaultCode || 'all';
+  if (defaultCode && isSemesterCode(choice.defaultCode)
+      && semesterRank(defaultCode) > semesterRank(choice.defaultCode)) {
+    return defaultCode;
+  }
+  return choice.code;
 }
 
 function getCourseOfferings(course) {
@@ -807,10 +855,11 @@ function getCourseOfferings(course) {
   if (Array.isArray(course.offerings) && course.offerings.length) {
     return course.offerings;
   }
-  // Legacy soc_sections → normalized offering shape
+  // Legacy soc_sections → normalized offering shape. A section without a
+  // semester code is listed under "All semesters" only.
   return (course.soc_sections || []).map(s => ({
-    semester: s.semester || semesterLabel(s.semester_code || 'F26'),
-    semester_code: s.semester_code || 'F26',
+    semester: s.semester || semesterLabel(s.semester_code),
+    semester_code: s.semester_code || '',
     campus: s.campus || (s.location && s.location.includes('Qatar') ? 'Qatar'
       : s.location && s.location.includes('Pittsburgh') ? 'Pittsburgh' : null),
     section: s.section,

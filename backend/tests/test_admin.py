@@ -79,6 +79,14 @@ def test_insights_aggregates_lookups_saves_and_flags(client, app, admin, student
     assert [r["course_code"] for r in fall["top_lookups"]] == ["15-122"]
 
 
+def test_insights_lists_semesters_newest_first(client, admin, student):
+    login(client, student)
+    for sem in ("S26", "S27", "M26", "F26", "F25"):
+        client.post("/api/search-analytics/events", json={"course_code": "15-122", "semester_code": sem})
+    login(client, admin)
+    assert client.get("/api/admin/insights").get_json()["semesters"] == ["S27", "F26", "M26", "S26", "F25"]
+
+
 def test_user_role_change_is_logged(client, admin, student):
     login(client, admin)
     r = client.patch(f"/api/users/{student.id}", json={"role": "professor", "department": "Computer Science", "primary_program": "CS"})

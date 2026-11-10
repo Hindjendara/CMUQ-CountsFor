@@ -397,3 +397,103 @@ test('minors: without minors.json the tree still renders and the minor says why'
   assertTrue(treeHtml(document).includes('The minor requirements could not be loaded.'));
 });
 
+
+// ── Semester picker ──────────────────────────────────────────
+// The real loadData() with the network stubbed: the picker lists the catalog's
+// semesters and opens on the newest fall or spring with Qatar sections; the
+// semester picked last is kept on this device (cf_semester).
+function semesterCatalog(...extra) {
+  const off = (semester_code, campus) => ({ semester_code, campus, modality: 'In Person', section: 'A', days_times: 'MW 10:00AM-11:20AM' });
+  const course = (code, name, path, offerings) => {
+    const requirements = { CS: [{ requirement: path, type: false, major: 'CS' }], IS: [], BA: [], BS: [] };
+    return { course_code: code, course_name: name, units: 12, requirements, offerings, offered: [...new Set(offerings.map(o => o.semester_code))] };
+  };
+  return [
+    course('15-112', 'Fundamentals of Programming', 'Computer Science---Intro Programming',
+      [off('F25', 'Qatar'), off('S26', 'Qatar'), off('M26', 'Pittsburgh'), off('F26', 'Qatar'), off('S27', 'Qatar')]),
+    course('15-122', 'Principles of Imperative Computation', 'Computer Science---Imperative', [off('F26', 'Qatar')]),
+    ...extra,
+  ];
+}
+
+async function loadSemesterApp(catalog, saved) {
+  const env = loadApp();
+  const { App, ctx } = env;
+  if (saved !== undefined) ctx.localStorage.setItem('cf_semester', JSON.stringify(saved));
+  ctx.fetchAllCourses = async () => JSON.parse(JSON.stringify(catalog));
+  ctx.fetchMinors = async () => MINORS_JSON;
+  ctx.apiGetCourseOverrides = async () => ({ ok: true, data: { items: [] } });
+  await App.loadData();
+  return env;
+}
+
+const lookupCourseIn = (App, code) => App.courses.find(c => c.course_code === code);
+
+const semesterOptionsShown = document => {
+  const html = document.getElementById('semesterSelect').innerHTML;
+  return [...html.matchAll(/<option value="([^"]*)"\s*(selected)?\s*>([^<]*)</g)].map(m => (m[2] ? '*' : '') + m[3]);
+};
+
+test('semesters: the picker lists the catalog semesters and opens on Spring 2027', async () => {
+  const env = loadApp();
+  assertTrue(env.document.getElementById('app').innerHTML.includes('Loading semesters'), 'a placeholder until the catalog loads');
+  const { App, document } = await loadSemesterApp(semesterCatalog());
+  assertEqual(App.activeSemester, 'S27');
+  assertEqual(semesterOptionsShown(document),
+    ['All semesters', '*Spring 2027', 'Fall 2026', 'Summer 2026', 'Spring 2026', 'Fall 2025']);
+  const course = code => lookupCourseIn(App, code);
+  assertTrue(App.coursePassesTreeFilter(course('15-112')) && App.coursePassesSearchFilter(course('15-112')));
+  assertFalse(App.coursePassesTreeFilter(course('15-122')), 'only offered in Fall 2026');
+  assertFalse(App.coursePassesSearchFilter(course('15-122')));
+  assertEqual(App._normalizePlanItem({ course_code: '15-112' }).semester_code, 'S27', 'a plan row without a semester');
+  assertEqual(App._popularSemester(), 'S27');
+});
+
+test('semesters: a picked semester is kept on this device while the catalog has it', async () => {
+  const first = await loadSemesterApp(semesterCatalog());
+  first.App.setSemester('F26');
+  const saved = JSON.parse(first.ctx.localStorage.getItem('cf_semester'));
+  assertEqual(saved, { code: 'F26', defaultCode: 'S27' });
+  assertTrue(first.App.coursePassesTreeFilter(lookupCourseIn(first.App, '15-122')));
+
+  const again = await loadSemesterApp(semesterCatalog(), saved);
+  assertEqual(again.App.activeSemester, 'F26');
+  assertEqual(semesterOptionsShown(again.document)[2], '*Fall 2026');
+
+  const all = await loadSemesterApp(semesterCatalog(), { code: 'all', defaultCode: 'S27' });
+  assertEqual(all.App.activeSemester, 'all');
+  assertEqual(all.App._popularSemester(), 'S27', 'lookups under "All semesters" count for the default');
+  assertEqual(all.App._normalizePlanItem({ course_code: '15-112' }).semester_code, '');
+
+  const gone = await loadSemesterApp(semesterCatalog(), { code: 'F24', defaultCode: 'F24' });
+  assertEqual(gone.App.activeSemester, 'S27', 'a semester the catalog no longer has');
+});
+
+test('semesters: a new semester in the catalog (F27) is listed with no code change and opens once Qatar has sections', async () => {
+  const off = campus => ({ semester_code: 'F27', campus, modality: 'In Person', section: 'A' });
+  const pitt = { course_code: '15-213', course_name: 'Introduction to Computer Systems', units: 12, requirements: {}, offerings: [off('Pittsburgh')] };
+  const saved = { code: 'F26', defaultCode: 'S27' };
+
+  const pittOnly = await loadSemesterApp(semesterCatalog(pitt));
+  assertEqual(pittOnly.App.activeSemester, 'S27', 'Pittsburgh sections alone do not move the default');
+  assertEqual(semesterOptionsShown(pittOnly.document).slice(0, 3), ['All semesters', 'Fall 2027', '*Spring 2027']);
+
+  const qatar = { ...pitt, course_code: '15-214', offerings: [off('Qatar')] };
+  const fresh = await loadSemesterApp(semesterCatalog(pitt, qatar));
+  assertEqual(fresh.App.activeSemester, 'F27');
+  assertEqual(semesterOptionsShown(fresh.document)[1], '*Fall 2027');
+  const returning = await loadSemesterApp(semesterCatalog(pitt, qatar), saved);
+  assertEqual(returning.App.activeSemester, 'F27', 'a choice made before Fall 2027 came out gives way to it');
+});
+
+test('semesters: when the catalog cannot be loaded the picker stops saying it is loading', async () => {
+  const { App, ctx, document } = loadApp();
+  ctx.console = { log() {}, warn() {}, error() {} };
+  ctx.fetchAllCourses = async () => { throw new Error('offline'); };
+  ctx.fetchMinors = async () => MINORS_JSON;
+  ctx.apiGetCourseOverrides = async () => ({ ok: true, data: { items: [] } });
+  await App.loadData();
+  assertEqual(App.activeSemester, 'all');
+  assertEqual(semesterOptionsShown(document), ['*All semesters']);
+  assertTrue(document.getElementById('leftBody').innerHTML.includes('Failed to load data: offline'));
+});

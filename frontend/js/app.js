@@ -28,7 +28,8 @@ const App = {
   selectedCourse: null,
   treeSearchQuery: '',
   locationFilter: 'all', // 'all' | 'qatar' | 'pittsburgh'
-  activeSemester: 'F26',
+  activeSemester: null,  // a semester code or 'all'; null until the catalog loads (_resolveSemesters)
+  _semesters: { codes: [], defaultCode: null }, // catalogSemesters() of the loaded catalog
   modalityFilter: 'all', // 'all' | 'in_person' | 'remote' | 'hybrid'
   theme: loadStore('cf_theme', 'light'),
   expandedNodes: new Set(),
@@ -304,19 +305,25 @@ const App = {
 
     try {
       await this._prepareCatalog();
+      this._resolveSemesters();
 
       // Auto-expand first level of the default major
       this.autoExpandFirstLevel(this.activeMajor);
 
       // The navbar is rendered before the catalog finishes loading, so the semester
-      // picker was built from an empty course list. Refresh it now that we know which
-      // semesters actually have offerings.
+      // picker only says it is loading. Fill it now that we know which semesters
+      // actually have offerings.
       this._refreshSemesterOptions();
 
       this.renderLeftEmpty();
       this.renderTree();
     } catch (err) {
       console.error(err);
+      // Without a catalog the semester picker would keep saying it is loading.
+      if (!this.activeSemester) {
+        this._resolveSemesters();
+        this._refreshSemesterOptions();
+      }
       // Look #leftBody up again: renderLeftEmpty() may have re-rendered the shell.
       const failBody = document.getElementById('leftBody');
       if (failBody) failBody.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Failed to load data: ${esc(err.message)}</div></div>`;
@@ -887,7 +894,7 @@ const App = {
               <div class="navbar-semester">
                 <label class="sr-only" for="semesterSelect">Semester</label>
                 <select id="semesterSelect" class="semester-select" onchange="App.setSemester(this.value)">
-                  ${availableSemesterOptions(this.courses, this.activeSemester).map(s => `<option value="${s.code}" ${this.activeSemester===s.code?'selected':''}>${esc(s.label)}</option>`).join('')}
+                  ${this._semesterOptionsHtml()}
                 </select>
               </div>
               <div class="navbar-location-toggle">
@@ -1203,20 +1210,33 @@ const App = {
   },
 
   /**
-   * Rebuild the semester <select> in place from the loaded catalog. Done as a
-   * targeted DOM update rather than a full navbar re-render so open panels and
-   * focus are left alone.
+   * Take the semester list from the loaded catalog (catalogSemesters in
+   * js/data.js) and settle the semester on screen: the one already shown if
+   * the catalog still has it, else the saved choice or the default
+   * (resolveSemesterChoice).
+   */
+  _resolveSemesters() {
+    this._semesters = catalogSemesters(this.courses);
+    const current = this.activeSemester;
+    if (current === 'all' || this._semesters.codes.includes(current)) return;
+    this.activeSemester = resolveSemesterChoice(this._semesters, loadStore(SEMESTER_STORE_KEY, null));
+  },
+
+  /** The semester picker's options; a placeholder until the catalog has loaded. */
+  _semesterOptionsHtml() {
+    if (!this.activeSemester) return '<option value="" selected disabled>Loading semesters…</option>';
+    return semesterOptions(this._semesters.codes, this.activeSemester)
+      .map(s => `<option value="${esc(s.code)}" ${this.activeSemester === s.code ? 'selected' : ''}>${esc(s.label)}</option>`)
+      .join('');
+  },
+
+  /**
+   * Rebuild the semester <select> in place. Done as a targeted DOM update
+   * rather than a full navbar re-render so open panels and focus are left alone.
    */
   _refreshSemesterOptions() {
     const sel = document.getElementById('semesterSelect');
-    if (!sel) return;
-    const opts = availableSemesterOptions(this.courses, this.activeSemester);
-    if (this.activeSemester !== 'all' && !opts.some(s => s.code === this.activeSemester) && opts.length) {
-      this.activeSemester = opts[1]?.code || opts[0].code;
-    }
-    sel.innerHTML = opts
-      .map(s => `<option value="${s.code}" ${this.activeSemester === s.code ? 'selected' : ''}>${esc(s.label)}</option>`)
-      .join('');
+    if (sel) sel.innerHTML = this._semesterOptionsHtml();
   },
 
   _campusFilterLabel() {
@@ -1280,6 +1300,7 @@ const App = {
 
   setSemester(code) {
     this.activeSemester = code;
+    saveStore(SEMESTER_STORE_KEY, { code, defaultCode: this._semesters.defaultCode });
     this._refreshFilters();
     if (this._homeView === 'home') this._loadPopularCourses();
     if (this._homeView === 'plan') {
@@ -1838,8 +1859,13 @@ const App = {
     return (p && p !== 'AS') ? p : 'CS';
   },
 
+  /** Lookups are counted per semester: the one shown, or the default under "All semesters". */
+  _popularSemester() {
+    return isSemesterCode(this.activeSemester) ? this.activeSemester : this._semesters.defaultCode;
+  },
+
   _localSearchStoreKey() {
-    return 'cf_search_counts_' + this._popularProgram() + '_' + this.activeSemester;
+    return 'cf_search_counts_' + this._popularProgram() + '_' + (this._popularSemester() || 'all');
   },
 
   _bumpLocalSearchCount(courseCode) {
@@ -1873,7 +1899,7 @@ const App = {
     this._bumpLocalSearchCount(code);
 
     if (isStudent(this.profile) && this.authMode === 'authed') {
-      apiRecordCourseSearch(code, this.activeSemester).catch(() => {});
+      apiRecordCourseSearch(code, this._popularSemester()).catch(() => {});
     }
 
     if (this._homeView === 'home') {
@@ -1888,7 +1914,7 @@ const App = {
     if (!listEl || !cardEl) return;
 
     const program = this._popularProgram();
-    const semester = this.activeSemester;
+    const semester = this._popularSemester();
     const limit = 5;
 
     // Sync pass: refresh from local/static immediately (semester or program
@@ -1905,12 +1931,13 @@ const App = {
       cardEl.hidden = true;
     }
 
-    // Async pass: upgrade in place when real peer data arrives.
-    if (semester === 'all') return;
+    // Async pass: upgrade in place when real peer data arrives (once the
+    // catalog has said which semester that is).
+    if (!semester) return;
     const r = await apiGetPopularCourses(program, semester, limit);
     if (!r.ok || !r.data || !Array.isArray(r.data.items) || !r.data.items.length) return;
     // Stale-response guards: user may have switched semester or left home.
-    if (this.activeSemester !== semester) return;
+    if (this._popularSemester() !== semester) return;
     const list = document.getElementById('homePopularList');
     if (!list) return;
     const rows = this._popularRowsHtml(r.data.items);
@@ -2360,7 +2387,7 @@ const App = {
           </div>
           <div class="cc-section">
             <div class="cc-h4">${esc(semLabel.toUpperCase())}</div>
-            ${this._renderOfferingPredictionHtml(course, this.activeSemester ? this.activeSemester[0] : 'F')}
+            ${this._renderOfferingPredictionHtml(course, isSemesterCode(this.activeSemester) ? this.activeSemester[0] : null)}
             ${schedHtml}
           </div>
         </div>
@@ -3431,7 +3458,7 @@ const App = {
   _normalizePlanItem(item) {
     const base = {
       course_code: item.course_code,
-      semester_code: item.semester_code || (this.activeSemester !== 'all' ? this.activeSemester : ''),
+      semester_code: item.semester_code || (isSemesterCode(this.activeSemester) ? this.activeSemester : ''),
       section: item.section || '',
       campus: item.campus || '',
       days_times: item.days_times || 'TBA',
