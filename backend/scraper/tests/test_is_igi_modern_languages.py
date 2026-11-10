@@ -43,7 +43,8 @@ def test_overlay_is_additive_only():
         {
             "course_code": "82-101",
             "requirements": {
-                "CS": [{"requirement": "BS in Computer Science---SCS Electives", "type": False, "major": "CS"}],
+                "CS": [{"requirement": "BS in Computer Science---Computer Science---Two School of Computer Science electives",
+                        "type": False, "major": "CS"}],
                 "IS": [],
                 "BA": [],
                 "BS": [],

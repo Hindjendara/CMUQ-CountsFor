@@ -1,8 +1,8 @@
 """Course catalog edit tests."""
 from .conftest import login
 
-CS_CORE = {"requirement": "BS in Computer Science---Computer Science", "type": False}
-GENED = {"requirement": "GenEd---Humanities/Arts Electives", "type": True}
+CS_CORE = {"requirement": "BS in Computer Science---Computer Science---Computer Science Core", "type": False}
+GENED = {"requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives", "type": True}
 
 
 def test_writes_require_admin(client, student, professor):
@@ -39,6 +39,21 @@ def test_edit_catalog_course_and_counts_for(client, admin):
     items = client.get("/api/courses/overrides").get_json()["items"]
     assert items[0]["fields"] == {"course_name": "Imperative Computation", "units": 10, "description": "New text"}
     assert items[0]["requirements"]["IS"]
+
+
+def test_counts_for_keeps_the_earlier_flag(client, admin):
+    login(client, admin)
+    earlier = {**CS_CORE, "earlier": True, "earlier_reason": "older degree version"}
+    r = client.patch("/api/courses/overrides/15-122", json={
+        "requirements": {"CS": [earlier, {**GENED, "earlier": False, "earlier_reason": "ignored"}]},
+    })
+    assert r.status_code == 200, r.get_json()
+    rows = r.get_json()["requirements"]["CS"]
+    assert rows[0] == {**CS_CORE, "major": "CS", "earlier": True, "earlier_reason": "older degree version"}
+    assert rows[1] == {**GENED, "major": "CS"}  # no flag stored for a current row
+    long_reason = {**CS_CORE, "earlier": True, "earlier_reason": "x" * 201}
+    r = client.patch("/api/courses/overrides/15-122", json={"requirements": {"CS": [long_reason]}})
+    assert r.status_code == 400
 
 
 def test_renumber_catalog_course(client, admin):

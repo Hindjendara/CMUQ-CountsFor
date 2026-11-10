@@ -53,7 +53,7 @@ Written: November 2026. Keep it current: when you change how something works, up
 
 ## 1. What CountsFor is
 
-CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answers one question: **"What does this course count for?"** For every course in the catalog it shows which requirements it satisfies in each CMU-Q undergraduate major (Computer Science, Information Systems, Business Administration, Biological Sciences), including General Education (GenEd) categories, plus section times from CMU's Schedule of Classes.
+CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answers one question: **"What does this course count for?"** For every course in the catalog it shows which requirements it satisfies in each CMU-Q undergraduate major (Computer Science, Information Systems, Business Administration, Biological Sciences, Artificial Intelligence), including General Education (GenEd) categories, plus section times from CMU's Schedule of Classes.
 
 ### 1.1 Who uses it
 
@@ -67,7 +67,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 ### 1.2 Stakeholders and people
 
 - **Aditya Vivek** (GitHub `Adicmu`): original author and owner of the main repo `Adicmu/Countsfor-Summer-26`. CMU-Q student.
-- **Hind Jendara** (GitHub `Hindjendara`): co-developer. Owns the fork `Hindjendara/Countsfor-Summer-26` (git remote `hind`) and the working repo `Hindjendara/CMUQ-CountsFor` where the `cleanup` branch was made (17.1). AI and GS requirement data was expected to come from her (see `frontend/js/data.js` line 16).
+- **Hind Jendara** (GitHub `Hindjendara`): co-developer. Owns the fork `Hindjendara/Countsfor-Summer-26` (git remote `hind`) and the working repo `Hindjendara/CMUQ-CountsFor` where the `cleanup` branch was made (17.1). GS requirement data is expected to come from her (see `MAJOR_ORDER` in `frontend/js/data.js`).
 - CMU-Q faculty, area heads and advisors: the faculty directory in `backend/data/faculty_directory.json` (65 people scraped from the public CMU-Q People page) decides who gets faculty access.
 - CMU-Q IT: runs the Ubuntu server CountsFor is moving to and owns the `countsfor.qatar.cmu.edu` hostname and its certificate (see [15.2](#152-prerequisites)).
 - Upstream data source: the course-to-requirement mappings originally came from the older open-source project [open-cmuq/CountsFor](https://github.com/open-cmuq/CountsFor) (credited in `README.md`).
@@ -75,7 +75,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 ### 1.3 What it is not
 
 - It is not an official degree audit. Mappings come from upstream data plus manual overlays and admin edits.
-- AI (Artificial Intelligence) and GS (General Studies) majors are defined in `js/data.js` (marked `dataPending`) but have **no requirement data** and are not in `MAJOR_ORDER`.
+- The GS (General Studies) major is defined in `js/data.js` (marked `dataPending`) but has **no requirement data** and is not in `MAJOR_ORDER`.
 
 ---
 
@@ -86,10 +86,11 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **SOC** | Schedule of Classes. CMU's public course offering site at `https://enr-apps.as.cmu.edu/open/SOC/SOCServlet`. The scraper reads sections, days, times, campus and modality from it. |
 | **Semester codes** | `F26` = Fall 2026, `S26` = Spring 2026, `M26` = Summer 2026, `N26` = Fall mini (see `SEASON_NAME` in `js/data.js`). Backend validates with regex `^[FSMN]\d{2}$`. |
 | **Course code** | Always normalized to `NN-NNN`, e.g. `15-122`. `normalizeCourseCode()` in `js/data.js` and `_normalize_code()` in `backend/course_overrides.py` accept `15122`, `15122.0`, `15-122`. |
-| **Requirement path** | A string of segments joined by three hyphens, e.g. `GenEd---GenEd---Foundations---Contextual Thinking`. The frontend splits on `---` to build the requirement tree. |
+| **Requirement path** | A string of segments joined by three hyphens, e.g. `GenEd---Foundations---Contextual Thinking`. The frontend splits on `---` to build the requirement tree. The bucket names are the 2026-27 catalog's (14.10). |
 | **`type` on a requirement** | Boolean. `true` means GenEd, `false` means a major (core) requirement. |
-| **GenEd** | General Education. University core requirements every student in a major must satisfy (humanities, cultural analysis and so on). `splitTreeSections()` treats top-level nodes named `GenEd` or containing `University Core`, `EY2022`, `EY2024` as GenEd. |
-| **Majors** | `CS` Computer Science, `IS` Information Systems, `BA` Business Administration, `BS` Biological Sciences. Live in `MAJOR_ORDER`. Scaffolded but not live: `AI`, `GS`. |
+| **Earlier requirement** | A requirement row with `"earlier": true` and a short `earlier_reason` (for example "older degree version"): the course was mapped to that bucket before, but the 2026-27 catalog no longer lists it there. It is kept, not deleted, and the app tags it "Earlier requirement" (14.10). |
+| **GenEd** | General Education. University core requirements every student in a major must satisfy (humanities, cultural analysis and so on). Every major keeps it under the `GenEd` root, and `splitTreeSections()` treats that root as GenEd. |
+| **Majors** | `CS` Computer Science, `IS` Information Systems, `BA` Business Administration, `BS` Biological Sciences, `AI` Artificial Intelligence. Live in `MAJOR_ORDER`. Scaffolded but not live: `GS`. |
 | **`AS`** | "Arts & Sciences". Not a major. A grouping used as the `primary_program` of cross-program faculty and as the default program for directory entries (`DEFAULT_DIRECTORY_PROGRAM = "AS"`). Students can never pick it. |
 | **Minors** | Codes in `VALID_MINORS_FOR_PATCH` (`backend/auth.py`) and `MINOR_LIST` (`js/profile.js`): arabic, biology, business, cs, economics, finance, history, math, neuroscience, product, writing, psychology, sociology, self_defined, tech_entre. Course lists per minor are in `frontend/data/minor_courses.json` (only `business` and `cs` are populated). A student cannot take a minor in their own major field (`MAJOR_MINOR_COLLISION`). |
 | **Role** | Exact title stored on the user: `student`, `professor`, `area_head`, `associate_area_head`, `advisor`, `admin`. |
@@ -238,7 +239,7 @@ CountsFor/
 | `deploy/` | yes | Everything the CMU-Q server needs besides the code. No secrets. See [4.3](#43-deploy). | Live |
 | `scripts/dev_server.py` | yes | Local server that mirrors production: serves `frontend/` on port 8765 and proxies `/api` and `/health` to the API on `127.0.0.1:5050` (5.6). Standard library only. | Live |
 | `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `frontend/app.html`, and every `?v=` tag in `frontend/index.html`. A release tool, run by hand. Optional on the server, where Apache makes browsers revalidate (15.16). | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js` and `app-views.test.js`. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js`, `app-views.test.js` and `catalog-data.test.js`. | Live |
 | `pytest.ini` | yes | Lets `python -m pytest` from the repo root run `backend/tests` and `backend/scraper/tests` together. | Live |
 | `.gitattributes` | yes | Keeps `*.sh` and everything in `deploy/` at LF line endings in every checkout (a CR breaks bash, cron and systemd, for example on Windows with `core.autocrlf`). | Live |
 | `README.md` | yes | This manual. | Keep current |
@@ -311,12 +312,13 @@ The served catalog (`courses.json`, `minor_courses.json`) is in `frontend/data/`
 
 | File | Purpose |
 |---|---|
-| `frontend/data/courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`, 6,784 courses, about 30 MB (about 1.2 MB gzipped). Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`), `soc_sections`, `offerings`. Set by the overlay step (14.5): `qatar_only`. Set by reconcile: `previous_course_name` when a number was reused for a different course. |
+| `frontend/data/courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`, 6,784 courses, about 30 MB (about 1.2 MB gzipped). Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`, plus `AI: [...]` on courses that count for AI; each row `{requirement, type, major}`, plus `earlier` and `earlier_reason` on rows kept from an earlier requirement, 14.10), `soc_sections`, `offerings`. Set by the overlay step (14.5): `qatar_only`. Set by reconcile: `previous_course_name` when a number was reused for a different course. |
 | `frontend/data/minor_courses.json` | Course lists per minor (only `business` and `cs` populated). Loaded by `fetchMinorCourses()`. |
 | `backend/data/soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 31 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
 | `backend/data/mapping_overlays.json` | The one place for Qatar information and other manual complements to the SOC scrape (14.5): `overlays` (additive mappings, 21 entries, including the H&SS Course Offerings sheet), `remove_mappings` (85-414, 85-426) and `qatar_visibility` (85-100). |
 | `backend/data/faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. The directory seed in production (`SEED_USERS_PATH` in `deploy/countsfor.env.example`). |
 | `backend/data/directory_admins.json` | Hand-kept admins layered over the faculty seed (7.1, 19.7). |
+| `backend/data/requirement_path_renames.json` | Old to new requirement paths from the move to the 2026-27 catalog bucket names (14.10). Only needed to update admin course edits saved before that change (15.8 step 8). |
 | `backend/data/minors/` | The official CMU-Q minor requirement files (15 `cmu_minor_*.json` audit exports, Markdown versions of two of them and the Scotty "Minors" general information page). The source of truth for minor requirements; the app does not read them yet. |
 | `backend/scraper/update_data.py` | **The daily update** run by cron (14.2): lock, parser tests, staged pipeline run, checks, publish in place with `.prev` copies and a `.gz`. |
 | `backend/scraper/run_scrape.sh` | The cron entry point: refuses to run as anyone but the owner of `backend/data/` (`countsfor` on the server; a run as root would leave root-owned files that break every later run), sources `/etc/countsfor/scraper.env` if it exists, changes to the deploy root and runs `backend/.venv/bin/python backend/scraper/update_data.py` with its arguments. Executable, LF line endings. |
@@ -620,12 +622,12 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 | Lines (approx.) | Item | Purpose |
 |---|---|---|
-| 6 to 25 | `MAJOR_META`, `MAJOR_ORDER`, `MAJOR_BRAND` | Majors, their labels, degree names and colors. `MAJOR_ORDER = ['CS','IS','BA','BS']` controls which programs get trees and columns. |
+| 6 to 25 | `MAJOR_META`, `MAJOR_ORDER`, `MAJOR_BRAND` | Majors, their labels, degree names and colors. `MAJOR_ORDER = ['CS','IS','BA','BS','AI']` controls which programs get trees and columns. |
 | 28 to 45 | `ACCENT_RULES`, `pickAccentColor()` | Accent color by requirement label. |
-| 48 to 110 | `LABEL_OVERRIDES` | Prettier display names for raw requirement segments. Data labels with a spaced hyphen (for example "Independent Study - Special Permission Required") get their display text here; the stored path never changes. Show a segment with `requirementLeafLabel()` or `formatRequirementPath()`, never raw. |
-| 110 to 220 | `FULFILLMENT_RULES`, `setRule()` | Hand-annotated rule chips ("pick 1", "take all", "at least N units") per major and requirement. |
+| 48 to 65 | `LABEL_OVERRIDES` | Display names for the few segments that should not show as stored: the degree roots ("CS Degree Requirements") and four Biological Sciences track comment rows. Every other bucket shows its 2026-27 catalog name. The stored path never changes. Show a segment with `requirementLeafLabel()` or `formatRequirementPath()`, never raw. |
+| 65 to 275 | `FULFILLMENT_RULES`, `setRule()` | Rule chips ("Choose 1", "Take all", "At least 36 units") per major and bucket name, from the 2026-27 catalog, listed in catalog order. A rule's optional `note` shows as the chip's tooltip. |
 | 220 to 235 | `courseOfferedInQatar()`, `isCourseHidden()` | A row is hidden everywhere (tree, search, typeahead, home lists, also counts for, double counters) when it has `qatar_only` without a running Qatar offering. |
-| 237 to 346 | `buildRequirementTree()`, `normalizeTree()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; split into degree and GenEd sections. |
+| 290 to 400 | `buildRequirementTree()`, `normalizeTree()`, `ruleOrder()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; sibling buckets follow the order of the major's rules (catalog order), and courses kept from an earlier requirement list after the current ones; split into degree and GenEd sections. |
 | 334 | `normalizeCourseCode()` | Canonical `NN-NNN`. |
 | 343 to 425 | `COURSE_EDIT_FIELDS`, `applyCourseOverrides(courses, overrides)` | Apply admin edits. Returns `{ courses, archived }`. Edited courses get `_edit` (the override) and `_catalog` (the scraped values replaced). Added courses get `_added`. Archived courses are removed from `courses` and returned in `archived`. Copies objects so a reload starts from scraped data. |
 | 428 | `knownRequirementPaths()` | All requirement paths per program, used by the course editor's autocomplete. |
@@ -641,7 +643,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 | Item | Purpose |
 |---|---|
-| `PROGRAM_GROUPS` | Programs with labels and `dataPending` (AI and GS are pending). Derived: `VALID_PROGRAMS`, `MAJOR_LIST`, `STUDENT_PROGRAMS`, `PROGRAM_FULL_NAME`. |
+| `PROGRAM_GROUPS` | Programs with labels and `dataPending` (GS is pending). Derived: `VALID_PROGRAMS`, `MAJOR_LIST`, `STUDENT_PROGRAMS`, `PROGRAM_FULL_NAME`. |
 | `DEPARTMENT_LIST` | Must match `VALID_DEPARTMENTS` in `backend/models.py`. |
 | `getRoleGroup()`, `isFaculty()`, `isStudent()` | Role group helpers (mirror of backend). |
 | `canManageDirectory()`, `canFlagCourses()`, `canManageUsers()`, `canUseSchedulePlan()` | UI gates only. The backend enforces the real rules. |
@@ -941,14 +943,14 @@ Since November 3, 2026 production `/health` on Render reports `"tables": 14` (th
 
 One row per course code:
 
-- Scraped course edited: `is_new = false`, `course_code` = the catalog code (even if the admin renumbers it; the new number is stored inside `fields.course_code`), `fields` = only the changed fields (`course_name`, `department`, `units`, `description`, `prerequisites`, `offered_qatar`, `offered_pitts`, `offered`, optionally `course_code`), `requirements` = the complete "counts for" map when edited (`{"CS": [{"requirement": "A---B", "type": false, "major": "CS"}], ...}`), else null.
+- Scraped course edited: `is_new = false`, `course_code` = the catalog code (even if the admin renumbers it; the new number is stored inside `fields.course_code`), `fields` = only the changed fields (`course_name`, `department`, `units`, `description`, `prerequisites`, `offered_qatar`, `offered_pitts`, `offered`, optionally `course_code`), `requirements` = the complete "counts for" map when edited (`{"CS": [{"requirement": "A---B", "type": false, "major": "CS"}], ...}`; a row kept from an earlier requirement also has `"earlier": true` and `earlier_reason`, which the editor keeps), else null.
 - Course added by an admin: `is_new = true`, keyed by its own code; renumbering moves the key.
 - `archived = true` hides the course from everyone; nothing is deleted.
 - If an edit leaves a scraped course identical to the scrape (no fields, no requirements, not archived) the row is deleted.
 
 ### 12.3 Validation rules (`course_overrides.py`)
 
-Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`. Requirement programs must be in `CS IS BA BS AI GS`; each path up to 400 chars; duplicates are dropped.
+Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`. Requirement programs must be in `CS IS BA BS AI GS`; each path up to 400 chars; duplicates are dropped; `earlier_reason` up to 200 chars, stored only on a row with `earlier` true.
 
 ### 12.4 How the browser applies them
 
@@ -1093,7 +1095,7 @@ The SOC scrape stays the rule. This file is the one place for manual complements
       "course_codes": ["85-110"],
       "create_missing": false,
       "requirements": {
-        "BA": [{"requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning", "type": true, "major": "BA"}]
+        "BA": [{"requirement": "GenEd---University Core---Scientific Reasoning", "type": true, "major": "BA"}]
       },
       "ensure_course_defaults": {"department": "82", "offered_qatar": true},
       "ensure_course_defaults_codes": ["82-101"]
@@ -1111,7 +1113,7 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 `apply_mapping_overlays.py` applies the sections in this order, in one step. Running it twice gives the same file.
 
 1. **`overlays`**: additive mappings. `create_missing: false` skips (with a warning) a code the catalog lacks instead of creating a `manual_seed` row. `ensure_course_defaults_codes` limits `ensure_course_defaults` (and creation) to those codes.
-2. **`remove_mappings`**: removes the requirement rows of the listed programs (`["BA", "BS"]` or `"all"`). It runs after step 1, and step 1 skips those programs, so nothing re-adds them.
+2. **`remove_mappings`**: removes the requirement rows of the listed programs (`["BA", "BS"]` or `"all"`, which covers CS, IS, BA, BS and AI). It runs after step 1, and step 1 skips those programs, so nothing re-adds them.
 3. **`qatar_visibility`**: `show_only_if_offered_qatar` sets `qatar_only`; the app hides the course everywhere unless its SOC offerings include the Qatar campus.
 
 `qatar_only` belongs to this step: a row the file no longer lists loses it. Use the file for mapping fixes that should live in git and apply to every deploy; use the admin course editor for quick fixes by non-developers. After you change the file, deploy it (15.16), which runs `--no-scrape`. Tests: `backend/scraper/tests/test_mapping_overlay_sections.py` (also checks that every requirement path in the file exists in `frontend/data/courses.json`) and `backend/scraper/tests/test_is_igi_modern_languages.py`.
@@ -1132,8 +1134,8 @@ Settled in November 2026 (the Entry column says where each one lives):
 Open questions (nothing in the data changes until someone with authority answers them):
 
 1. **85-426** has no mappings until it is confirmed what "Reverse Engineering Brains and Machines" should count for.
-2. **85-102** (Introduction to Psychology, last offered M25 and never in Qatar in the SOC data) keeps its base catalog mappings (CS, IS, BA, BS) and stays visible. Should it keep them, or be hidden like 85-100?
-3. **85-421** (Language and Thought, last offered F25, not in Qatar) keeps its base catalog mappings (CS, BA, BS). Are they still right?
+2. **85-102** (Introduction to Psychology, last offered M25 and never in Qatar in the SOC data) keeps its base catalog mappings (CS, IS, BA, BS, and AI through the SCS general education) and stays visible; since 14.10 its CS Category 1 row is marked earlier (the 2026-27 list has 85-100). Should it keep them, or be hidden like 85-100?
+3. **85-421** (Language and Thought, last offered F25, not in Qatar) keeps its base catalog mappings (CS, BA, BS); the 2026-27 AI page lists it for Category 1A. Are they still right?
 4. **The 43 same-title pairs** that `validate_soc_coverage.py` logs as warnings on every run (other departments, none in Psychology) are hints only; change nothing without an official source.
 
 The other data questions (SOC-created rows that keep F26, codes printed under `REVIEW`, M25) are in 21.2.
@@ -1155,6 +1157,20 @@ git diff --stat
 ### 14.9 History: the GitHub Actions scrape
 
 Before the server, `.github/workflows/scrape.yml` ran the same steps on GitHub every day at 12:00 UTC and on weekdays at 06:00 UTC (only on `Adicmu/Countsfor-Summer-26`), ran `bump_cf_build.py`, committed `data/soc.json`, `data/courses.json` and `app.html` as `soc-bot` (`Update SOC data (YYYY-MM-DD)`) and triggered the Pages deploy. It failed every day from July 9 to November 3, 2026 because it never installed pytest; that was fixed on November 3. The `cleanup` branch removes it, but **it still runs on `main` until the branch is merged**, with the old layout and the old fixed-column parser (it shifts every field on summer pages, does not mark cancelled sections and turns accented letters into U+FFFD). Disable it in the GitHub Actions tab at the cutover (15.15). The partner fork `Hindjendara/Countsfor-Summer-26` has its own copy of the workflow.
+
+### 14.10 Requirement bucket names (2026-27 catalog)
+
+On November 10, 2026 the requirement paths of all five majors moved to the bucket names of the 2026-27 CMU Undergraduate Catalog (the major pages, the SCS, Dietrich, MCS and Tepper general education pages, and the CMU-Q page). The mappings that were already there stayed the base:
+
+- Each old bucket was renamed to the catalog heading it belongs to. Several old buckets can merge into one (for example the CS Science and Engineering options all became `GenEd---Science and Engineering`); a course appears once per bucket.
+- Courses the catalog lists but the mapping lacked were added, when `courses.json` has a row for them. Where the catalog gives a rule instead of a list ("any 70-3xx course"), today's courses were checked against the rule and other matching courses were not added, with two exceptions: the AI School of Computer Science Electives, which had no list to start from, holds every SCS course in `courses.json` that meets its rule, and the Biological Sciences D. Cultural/Global Understanding Course bucket holds the 82-xxx courses below 600 its rule names.
+- Courses the catalog no longer lists in a bucket were **kept** and marked `"earlier": true` with an `earlier_reason`: `older degree version`, `not covered by the 2026-27 rule`, `honors or older alternative`, `cross-listed with NN-NNN` or `renumbered as NN-NNN`. The tree lists them after the current courses and the course card's Counts For list shows them, each with an "Earlier requirement" tag (the reason is in its tooltip).
+- Old buckets with no 2026-27 heading keep their name with every row earlier (the Biological Sciences Biophysics and Computational Biology options, under `Options`; the Information Systems Digitalization concentration, under `IS Concentrations`).
+- AI became a live major, built from its catalog page; its general education rows are the SCS ones CS uses, with Category 1A (Cognitive Studies) in place of Category 1.
+
+Every bucket name has a rule chip in `FULFILLMENT_RULES` (`js/data.js`), and the rules are listed in catalog order, which is also the order the tree shows sibling buckets in. `frontend/tests/catalog-data.test.js` checks the served catalog against `js/data.js`: known roots only, no dash punctuation in bucket names, a rule chip for every bucket, no stale `LABEL_OVERRIDES` or rule keys, and a reason on every earlier row.
+
+The old to new paths are in `backend/data/requirement_path_renames.json`. The pipeline does not read it: `courses.json` carries the new paths, and reconcile keeps them; `mapping_overlays.json` and the constants in `apply_mapping_overlays.py` use the new paths, so the daily overlay step adds no old path back.
 
 ---
 
@@ -1471,6 +1487,14 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    WHERE course_code IN ('85-104','85-253','85-261','85-211','85-219','85-221','85-241','85-377','85-442','85-359','85-340');
    ```
 
+   Admin edits saved before November 10, 2026 that changed what a course counts for still use the old requirement paths (14.10). The browser applies an edit's whole "counts for" list, so such a course would show under an old bucket with no rule chip. List them:
+
+   ```sql
+   SELECT course_code, updated_by_email, updated_at FROM course_overrides WHERE requirements IS NOT NULL;
+   ```
+
+   No rows: nothing to do. Otherwise an admin opens each course in the course editor, removes every category that is not in the pick list and adds its new name from `backend/data/requirement_path_renames.json`, then saves.
+
 9. **Bootstrap**, which adds anything the current code needs that the Render database lacks, and verifies the tables:
 
    ```bash
@@ -1766,7 +1790,7 @@ python -m pytest backend/tests -q
 python -m pytest backend/scraper/tests -q
 
 # Frontend (Node): tests/profile.test.js, tests/data.test.js and tests/utils.test.js
-# like tests/test.html, then the Node-only tests/dash-guard.test.js and tests/app-views.test.js
+# like tests/test.html, then the Node-only tests/dash-guard.test.js, tests/app-views.test.js and tests/catalog-data.test.js
 node scripts/run-data-tests.js
 
 # Frontend in the browser (profile, data and utils tests)
@@ -1806,7 +1830,8 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
 - `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list, the daily update (`test_update_data.py`), `scripts/dev_server.py` (`test_dev_server.py`) and `scripts/bump_cf_build.py`. `backend/scraper/tests/` has no `__init__.py`; its `conftest.py` puts `backend/scraper/` on `sys.path`, which is why the scripts are imported as top-level modules there.
 - `frontend/tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
-- `frontend/tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also written as an HTML entity) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason: today only the four `LABEL_OVERRIDES` keys that must match requirement paths in the data.
+- `frontend/tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also written as an HTML entity) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason; it is empty since the 2026-27 catalog bucket names (no requirement path has a spaced hyphen).
+- `frontend/tests/catalog-data.test.js` (Node only) reads `data/courses.json` and checks it against `js/data.js` (14.10).
 - `frontend/tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen, and that the course editor saves a row under its own code and refuses a number another row already has.
 - `frontend/tests/utils.test.js` covers `hasTypedText()` (the landing page check for typed text).
 
@@ -1875,16 +1900,16 @@ From `git log`: one line, imperative, sentence case, describing the change, with
 
 ## 19. How-to recipes
 
-### 19.1 Add a new major (for example AI)
+### 19.1 Add a new major (for example GS)
 
 Requirement data is the hard part. The scrape does not produce requirement mappings; they come from the upstream catalog plus overlays.
 
-1. Get the authoritative requirement list and decide requirement path names (`Top---Sub---Leaf`).
+1. Get the authoritative requirement list and use its headings as requirement path names (`BS in <Major>---Section---Bucket` for degree rows, `GenEd---...` for general education; 14.10). AI was added this way in November 2026.
 2. Add mappings: either an overlay in `backend/data/mapping_overlays.json` per course (`"requirements": {"AI": [...]}`) and run `python backend/scraper/apply_mapping_overlays.py`, or use the admin course editor (backend already accepts `AI` and `GS` in `REQUIREMENT_PROGRAMS`).
 3. Frontend:
-   - `js/data.js`: add the code to `MAJOR_ORDER`; check `MAJOR_META` and `MAJOR_BRAND`; add `LABEL_OVERRIDES` and `setRule(...)` lines if needed; update `annotateMultiProgram()` which has its own hardcoded `['CS','IS','BA','BS']` list (about line 1042); check `splitTreeSections()` GenEd detection.
+   - `js/data.js`: add the code to `MAJOR_ORDER`; check `MAJOR_META` and `MAJOR_BRAND`; add a `LABEL_OVERRIDES` entry for the degree root and a `setRule(...)` line for every bucket name, in catalog order. `annotateMultiProgram()` and `splitTreeSections()` need no change.
    - `js/profile.js`: set `dataPending: false` in `PROGRAM_GROUPS`.
-   - `css/styles.css`: add `--major-ai` tokens next to `--major-cs` (line 26) for light and dark themes, and any `.ai` classes the tree uses (copy the existing ones for `cs`).
+   - `css/styles.css`: add `--major-<code>` tokens next to `--major-cs` (line 26) for light and dark themes, and the per-major classes the tree uses (copy the ones for `ai`: `.tr-leaf-tag-ai`, `.role-badge.rb-ai`, `.cc-cf-ai`, `.cc-cf-col-ai`, `.typeahead-cat-major-ai`, `.major-tab[data-major="AI"]`).
 4. Backend: `VALID_PROGRAMS_FOR_PATCH` (`auth.py`), `REQUIREMENT_PROGRAMS` (`course_overrides.py`) and `_VALID_PROGRAMS` (`search_analytics.py`) already include `AI` and `GS`. For a brand new code, add it to all three.
 5. If the program has a matching minor, update `MAJOR_MINOR_COLLISION` (`auth.py`) and `MAJOR_TO_MINOR_CODE` (`profile.js`).
 6. Test: a student with that major sees the tree; course cards show the new column.
@@ -2060,14 +2085,14 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 ### 21.3 Code hygiene
 
-- The no-dash rule (section 18) covers user-facing text and text that comes from data: requirement labels go through `LABEL_OVERRIDES`, and meeting times show "to" instead of a hyphen. `frontend/tests/dash-guard.test.js` checks it on every run. Meeting strings that are not in the `DAYS hh:mmAM-hh:mmPM` form, including scraper junk such as "Pittsburgh, Pennsylvania" (21.2 item 9), are still shown as stored.
+- The no-dash rule (section 18) covers user-facing text and text that comes from data: requirement bucket names have no dash punctuation (`frontend/tests/catalog-data.test.js` checks the catalog), and meeting times show "to" instead of a hyphen. `frontend/tests/dash-guard.test.js` checks it on every run. Meeting strings that are not in the `DAYS hh:mmAM-hh:mmPM` form, including scraper junk such as "Pittsburgh, Pennsylvania" (21.2 item 9), are still shown as stored.
 - Dead code: unused `users.reset_token_hash` and `reset_token_expires` columns (kept on purpose: dropping them is a schema change). The rest of the dead code found in the November 2026 audit was removed (see `git log` on the `cleanup` branch).
 - The 30 MB catalog download makes the first load slow on a slow connection (UX review items 4 to 12); on the server Apache sends it gzipped (about 1.2 MB).
 - `cf_flags` local queue has no cap.
 
 ### 21.4 Product roadmap (from docs and code comments)
 
-- AI and GS majors: waiting on authoritative requirement specs (`frontend/js/data.js` line 16).
+- GS major: waiting on an authoritative requirement spec (`MAJOR_ORDER` in `frontend/js/data.js`).
 - Minors: the official requirement files are in `backend/data/minors/` but the app does not read them yet; a normalization step should turn them into one dataset. Today minor course lists are empty for most minors (`frontend/data/minor_courses.json`).
 - Server-side storage of a user's own schedule plans (today they are browser-only, which also means they do not survive a change of site address, 15.15).
 - UX review (`docs/archive/UX_REVIEW_2026-07-17.md`): dark theme parity, copy consistency, accessibility (keyboard navigation of the tree, ARIA for typeahead), slimmer boot payload.

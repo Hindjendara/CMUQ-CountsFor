@@ -21,13 +21,13 @@ from apply_mapping_overlays import (  # noqa: E402
     apply_overlay_document,
 )
 
-SR = "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning"
-NT = "GenEd---Non-Technical Breadth Electives"
-HA = "GenEd---Humanities/Arts Electives"
-SS = "GenEd---GenEd---Disciplinary Perspectives---Social Sciences"
+SR = "GenEd---University Core---Scientific Reasoning"
+NT = "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses"
+HA = "GenEd---Humanities and Arts---C. Humanities and Arts Electives"
+SS = "GenEd---Disciplinary Perspectives---Social Sciences"
 IEG = (
     "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives"
-    "---Biological Sciences Electives---Interdisciplinary Electives Group"
+    "---Interdisciplinary Electives Group"
 )
 
 
@@ -160,7 +160,7 @@ def test_ensure_course_defaults_codes_limits_defaults():
     courses = [course("82-101", offered_qatar=False), course("76-386", offered_qatar=False)]
     apply_overlay_document(courses, {"overlays": [{
         "id": "igi", "course_codes": ["82-101", "76-386", "82-999"],
-        "requirements": {"IS": [req("IS", "GenEd---GenEd---Foundations---Intercultural and Global Inquiry")]},
+        "requirements": {"IS": [req("IS", "GenEd---Foundations---Intercultural and Global Inquiry")]},
         "ensure_course_defaults": {"department": "82", "offered_qatar": True},
         "ensure_course_defaults_codes": ["82-101", "82-999"],
     }]})
@@ -261,16 +261,21 @@ def test_real_overlay_merge_result(real_courses):
     # 85-190 has the sheet's IS Social Sciences and the mappings moved from its old numbers.
     assert leaves("85-190") == {
         ("IS", "Social Sciences", True),
-        ("CS", "Cognition, Choice, and Behavior (CS, CB, & HCI)", True),
-        ("CS", "Humanities/Arts Electives", True),
+        ("CS", "Category 1: Cognition, Choice and Behavior", True),
+        ("CS", "C. Humanities and Arts Electives", True),
         ("BA", "Scientific Reasoning", True),
-        ("BS", "Non-Technical Breadth Electives", True),
+        ("BS", "E. Nontechnical Elective Courses", True),
+        ("AI", "C. Humanities and Arts Electives", True),
     }
     assert leaves("85-170") == {
+        ("CS", "Science and Engineering", True),
         ("IS", "Scientific Inquiry", True),
         ("BA", "Scientific Reasoning", True),
         ("BS", "Interdisciplinary Electives Group", False),
-        ("BS", "Any ONE of the following courses", False),
+        ("BS", "And TWO (2) or THREE (3) of the following for a total of FIVE (5) courses", False),
+        ("BS", "A. Life Sciences", True),
+        ("BS", "D. STEM Course", True),
+        ("AI", "Science and Engineering", True),
     }
     assert leaves("85-414") == set()
     assert leaves("85-426") == set()

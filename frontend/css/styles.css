@@ -136,6 +136,8 @@
   --major-ba-text: #60A5FA;
   --major-bs-bg: rgba(5,150,105,0.12);
   --major-bs-text: #34D399;
+  --major-ai-bg: rgba(124,58,237,0.16);
+  --major-ai-text: #A78BFA;
 }
 
 /* ---------- Reset & Base ---------- */
@@ -1059,6 +1061,14 @@ body.is-resizing-panels * {
 .tr-leaf-tag-is { background: var(--major-is); }
 .tr-leaf-tag-ba { background: var(--major-ba); }
 .tr-leaf-tag-bs { background: var(--major-bs); }
+.tr-leaf-tag-ai { background: var(--major-ai); }
+/* A course kept from an earlier version of the requirement (not in the 2026-27 catalog). */
+.tr-earlier-tag, .cc-cf-item-earlier, .adm-req-earlier {
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; white-space: nowrap;
+  color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-medium);
+  flex-shrink: 0;
+}
+.tr-leaf.is-earlier .tr-leaf-name, .cc-cf-item.is-earlier .cc-cf-item-label { color: var(--text-secondary); }
 .tr-mp-chip { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--bg-secondary); color: var(--text-secondary); font-weight: 600; }
 .tr-also { display: inline-flex; gap: 4px; }
 
@@ -1436,6 +1446,7 @@ body.is-resizing-panels * {
 .role-badge.rb-is   .rb-primary { background: var(--major-is-bg); color: var(--major-is); }
 .role-badge.rb-ba   .rb-primary { background: var(--major-ba-bg); color: var(--major-ba); }
 .role-badge.rb-bs   .rb-primary { background: var(--major-bs-bg); color: var(--major-bs); }
+.role-badge.rb-ai   .rb-primary { background: var(--major-ai-bg); color: var(--major-ai); }
 .role-badge.rb-as   .rb-primary { background: var(--bg-tertiary); color: var(--text-secondary); }
 .role-badge.rb-ah   .rb-primary { background: var(--bg-tertiary); color: var(--text-secondary); }
 

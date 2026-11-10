@@ -129,9 +129,9 @@ test('validateProfile: advisor with no scope → invalid', () => {
 
 // ── PROGRAM_GROUPS ───────────────────────────────────────
 
-test('isProgramDataPending: true for AI and GS, false for CS', () => {
-  assertTrue(isProgramDataPending('AI'));
+test('isProgramDataPending: true for GS only; AI and CS have requirement data', () => {
   assertTrue(isProgramDataPending('GS'));
+  assertFalse(isProgramDataPending('AI'));
   assertFalse(isProgramDataPending('CS'));
 });
 

@@ -40,7 +40,7 @@ for (const file of TEST_FILES) {
   byFile.push({ file, tests: __tests.slice(start) });
 }
 // Node-only suites (they read source files with fs), loaded with require().
-const NODE_TEST_FILES = ['tests/dash-guard.test.js', 'tests/app-views.test.js'];
+const NODE_TEST_FILES = ['tests/dash-guard.test.js', 'tests/app-views.test.js', 'tests/catalog-data.test.js'];
 for (const file of NODE_TEST_FILES) {
   const start = __tests.length;
   require(path.join(ROOT, file));
