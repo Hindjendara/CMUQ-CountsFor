@@ -3232,6 +3232,19 @@ body.is-resizing-panels * {
   background: var(--major-ba-bg);
   color: var(--major-ba-text);
 }
+/* One offering as the Schedule of Classes lists it: the lecture line, then
+   the lines of its sections (indented); a rule separates offerings. */
+.cc-sched-block { border-bottom: 1px solid var(--border-light); }
+.cc-sched-block:last-child { border-bottom: 0; }
+.cc-sched-block > .cc-kv { border-bottom: 0; }
+.cc-sched-block > .cc-kv + .cc-kv { padding-top: 0; }
+.cc-sched-sub > .cc-k { padding-left: 10px; }
+.cc-sched-term {
+  padding-top: 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
 .cc-action-plan.is-planned {
   background: var(--major-ba-bg);
   border-color: var(--major-ba-border);

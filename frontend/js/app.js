@@ -2147,7 +2147,7 @@ const App = {
     const planCount = (store.plans || []).length;
     const active = this._ensureActivePlan(false);
     const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedSections(this.activeSemester, active.id) : 0;
+    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
     const units = this._planUnitsTotal(planned);
     const countChip = planCount > 0 ? `<span class="nav-plan-count">${planCount}</span>` : '';
     const label = planCount > 1
@@ -2168,7 +2168,7 @@ const App = {
     const planCount = (store.plans || []).length;
     const active = this._ensureActivePlan(false);
     const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedSections(this.activeSemester, active.id) : 0;
+    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
     const units = this._planUnitsTotal(planned);
     const existing = btn.querySelector('.nav-plan-count');
     const label = btn.querySelector('.nav-plan-label');
@@ -2243,7 +2243,7 @@ const App = {
     const profile = this.profile;
     const facultyView = isFaculty(profile);
     const mappings = getCourseMappings(course);
-    const sections = filterOfferings(getCourseOfferings(course), this._filterParams());
+    const offeringGroups = this._visibleOfferingGroups(course);
     const semLabel = semesterLabel(this.activeSemester);
     const isDoubleCounter = !!course._doubleCounter;
 
@@ -2275,20 +2275,28 @@ const App = {
       <div class="cc-kv"><span class="cc-k">Prereq</span><span class="cc-v">${prereq ? esc(prereq) : '<em>None</em>'}</span></div>
     `;
 
-    // Schedule rows for active semester + campus + modality
-    let filtered = sections.slice();
-    const groupedSections = groupOfferingsBySection(filtered);
+    // Schedule for the active semester + campus + modality: each lecture with
+    // the sections listed under it, as in the Schedule of Classes. Whole
+    // offerings show until at least four lines do; the rest sit behind "more".
+    if (this._schedOpenFor !== course.course_code) this._schedOpenFor = null;
+    let inlineCount = 0;
     let schedHtml = '';
-    if (filtered.length === 0) {
+    if (offeringGroups.length === 0) {
       const campus = this.locationFilter === 'qatar' ? 'Qatar' : this.locationFilter === 'pittsburgh' ? 'Pittsburgh' : 'this filter';
       const mod = this.modalityFilter !== 'all' ? (' · ' + (MODALITY_OPTIONS.find(m => m.id === this.modalityFilter) || {}).label) : '';
       schedHtml = `<div class="cc-empty">No matching sections for ${esc(semLabel)}${mod ? esc(mod) : ''}${this.locationFilter !== 'all' ? ' · ' + esc(campus) : ''}</div>`;
     } else {
-      const inline = groupedSections.slice(0, 4).map(g => this._renderSchedRowGroup(g, course.course_code)).join('');
-      const extraCount = groupedSections.length - 4;
+      for (let lines = 0; inlineCount < offeringGroups.length && lines < 4; inlineCount++) {
+        lines += offeringGroupParts(offeringGroups[inlineCount]).length;
+      }
+      const planned = this._plannedIdSet();
+      const inline = offeringGroups.slice(0, inlineCount).map(g => this._renderSchedBlock(g, course.course_code, planned)).join('');
+      const extraGroups = offeringGroups.slice(inlineCount);
+      const extraCount = this._schedLineCount(extraGroups);
+      const open = extraCount > 0 && this._schedOpenFor === course.course_code;
       const more = extraCount > 0
-        ? `<button class="cc-more" onclick="App.expandScheduleV2(event)" id="cc-sched-more" data-expanded="0">+${extraCount} more sections</button>
-           <div id="cc-sched-extra" style="display:none;margin-top:6px"></div>`
+        ? `<button class="cc-more" onclick="App.expandScheduleV2(event)" id="cc-sched-more" data-expanded="${open ? 1 : 0}">${open ? 'Hide extra sections' : `+${extraCount} more sections`}</button>
+           <div id="cc-sched-extra" style="display:${open ? 'block' : 'none'};margin-top:6px">${open ? extraGroups.map(g => this._renderSchedBlock(g, course.course_code, planned)).join('') : ''}</div>`
         : '';
       schedHtml = inline + more;
     }
@@ -2384,11 +2392,55 @@ const App = {
     if (explBtn) explBtn.style.display = this.layoutMode === 'focused' ? 'flex' : 'none';
 
     this._bindWishlistNoteInputs(el);
-    this._schedSections = groupedSections;
+    this._schedSections = offeringGroups;
+    this._schedInlineCount = inlineCount;
     this._syncDirectoryFabLayout();
   },
 
-  _renderSchedRowGroup(group, courseCode) {
+  /** Lines an offering group takes on the course card: its lecture and each of its sections. */
+  _schedLineCount(groups) {
+    return (groups || []).reduce((n, g) => n + offeringGroupParts(g).length, 0);
+  },
+
+  /**
+   * One offering on the course card, as the Schedule of Classes lists it: the
+   * lecture line, then the line of each of its sections. When a lecture has
+   * sections, "+ Plan" sits on each section line and plans that section with
+   * the lecture; a lecture or a section alone has its own. Under All semesters
+   * the block names its semester.
+   */
+  _renderSchedBlock(group, courseCode, plannedIds) {
+    const planned = plannedIds || this._plannedIdSet();
+    const term = this.activeSemester === 'all' && group.semester_code
+      ? `<div class="cc-sched-term">${esc(semesterLabel(group.semester_code))}</div>`
+      : '';
+    const lines = [];
+    if (group.lecture) {
+      lines.push(this._renderSchedRowGroup(group.lecture, courseCode, { group, planned, plan: !group.sections.length }));
+    }
+    for (const part of group.sections) {
+      lines.push(this._renderSchedRowGroup(part, courseCode, { group, planned, plan: true, sub: !!group.lecture }));
+    }
+    return `<div class="cc-sched-block">${term}${lines.join('')}</div>`;
+  },
+
+  /** The "+ Plan" / "✓ Planned" button of one line of an offering group. */
+  _schedPlanBtnHtml(courseCode, group, part, planned) {
+    const isIn = m => planned.has(this._planItemForMeeting(courseCode, m).id);
+    const choice = offeringGroupChoice(group, part.section, isIn);
+    const meetings = choice.parts.flatMap(p => p.meetings);
+    const allIn = meetings.length > 0 && meetings.every(isIn);
+    const names = choice.parts.map(p => planSectionLabel(p.section)).join(' and ');
+    const replaces = choice.others.filter(p => p.meetings.some(isIn)).map(p => planSectionLabel(p.section));
+    let title = `Add ${names} (all meeting times) to your schedule plan`;
+    if (allIn) title = `Remove ${names} from your schedule plan`;
+    else if (replaces.length) title = `Plan ${names} instead of ${replaces.join(' and ')}`;
+    else if (meetings.some(isIn)) title = `Add the missing meeting times of ${names} to your schedule plan`;
+    const sem = group.semester_code || this.activeSemester;
+    return `<button type="button" class="cc-plan-btn ${allIn ? 'is-planned' : ''}" data-action="plan-toggle-section" data-course-code="${esc(courseCode)}" data-semester-code="${esc(sem)}" data-section="${esc(part.section || '')}" data-campus="${esc(part.campus || '')}" title="${esc(title)}" aria-label="${esc(title)}">${allIn ? '✓ Planned' : '+ Plan'}</button>`;
+  },
+
+  _renderSchedRowGroup(group, courseCode, opts = {}) {
     const dmCls = (dm) => {
       const d = (dm || '').toLowerCase();
       if (d.includes('remote')) return 'cc-dm-remote';
@@ -2403,12 +2455,10 @@ const App = {
       return `<span class="cc-sched-meeting">${esc(time)}</span>`;
     }).join('');
     let planBtn = '';
-    if (canUseSchedulePlan(this.profile) && courseCode) {
-      const inPlan = this._isSectionGroupInPlan(courseCode, group);
-      const sem = group.semester_code || this.activeSemester;
-      planBtn = `<button type="button" class="cc-plan-btn ${inPlan ? 'is-planned' : ''}" data-action="plan-toggle-section" data-course-code="${esc(courseCode)}" data-semester-code="${esc(sem)}" data-section="${esc(group.section || '')}" data-campus="${esc(group.campus || '')}" title="${inPlan ? 'Remove section from schedule plan' : 'Add this section (all meeting times) to your schedule plan'}" aria-label="${inPlan ? 'Remove section from schedule plan' : 'Add section to schedule plan'}">${inPlan ? '✓ Planned' : '+ Plan'}</button>`;
+    if (opts.plan && opts.group && canUseSchedulePlan(this.profile) && courseCode) {
+      planBtn = this._schedPlanBtnHtml(courseCode, opts.group, group, opts.planned);
     }
-    return `<div class="cc-kv cc-kv-sched cc-kv-sched-group"><span class="cc-k">Sec ${esc(group.section)}</span><span class="cc-v"><span class="cc-sched-meetings">${meetingsHtml}</span> ${campusBadge} ${dm} ${planBtn}</span></div>`;
+    return `<div class="cc-kv cc-kv-sched cc-kv-sched-group${opts.sub ? ' cc-sched-sub' : ''}"><span class="cc-k">${esc(planSectionLabel(group.section))}</span><span class="cc-v"><span class="cc-sched-meetings">${meetingsHtml}</span> ${campusBadge} ${dm} ${planBtn}</span></div>`;
   },
 
   expandScheduleV2(e) {
@@ -2417,15 +2467,19 @@ const App = {
     const extra = document.getElementById('cc-sched-extra');
     if (!btn || !extra) return;
     const expanded = btn.dataset.expanded === '1';
-    const sections = (this._schedSections || []).slice(4);
+    const code = this.selectedCourse ? this.selectedCourse.course_code : '';
+    const groups = (this._schedSections || []).slice(this._schedInlineCount || 0);
+    // Kept open when the card redraws (after "+ Plan"), until another course opens.
+    this._schedOpenFor = expanded ? null : code;
     if (!expanded) {
       extra.style.display = 'block';
-      extra.innerHTML = sections.map(g => this._renderSchedRowGroup(g, this.selectedCourse ? this.selectedCourse.course_code : '')).join('');
+      const planned = this._plannedIdSet();
+      extra.innerHTML = groups.map(g => this._renderSchedBlock(g, code, planned)).join('');
       btn.textContent = 'Hide extra sections';
       btn.dataset.expanded = '1';
     } else {
       extra.style.display = 'none';
-      btn.textContent = '+' + sections.length + ' more sections';
+      btn.textContent = '+' + this._schedLineCount(groups) + ' more sections';
       btn.dataset.expanded = '0';
     }
   },
@@ -2830,9 +2884,10 @@ const App = {
         </button>`);
     }
     if (canUseSchedulePlan(this.profile)) {
-      const sections = filterOfferings(getCourseOfferings(course), this._filterParams());
-      const grouped = groupOfferingsBySection(sections);
-      const hasPlannedSection = grouped.some(g => this._isSectionGroupInPlan(course.course_code, g));
+      const grouped = this._visibleOfferingGroups(course);
+      const planned = this._plannedIdSet();
+      const hasPlannedSection = grouped.some(g => offeringGroupParts(g).some(p =>
+        p.meetings.some(m => planned.has(this._planItemForMeeting(course.course_code, m).id))));
       if (hasPlannedSection) {
         parts.push(`
           <button class="cc-action cc-action-plan is-planned" onclick="App._openActivePlanDetail()" aria-label="View in schedule plan">
@@ -2841,7 +2896,7 @@ const App = {
           </button>`);
       } else if (grouped.length) {
         parts.push(`
-          <button class="cc-action cc-action-plan" data-action="plan-add-first" data-course-code="${esc(course.course_code)}" aria-label="Add first section to schedule plan">
+          <button class="cc-action cc-action-plan" data-action="plan-add-first" data-course-code="${esc(course.course_code)}" aria-label="Add the first matching section, with its lecture, to schedule plan">
             ${this._iconCalendar()}
             <span>Add to plan</span>
           </button>`);
@@ -3460,59 +3515,53 @@ const App = {
     return items.filter(i => i.semester_code === code);
   },
 
-  _isOfferingInPlan(courseCode, offering) {
-    const id = planOfferingKey(courseCode, offering);
-    return this._getPlanItems().some(i => i.id === id);
+  /** The plan item for one meeting of a section; its id is the saved plan key. */
+  _planItemForMeeting(courseCode, m, semesterCode) {
+    return this._normalizePlanItem({
+      course_code: courseCode,
+      semester_code: m.semester_code || semesterCode,
+      section: m.section,
+      campus: m.campus,
+      days_times: offeringDaysTimes(m),
+      modality: m.modality || m.delivery_mode || '',
+    });
   },
 
-  _sectionMeetingsForPlan(courseCode, semesterCode, section, campus) {
+  /** Ids of the meetings in the active plan. */
+  _plannedIdSet() {
+    return new Set(this._getPlanItems().map(i => i.id));
+  },
+
+  /** A course's offering groups (each lecture with its sections), before any filter. */
+  _offeringGroups(courseCode) {
     const course = lookupCourse(this.courseIndex, courseCode);
-    if (!course) return [];
-    return getCourseOfferings(course).filter(o =>
-      (o.semester_code || this.activeSemester) === semesterCode
-      && (o.section || '') === (section || '')
-      && (o.campus || '') === (campus || '')
-    );
+    return course ? linkOfferingGroups(getCourseOfferings(course)) : [];
   },
 
-  _isSectionGroupInPlan(courseCode, group) {
-    const meetings = (group && group.meetings) || [];
-    if (!meetings.length) return false;
-    return meetings.some(m => this._isOfferingInPlan(courseCode, m));
+  /** The course's offering groups that match the semester, campus and modality filters. */
+  _visibleOfferingGroups(course) {
+    return filterOfferingGroups(linkOfferingGroups(getCourseOfferings(course)), this._filterParams());
   },
 
-  _countPlannedSections(semesterCode, planId) {
+  /** Courses in the plan for a semester (a lecture and its section are one course). */
+  _countPlannedCourses(semesterCode, planId) {
     const items = this._getPlanItemsForSemester(semesterCode, planId);
-    return new Set(items.map(i => planSectionKey(i.course_code, i))).size;
+    return new Set(items.map(i => i.course_code)).size;
   },
 
   _planSummary(plan, semesterCode) {
     const items = this._getPlanItemsForSemester(semesterCode || this.activeSemester, plan.id);
     const allItems = plan.items || [];
-    const sectionCount = new Set(allItems.map(i => planSectionKey(i.course_code, i))).size;
-    const filteredSections = this._countPlannedSections(semesterCode || this.activeSemester, plan.id);
+    const courseCount = new Set(allItems.map(i => i.course_code)).size;
+    const filteredCourses = this._countPlannedCourses(semesterCode || this.activeSemester, plan.id);
     const units = this._planUnitsTotal(items.length ? items : allItems);
-    const courseCount = new Set((items.length ? items : allItems).map(i => i.course_code)).size;
     const conflicts = countPlanConflictPairs(items.length ? items : allItems);
-    return { sectionCount, filteredSections, units, courseCount, conflicts, itemCount: allItems.length };
+    return { courseCount, filteredCourses, units, conflicts, itemCount: allItems.length };
   },
 
+  /** Planned meetings as one entry per offering: a lecture and its planned section together. */
   _groupPlanItems(items) {
-    const map = new Map();
-    for (const item of items || []) {
-      const key = planSectionKey(item.course_code, item);
-      if (!map.has(key)) {
-        map.set(key, {
-          course_code: item.course_code,
-          semester_code: item.semester_code,
-          section: item.section,
-          campus: item.campus,
-          meetings: [],
-        });
-      }
-      map.get(key).meetings.push(item);
-    }
-    return [...map.values()];
+    return groupPlanItemsByOffering(items, code => this._offeringGroups(code));
   },
 
   _planUnitsTotal(items) {
@@ -3543,69 +3592,74 @@ const App = {
     this._ensureActivePlan(true);
     const course = lookupCourse(this.courseIndex, courseCode);
     if (!course) return;
-    const sections = filterOfferings(getCourseOfferings(course), this._filterParams());
-    const grouped = groupOfferingsBySection(sections);
-    if (!grouped.length) {
+    const group = this._visibleOfferingGroups(course)[0];
+    if (!group) {
       showToast('No sections match your current filters.');
       return;
     }
-    const g = grouped[0];
-    this.togglePlanSection(courseCode, g.semester_code || this.activeSemester, g.section, g.campus, { forceAdd: true });
+    // The first matching offering: its lecture with its first section (or with
+    // the section of it already in the plan), or a section that stands alone.
+    const head = offeringGroupParts(group)[0];
+    this.togglePlanSection(courseCode, group.semester_code || this.activeSemester, head.section, head.campus, { forceAdd: true });
     const ta = document.getElementById('typeahead');
     if (ta) ta.classList.remove('visible');
   },
 
+  /**
+   * "+ Plan" / "✓ Planned" on a course card line. Planning a section plans
+   * every meeting of it and of its lecture (they meet at different times of
+   * the week) and replaces another section of the same lecture. When all of
+   * that is planned, the click takes the whole offering out. A plan holding
+   * only part of it (saved before lectures and sections were linked) gets the
+   * missing part added. opts.forceAdd never removes.
+   */
   togglePlanSection(courseCode, semesterCode, section, campus, opts) {
     if (!canUseSchedulePlan(this.profile)) {
       showToast('Schedule planning is not available for this account.');
       return;
     }
     this._ensureActivePlan(true);
-    const meetings = this._sectionMeetingsForPlan(courseCode, semesterCode, section, campus);
-    if (!meetings.length) return;
+    const found = findOfferingGroup(this._offeringGroups(courseCode), semesterCode, section, campus);
+    if (!found) return;
     let list = this._getPlanItems();
-    const ids = meetings.map(m => planOfferingKey(courseCode, m));
-    const anyIn = ids.some(id => list.some(i => i.id === id));
-    const allIn = ids.every(id => list.some(i => i.id === id));
-    if (allIn && (!opts || !opts.forceAdd)) {
-      list = list.filter(i => !ids.includes(i.id));
+    const ids = new Set(list.map(i => i.id));
+    const itemFor = m => this._planItemForMeeting(courseCode, m, semesterCode);
+    const isIn = m => ids.has(itemFor(m).id);
+    const choice = offeringGroupChoice(found.group, section, isIn);
+    const meetings = choice.parts.flatMap(p => p.meetings);
+    if (!meetings.length) return;
+    const allIn = meetings.every(isIn);
+    if (allIn && !(opts && opts.forceAdd)) {
+      const groupIds = new Set(offeringGroupParts(found.group).flatMap(p => p.meetings).map(m => itemFor(m).id));
+      list = list.filter(i => !groupIds.has(i.id));
       this._savePlanItems(list);
       showToast('Removed from schedule plan');
-    } else if (anyIn && !allIn) {
+    } else if (allIn) {
+      showToast('Already in your schedule plan');
+    } else {
+      const otherIds = new Set(choice.others.flatMap(p => p.meetings).map(m => itemFor(m).id));
+      const switched = list.some(i => otherIds.has(i.id));
+      const partial = meetings.some(isIn);
+      list = list.filter(i => !otherIds.has(i.id));
       for (const m of meetings) {
-        const normalized = this._normalizePlanItem({
-          course_code: courseCode,
-          semester_code: m.semester_code || semesterCode,
-          section: m.section,
-          campus: m.campus,
-          days_times: offeringDaysTimes(m),
-          modality: m.modality || m.delivery_mode || '',
-        });
-        if (!list.some(i => i.id === normalized.id)) list.push(normalized);
+        const item = itemFor(m);
+        if (!list.some(i => i.id === item.id)) list.push(item);
       }
       this._savePlanItems(list);
-      showToast('Added remaining meeting times to your schedule plan');
-    } else if (!anyIn || (opts && opts.forceAdd)) {
-      for (const m of meetings) {
-        const normalized = this._normalizePlanItem({
-          course_code: courseCode,
-          semester_code: m.semester_code || semesterCode,
-          section: m.section,
-          campus: m.campus,
-          days_times: offeringDaysTimes(m),
-          modality: m.modality || m.delivery_mode || '',
-        });
-        if (!list.some(i => i.id === normalized.id)) list.push(normalized);
-      }
-      this._savePlanItems(list);
-      showToast('Added to your schedule plan');
+      const chosen = choice.parts[choice.parts.length - 1];
+      if (switched) showToast(`Switched to ${planSectionLabel(chosen.section)} in your schedule plan`);
+      else if (partial) showToast('Added remaining meeting times to your schedule plan');
+      else showToast('Added to your schedule plan');
     }
     this._refreshPlanSurfaces(courseCode);
   },
 
+  /** Plan list "Remove": the whole offering (lecture and section) of that entry. */
   removePlanSection(courseCode, semesterCode, section, campus) {
-    const key = planSectionKey(courseCode, { semester_code: semesterCode, section, campus });
-    const list = this._getPlanItems().filter(i => planSectionKey(i.course_code, i) !== key);
+    const groups = this._offeringGroups(courseCode);
+    const key = planItemOfferingGroup({ course_code: courseCode, semester_code: semesterCode, section, campus }, groups).key;
+    const list = this._getPlanItems().filter(i =>
+      i.course_code !== courseCode || planItemOfferingGroup(i, groups).key !== key);
     this._savePlanItems(list);
     showToast('Removed from schedule plan');
     this._refreshPlanSurfaces(courseCode);
@@ -3677,11 +3731,11 @@ const App = {
         const inset = totalCols > 1 ? 1 : 2;
         const colors = courseColor[item.course_code];
         const c = lookupCourse(this.courseIndex, item.course_code);
-        const title = `${item.course_code} · Sec ${item.section}\n${parsed.raw}`;
+        const title = `${item.course_code} · ${planSectionLabel(item.section)}\n${parsed.raw}`;
         return `
           <button type="button" class="plan-block" style="top:${top}%;height:${height}%;left:calc(${leftPct}% + ${inset}px);width:calc(${widthPct}% - ${inset * 2}px);background:${colors.bg};border-color:${colors.border};color:${colors.text}" title="${esc(title)}" onclick="App.selectCourseFromTree('${esc(item.course_code)}')">
             <span class="plan-block-code">${esc(item.course_code)}</span>
-            <span class="plan-block-sec">Sec ${esc(item.section)}</span>
+            <span class="plan-block-sec">${esc(planSectionLabel(item.section))}</span>
             <span class="plan-block-time">${esc(formatPlanMinutes(parsed.startMin))} to ${esc(formatPlanMinutes(parsed.endMin))}</span>
           </button>`;
       }).join('');
@@ -3704,7 +3758,7 @@ const App = {
                 <button type="button" class="plan-tba-main" onclick="App.selectCourseFromTree('${esc(item.course_code)}')">
                   <span class="plan-tba-code">${esc(item.course_code)}</span>
                   <span class="plan-tba-name">${esc(c ? c.course_name : '')}</span>
-                  <span class="plan-tba-meta">Sec ${esc(item.section)}${days ? ' · ' + esc(days) : ''}${item.campus ? ' · ' + esc(item.campus) : ''}</span>
+                  <span class="plan-tba-meta">${esc(planSectionLabel(item.section))}${days ? ' · ' + esc(days) : ''}${item.campus ? ' · ' + esc(item.campus) : ''}</span>
                 </button>
                 <button type="button" class="plan-tba-remove" data-action="plan-remove" data-plan-id="${esc(item.id)}" aria-label="Remove from plan">Remove</button>
               </div>`;
@@ -3736,6 +3790,8 @@ const App = {
 
   _renderPlanList(items, conflicts) {
     if (!items.length) return '';
+    // One entry per offering: a lecture and the section planned with it
+    // show together ("Lec 2 + Sec W"), each with its own meeting times.
     const groups = this._groupPlanItems(items);
     return `
       <section class="plan-list" aria-label="Planned courses">
@@ -3743,18 +3799,24 @@ const App = {
         <div class="plan-list-rows">
           ${groups.map(group => {
             const c = lookupCourse(this.courseIndex, group.course_code);
-            const times = group.meetings.map(m => formatDaysTimesForDisplay(m.days_times)).join(' · ');
+            const label = group.parts.map(p => planSectionLabel(p.section)).join(' + ');
+            const timesOf = part => part.meetings.map(m => formatDaysTimesForDisplay(m.days_times)).join(' · ');
             const groupConflict = group.meetings.some(m => conflicts.has(m.id));
+            const tail = `${group.campus ? ' · ' + esc(group.campus) : ''}${c && c.units ? ' · ' + c.units + 'u' : ''}${groupConflict ? ' · Time conflict' : ''}`;
+            const metaHtml = group.parts.length === 1
+              ? `<span class="plan-list-meta">${esc(label)} · ${esc(timesOf(group.parts[0]))}${tail}</span>`
+              : `<span class="plan-list-meta">${esc(label)}${tail}</span>`
+                + group.parts.map(p => `<span class="plan-list-meta">${esc(planSectionLabel(p.section))}: ${esc(timesOf(p))}</span>`).join('');
             return `
               <div class="plan-list-row ${groupConflict ? 'is-conflict' : ''}">
                 <button type="button" class="plan-list-main" onclick="App.selectCourseFromTree('${esc(group.course_code)}')">
                   <span class="plan-list-code">${esc(group.course_code)}</span>
                   <span class="plan-list-body">
                     <span class="plan-list-name">${esc(c ? c.course_name : '')}</span>
-                    <span class="plan-list-meta">Sec ${esc(group.section)} · ${esc(times)}${group.campus ? ' · ' + esc(group.campus) : ''}${c && c.units ? ' · ' + c.units + 'u' : ''}${groupConflict ? ' · Time conflict' : ''}</span>
+                    ${metaHtml}
                   </span>
                 </button>
-                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.section)}" data-campus="${esc(group.campus)}" aria-label="Remove section from plan">Remove</button>
+                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.parts[0].section)}" data-campus="${esc(group.campus)}" aria-label="Remove ${esc(label)} from plan">Remove</button>
               </div>`;
           }).join('')}
         </div>
@@ -3785,9 +3847,9 @@ const App = {
         <article class="plan-card ${isActive ? 'is-active' : ''}">
           <button type="button" class="plan-card-main" data-action="plan-open" data-plan-id="${esc(plan.id)}">
             <span class="plan-card-name">${esc(plan.name)}</span>
-            <span class="plan-card-meta">${sum.sectionCount} section${sum.sectionCount === 1 ? '' : 's'} · ${sum.units || 0} units${sum.conflicts ? ' · ' + sum.conflicts + ' conflict' + (sum.conflicts === 1 ? '' : 's') : ''}</span>
-            ${this.activeSemester !== 'all' && sum.filteredSections !== sum.sectionCount
-              ? `<span class="plan-card-meta plan-card-meta-sub">${sum.filteredSections} in ${esc(semLabel)}</span>` : ''}
+            <span class="plan-card-meta">${sum.courseCount} course${sum.courseCount === 1 ? '' : 's'} · ${sum.units || 0} units${sum.conflicts ? ' · ' + sum.conflicts + ' conflict' + (sum.conflicts === 1 ? '' : 's') : ''}</span>
+            ${this.activeSemester !== 'all' && sum.filteredCourses !== sum.courseCount
+              ? `<span class="plan-card-meta plan-card-meta-sub">${sum.filteredCourses} in ${esc(semLabel)}</span>` : ''}
             ${sharedFrom}
             ${updated ? `<span class="plan-card-meta plan-card-meta-sub">Updated ${esc(updated)}</span>` : ''}
           </button>
@@ -3844,8 +3906,7 @@ const App = {
     const items = this._getPlanItemsForSemester(this.activeSemester, planId);
     const conflicts = findPlanConflicts(items);
     const units = this._planUnitsTotal(items);
-    const sectionCount = this._countPlannedSections(this.activeSemester, planId);
-    const courseCount = new Set(items.map(i => i.course_code)).size;
+    const courseCount = this._countPlannedCourses(this.activeSemester, planId);
     const semLabel = semesterLabel(this.activeSemester);
     const conflictPairs = countPlanConflictPairs(items);
     const conflictNote = conflictPairs
@@ -3869,7 +3930,6 @@ const App = {
             <button type="button" class="plan-share-btn" data-action="plan-share" data-plan-id="${esc(plan.id)}">Share schedule</button>
           </div>
           <div class="plan-stats">
-            <span class="plan-stat">${sectionCount} section${sectionCount === 1 ? '' : 's'}</span>
             <span class="plan-stat">${courseCount} course${courseCount === 1 ? '' : 's'}</span>
             <span class="plan-stat">${units || 0} units</span>
             ${conflictNote}
