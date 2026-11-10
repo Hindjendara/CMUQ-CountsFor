@@ -153,10 +153,10 @@
   --major-ai-bg: rgba(124,58,237,0.16);
   --major-ai-text: #A78BFA;
 
-  --minor-accent: #22D3EE;
-  --minor-accent-bg: rgba(34,211,238,0.10);
-  --minor-accent-border: rgba(34,211,238,0.35);
-  --minor-accent-text: #67E8F9;
+  /* The minor teal keeps its base color, like the major colors; only its tint and text lighten. */
+  --minor-accent-bg: rgba(14,116,144,0.18);
+  --minor-accent-border: rgba(94,186,206,0.30);
+  --minor-accent-text: #5EBACE;
   --status-done: #34D399;
   --status-done-bg: rgba(52,211,153,0.14);
   --status-ip: #FBBF24;
@@ -988,7 +988,7 @@ body.is-resizing-panels * {
 
 .tree-filter-hint {
   margin: 0 0 10px;
-  padding: 8px 12px;
+  padding: 8px 16px;
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
@@ -1156,134 +1156,157 @@ body.is-resizing-panels * {
 .mn-node-info { padding: 4px 10px 6px 10px; }
 .mn-node-note { font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin: 2px 0; }
 .mn-node-empty { font-size: 12px; color: var(--text-tertiary); font-style: italic; margin: 4px 0; }
+/* A course code in a minor's notes and warnings: never split at its hyphen */
+.mn-code { white-space: nowrap; }
 
-/* A student's major and minors, above their tree */
-.mn-programs {
-  margin: 12px 12px 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
+/* Minors controls: labels, dropdowns and buttons of the programs bar, the
+   Minors tab and the minor headers. 34px high like the navbar controls, with
+   the surfaces of the tree filter. */
+.mn-label {
+  font-size: 12.5px; font-weight: 600; line-height: 34px;
+  color: var(--text-secondary); white-space: nowrap;
+}
+.mn-select {
+  height: 34px; min-width: 0; max-width: 100%;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border-light); border-radius: 8px;
+  background: var(--bg-secondary); color: var(--text-primary);
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.mn-select:hover { border-color: var(--border-medium); }
+[data-theme="dark"] .mn-select { color-scheme: dark; }
+.mn-select:focus-visible,
+.mn-add-btn:focus-visible,
+.mn-prog-chip-x:focus-visible,
+.mn-about summary:focus-visible { outline: 2px solid var(--cmu-red-text); outline-offset: 2px; }
+/* Inside the chip, so the ring stays clear of the minor's name */
+.mn-prog-chip-x:focus-visible { outline-offset: -2px; }
+
+/* A student's major and minors (above their tree) and the Minors tab picker:
+   a card like the tree cards, labels in the first column. */
+.mn-programs,
+.mn-browse-head {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start; gap: 8px 16px;
+  margin-bottom: 12px; padding: 12px 16px;
+  border: 1px solid var(--border-light); border-radius: 12px;
   background: var(--bg-card);
 }
-.mn-prog-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
-.mn-prog-field { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.mn-prog-label {
-  font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--text-tertiary);
-}
-.mn-prog-select {
-  height: 30px; max-width: 100%;
-  padding: 0 8px;
-  border: 1px solid var(--border-medium); border-radius: 8px;
-  background: var(--bg-secondary); color: var(--text-primary);
-  font-family: inherit; font-size: 12.5px;
-}
-.mn-prog-select:focus-visible { outline: 2px solid var(--minor-accent); outline-offset: 1px; }
+.mn-prog-value { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; min-height: 34px; }
+/* A chosen minor: a filled token with its remove button */
 .mn-prog-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 4px 3px 10px; border-radius: 999px;
-  font-size: 12px; font-weight: 700;
-  background: var(--minor-accent-bg); color: var(--minor-accent-text);
-  border: 1px solid var(--minor-accent-border);
+  display: inline-flex; align-items: center; gap: 2px;
+  height: 30px; padding: 0 3px 0 10px;
+  border-radius: 8px;
+  background: var(--bg-tertiary); color: var(--text-primary);
+  font-size: 13px; font-weight: 500; white-space: nowrap;
 }
 .mn-prog-chip-x {
-  width: 20px; height: 20px; padding: 0;
-  border: 0; border-radius: 50%;
-  background: transparent; color: inherit;
-  font-size: 15px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border: 0; border-radius: 6px;
+  background: transparent; color: var(--text-secondary);
+  cursor: pointer;
 }
-.mn-prog-chip-x:hover { background: var(--minor-accent-border); }
-.mn-prog-none { font-size: 12px; color: var(--text-tertiary); }
-.mn-prog-hint { margin: 8px 0 0; font-size: 11.5px; color: var(--text-tertiary); line-height: 1.4; }
+.mn-prog-chip-x:hover { background: var(--border-medium); color: var(--text-primary); }
+.mn-prog-none { font-size: 13px; color: var(--text-tertiary); }
+.mn-prog-hint { grid-column: 2; margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
 
 /* One minor: header + its categories */
 .mn-section {
-  margin: 22px 0 12px;
-  padding-top: 14px;
-  border-top: 3px solid var(--minor-accent);
+  margin: 28px 0 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-medium);
 }
-.mn-head { margin-bottom: 10px; padding: 0 12px; }
-.mn-body > .mn-note { padding: 0 12px; }
-.mn-head-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
-.mn-title { margin: 0; flex: 1 1 auto; font-size: 18px; font-weight: 800; color: var(--text-primary); }
+.mn-head { margin-bottom: 14px; padding: 0 16px; }
+.mn-body > .mn-note { padding: 0 16px; }
+/* Title, subtitle and version on the left; the action on the right (below them on phones) */
+.mn-head-row { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px 16px; }
+.mn-head-main { flex: 1 1 260px; min-width: 0; }
+.mn-title {
+  margin: 0;
+  font-size: 18px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
 .mn-meta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  margin-top: 4px; font-size: 12.5px; color: var(--text-secondary);
+  margin-top: 2px; font-size: 13px; color: var(--text-secondary);
 }
 .mn-dot { color: var(--text-tertiary); }
-.mn-version { margin-top: 2px; font-size: 11.5px; color: var(--text-tertiary); }
-.mn-pill {
-  display: inline-flex; align-items: center;
-  padding: 2px 8px; border-radius: 999px;
-  font-size: 11px; font-weight: 700;
-  background: var(--bg-secondary); color: var(--text-secondary);
-  border: 1px solid var(--border-light);
-}
-.mn-pill-campus { background: var(--status-ip-bg); color: var(--status-ip); border-color: transparent; }
-.mn-pill-mine { background: var(--minor-accent-bg); color: var(--minor-accent-text); border-color: var(--minor-accent-border); }
+.mn-version { margin-top: 2px; font-size: 12px; color: var(--text-tertiary); }
+/* The campus note ("Pittsburgh version"): text in the amber of the old pill */
+.mn-campus { color: var(--status-ip); font-weight: 600; }
+/* "Add to my minors": the app's secondary button (.plan-new-btn, "New schedule") */
 .mn-add-btn {
-  padding: 6px 12px; border-radius: 8px;
-  border: 1px solid var(--minor-accent); background: var(--minor-accent); color: #fff;
-  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 14px;
+  border: 1px solid var(--border-medium); border-radius: 8px;
+  background: var(--bg-card); color: var(--text-primary);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  white-space: nowrap; cursor: pointer;
+  transition: border-color var(--transition), color var(--transition);
 }
-.mn-add-btn:hover { filter: brightness(1.08); }
-.mn-progress { margin-top: 10px; }
-.mn-bar { display: flex; gap: 3px; height: 8px; }
-.mn-bar-seg { flex: 1; border-radius: 3px; background: var(--bg-tertiary); }
+.mn-add-btn:hover { border-color: var(--cmu-red); color: var(--cmu-red-text); }
+/* "Your minor" and "Not open to BA majors": plain text where the button would be */
+.mn-head-state {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 23px;
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+}
+.mn-head-row > .mn-add-btn,
+.mn-head-row > .mn-head-state { flex: none; }
+.mn-head-state.is-mine svg { color: var(--status-done); }
+.mn-progress { margin-top: 14px; }
+.mn-bar { display: flex; gap: 3px; height: 6px; }
+.mn-bar-seg { flex: 1; border-radius: 3px; background: color-mix(in srgb, var(--text-tertiary) 22%, transparent); }
 .mn-bar-seg.is-done { background: var(--status-done); }
 .mn-bar-seg.is-ip { background: var(--status-ip); }
-.mn-progress-text { margin-top: 5px; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+.mn-progress-text { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .mn-dc {
-  margin-top: 10px; padding: 8px 10px;
-  border-radius: 8px; background: var(--bg-secondary);
-  font-size: 12.5px; color: var(--text-primary); line-height: 1.45;
+  margin-top: 12px; padding: 10px 12px;
+  border: 1px solid var(--border-light); border-radius: 8px; background: var(--bg-secondary);
+  font-size: 13px; color: var(--text-primary); line-height: 1.5;
 }
 .mn-dc-label {
-  font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--minor-accent-text); margin-right: 4px;
+  display: block; margin-bottom: 1px;
+  font-size: 12.5px; font-weight: 700; color: var(--text-primary);
 }
-.mn-dc-rule { margin-top: 3px; font-size: 11.5px; color: var(--text-tertiary); }
+.mn-dc-rule { margin-top: 3px; font-size: 12px; color: var(--text-tertiary); }
 .mn-warn {
   display: flex; align-items: flex-start; gap: 8px;
-  margin-top: 8px; padding: 8px 10px;
+  margin-top: 8px; padding: 10px 12px;
   border-radius: 8px; border-left: 3px solid var(--status-warn-border);
   background: var(--status-warn-bg); color: var(--status-warn-text);
-  font-size: 12.5px; line-height: 1.45;
+  font-size: 13px; line-height: 1.5;
 }
-.mn-warn svg { flex-shrink: 0; margin-top: 2px; }
-.mn-about { margin-top: 8px; font-size: 12.5px; color: var(--text-secondary); }
-.mn-about summary { cursor: pointer; font-weight: 700; color: var(--text-primary); }
-.mn-about-group { margin-top: 6px; }
-.mn-about-title {
-  font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--text-tertiary);
+.mn-warn svg { flex-shrink: 0; margin-top: 3px; }
+/* "About this minor": a disclosure with the tree's arrow */
+.mn-about { margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
+.mn-about summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  list-style: none; cursor: pointer; border-radius: 4px;
+  font-weight: 600; color: var(--text-primary);
 }
+.mn-about summary::-webkit-details-marker { display: none; }
+.mn-about summary::before {
+  content: '\25B6'; width: 12px;
+  font-size: 9px; color: var(--text-tertiary);
+  transition: transform 150ms;
+}
+.mn-about[open] summary::before { transform: rotate(90deg); }
+.mn-about summary:hover { text-decoration: underline; text-underline-offset: 2px; }
+.mn-about-group { margin-top: 8px; padding-left: 18px; }
+.mn-about-title { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
 .mn-about ul { margin: 2px 0 0; padding-left: 18px; }
-.mn-about li { margin: 2px 0; line-height: 1.45; }
-.mn-note { margin: 6px 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
-.tr-card-minor { border-color: var(--minor-accent-border); }
+.mn-about li { margin: 2px 0; line-height: 1.5; }
+.mn-note { margin: 6px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 
-/* The Minors tab */
+/* The Minors tab: the picker card (shared with the programs bar above) and the chosen minor */
 .major-tab[data-major="MINORS"].active { color: var(--minor-accent-text); background: var(--minor-accent-bg); }
 .major-tab[data-major="MINORS"].active::after { background: var(--minor-accent); }
-.mn-browse-head { margin-bottom: 12px; padding: 12px 12px 0; }
-.mn-browse-title { margin: 0 0 4px; font-size: 18px; font-weight: 800; color: var(--text-primary); }
-.mn-browse-lead { margin: 0 0 8px; font-size: 12.5px; color: var(--text-secondary); }
-.mn-pick-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.mn-pick {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 10px; border-radius: 999px;
-  border: 1px solid var(--border-medium); background: var(--bg-card); color: var(--text-primary);
-  font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
-}
-.mn-pick:hover { border-color: var(--minor-accent-border); background: var(--minor-accent-bg); }
-.mn-pick.is-active { border-color: var(--minor-accent); background: var(--minor-accent); color: #fff; }
-.mn-pick-mine {
-  font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 1px 5px; border-radius: 999px;
-  background: var(--minor-accent-bg); color: var(--minor-accent-text);
-}
-.mn-pick.is-active .mn-pick-mine { background: rgba(255,255,255,0.22); color: #fff; }
+.mn-browse-head .mn-select { justify-self: start; }
+.mn-browse .mn-section { margin-top: 0; padding-top: 6px; border-top: 0; }
 .typeahead-cat-major-minor { background: var(--minor-accent); }
 
 /* Course card: status buttons and the minors a course counts for */
@@ -1326,7 +1349,18 @@ body.is-resizing-panels * {
 @media (max-width: 700px) {
   .cc-status { padding: 10px 16px; }
   .cc-section-minors { padding: 0 16px 14px; }
-  .mn-title { font-size: 16px; }
+  .mn-title { font-size: 17px; }
+}
+/* Phones: each label above its control, the dropdowns full width */
+@media (max-width: 480px) {
+  .mn-programs,
+  .mn-browse-head { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .mn-label { line-height: 1.5; }
+  .mn-prog-value + .mn-label { margin-top: 8px; }
+  .mn-prog-hint { grid-column: 1; margin-top: 6px; }
+  .mn-programs .mn-select,
+  .mn-browse-head .mn-select { width: 100%; justify-self: stretch; }
+  .mn-head-main { flex-basis: 100%; }
 }
 
 /* ============================================================
