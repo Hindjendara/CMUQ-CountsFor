@@ -289,16 +289,6 @@ async function apiDeleteDirectoryEntry(id) {
   return apiFetch('/api/directory/entries/' + encodeURIComponent(id), { method: 'DELETE' });
 }
 
-async function fetchMinorCourses() {
-  try {
-    const res = await fetch('data/minor_courses.json');
-    if (!res.ok) throw new Error('minor courses missing');
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
-
 // ── Flags ────────────────────────────────────────────────────
 // GET /api/flags scopes by role: students see every flag except dismissed ones;
 // faculty and admins see all flags (faculty can pass "mine=1" for only their own).

@@ -23,7 +23,6 @@ const App = {
   locationFilter: 'all', // 'all' | 'qatar' | 'pittsburgh'
   activeSemester: 'F26',
   modalityFilter: 'all', // 'all' | 'in_person' | 'remote' | 'hybrid'
-  minorCourseList: {},
   theme: loadStore('cf_theme', 'light'),
   expandedNodes: new Set(),
   highlightedPath: null,
@@ -238,16 +237,9 @@ const App = {
     this.courses = applied.courses;
     this._archivedCourses = applied.archived;
     this.courseIndex = buildCourseIndex(this.courses);
-    if (!this.minorCourseList) {
-      try {
-        this.minorCourseList = await fetchMinorCourses();
-      } catch {
-        this.minorCourseList = {};
-      }
-    }
 
     // Profile-aware annotations
-    annotateDoubleCounters(this.courses, this.profile, this.minorCourseList);
+    annotateDoubleCounters(this.courses, this.profile);
     annotateMultiProgram(this.courses);
 
     // Build trees for each major
@@ -547,7 +539,7 @@ const App = {
     this.bindGlobalEvents();
 
     if (wasEdit) {
-      annotateDoubleCounters(this.courses, this.profile, this.minorCourseList);
+      annotateDoubleCounters(this.courses, this.profile);
       this.renderLeftEmpty();
       this.renderTree();
     } else {
@@ -602,7 +594,7 @@ const App = {
     if (profile.primary && profile.primary !== 'AS' && MAJOR_LIST.includes(profile.primary)) {
       this.activeMajor = profile.primary;
     }
-    annotateDoubleCounters(this.courses, this.profile, this.minorCourseList);
+    annotateDoubleCounters(this.courses, this.profile);
     this.renderShell();
     this.bindGlobalEvents();
     this._refreshSemesterOptions();

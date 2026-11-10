@@ -91,7 +91,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **GenEd** | General Education. University core requirements every student in a major must satisfy (humanities, cultural analysis and so on). `splitTreeSections()` treats top-level nodes named `GenEd` or containing `University Core`, `EY2022`, `EY2024` as GenEd. |
 | **Majors** | `CS` Computer Science, `IS` Information Systems, `BA` Business Administration, `BS` Biological Sciences. Live in `MAJOR_ORDER`. Scaffolded but not live: `AI`, `GS`. |
 | **`AS`** | "Arts & Sciences". Not a major. A grouping used as the `primary_program` of cross-program faculty and as the default program for directory entries (`DEFAULT_DIRECTORY_PROGRAM = "AS"`). Students can never pick it. |
-| **Minors** | Codes in `VALID_MINORS_FOR_PATCH` (`backend/auth.py`) and `MINOR_LIST` (`js/profile.js`): arabic, biology, business, cs, economics, finance, history, math, neuroscience, product, writing, psychology, sociology, self_defined, tech_entre. Course lists per minor are in `frontend/data/minor_courses.json` (only `business` and `cs` are populated). A student cannot take a minor in their own major field (`MAJOR_MINOR_COLLISION`). |
+| **Minors** | Codes in `VALID_MINORS_FOR_PATCH` (`backend/auth.py`) and `MINOR_LIST` (`js/profile.js`): arabic, biology, business, cs, economics, finance, history, math, neuroscience, product, writing, psychology, sociology, self_defined, tech_entre. Minor requirements are in `frontend/data/minors.json`, built from the official files in `backend/data/minors/` (4.4); the app does not load that file yet. A student cannot take a minor in their own major field (`MAJOR_MINOR_COLLISION`). |
 | **Role** | Exact title stored on the user: `student`, `professor`, `area_head`, `associate_area_head`, `advisor`, `admin`. |
 | **Role group** | Permission bucket computed by `User.role_group()`: `student`, `faculty` (the four faculty titles), `admin`. **All permission checks use role groups**, except a few student-only routes that use the exact role. |
 | **Directory** | The list of people who get faculty or admin access. Two layers: a JSON seed file (static) plus the `directory_entries` table (editable, wins on conflict). Your role is recomputed from the directory **on every sign-in**. |
@@ -204,7 +204,7 @@ CountsFor/
 |-- frontend/            static site served by Apache (no build step)
 |   |-- index.html, app.html, reset.html, landing/index.html
 |   |-- js/  css/  assets/img/
-|   |-- data/            served catalog: courses.json, minor_courses.json
+|   |-- data/            served catalog: courses.json, minors.json
 |   `-- tests/           JS unit tests (not deployed)
 |-- backend/             Flask API (Python package "backend")
 |   |-- *.py             app, config, models, routes
@@ -232,7 +232,7 @@ CountsFor/
 | `frontend/css/styles.css` | yes | App styles, about 4,200 lines, light and dark tokens at the top. | Live |
 | `frontend/css/landing.css` | yes | Landing page styles. | Live |
 | `frontend/assets/img/` | yes | Scotty and CMU artwork used by the landing and navbar, plus the two favicons (`scotty-portrait.png` for the landing, `scotty-standing.png` for the app). | Live |
-| `frontend/data/` | yes | Served catalog: `courses.json` (6,784 courses, about 30 MB) and `minor_courses.json`. On the server the daily update rewrites `courses.json` and adds `courses.json.gz` and `courses.json.prev` (both gitignored or never committed). See [4.4](#44-backenddata-and-backendscraper). | Live |
+| `frontend/data/` | yes | Served catalog: `courses.json` (6,784 courses, about 30 MB) and `minors.json` (minor requirements). On the server the daily update rewrites `courses.json` and adds `courses.json.gz` and `courses.json.prev` (both gitignored or never committed). See [4.4](#44-backenddata-and-backendscraper). | Live |
 | `frontend/tests/` | yes | Browser test page (`test.html`) and JS unit tests. Not deployed (the rsync in 15.4 skips it, and Apache denies `/tests/`). | Live |
 | `backend/` | yes | Flask API, private data and the scraper. See [4.2](#42-backend) and [section 9](#9-backend-walkthrough). | Live |
 | `deploy/` | yes | Everything the CMU-Q server needs besides the code. No secrets. See [4.3](#43-deploy). | Live |
@@ -307,17 +307,17 @@ Each file starts with comments that give its install commands. Section 15 walks 
 
 ### 4.4 `backend/data/` and `backend/scraper/`
 
-The served catalog (`courses.json`, `minor_courses.json`) is in `frontend/data/`. The private data files are in `backend/data/`. The scripts and their `tests/` are in `backend/scraper/`; `pipeline_paths.py` there holds the default file locations, derived from the script folder, so the scripts work from any working directory, in a checkout and on the server.
+The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The private data files are in `backend/data/`. The scripts and their `tests/` are in `backend/scraper/`; `pipeline_paths.py` there holds the default file locations, derived from the script folder, so the scripts work from any working directory, in a checkout and on the server.
 
 | File | Purpose |
 |---|---|
 | `frontend/data/courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`, 6,784 courses, about 30 MB (about 1.2 MB gzipped). Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`), `soc_sections`, `offerings`. Set by the overlay step (14.5): `qatar_only`. Set by reconcile: `previous_course_name` when a number was reused for a different course. |
-| `frontend/data/minor_courses.json` | Course lists per minor (only `business` and `cs` populated). Loaded by `fetchMinorCourses()`. |
+| `frontend/data/minors.json` | Minor requirements: the 15 minors that have an official file in `backend/data/minors/`, plus `self_defined` (no fixed requirements). Each minor has its blocked majors, unit total, double counting limits (the audit file's), grade rules, notes and a tree of categories; each category has a rule and lists its courses by code (`courses`), matches them by number (`select`) or holds sub categories (`children`). One course fills one category. Built by hand from the official files, with old Psychology numbers shown as their current numbers; `backend/scraper/tests/test_minors_file.py` checks it against them. The daily update does not touch it, and the app does not load it yet. |
 | `backend/data/soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 31 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
 | `backend/data/mapping_overlays.json` | The one place for Qatar information and other manual complements to the SOC scrape (14.5): `overlays` (additive mappings, 21 entries, including the H&SS Course Offerings sheet), `remove_mappings` (85-414, 85-426) and `qatar_visibility` (85-100). |
 | `backend/data/faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. The directory seed in production (`SEED_USERS_PATH` in `deploy/countsfor.env.example`). |
 | `backend/data/directory_admins.json` | Hand-kept admins layered over the faculty seed (7.1, 19.7). |
-| `backend/data/minors/` | The official CMU-Q minor requirement files (15 `cmu_minor_*.json` audit exports, Markdown versions of two of them and the Scotty "Minors" general information page). The source of truth for minor requirements; the app does not read them yet. |
+| `backend/data/minors/` | The official CMU-Q minor requirement files (15 `cmu_minor_*.json` audit exports, Markdown versions of two of them and the Scotty "Minors" general information page). The source of truth for minor requirements; `frontend/data/minors.json` is built from them. |
 | `backend/scraper/update_data.py` | **The daily update** run by cron (14.2): lock, parser tests, staged pipeline run, checks, publish in place with `.prev` copies and a `.gz`. |
 | `backend/scraper/run_scrape.sh` | The cron entry point: refuses to run as anyone but the owner of `backend/data/` (`countsfor` on the server; a run as root would leave root-owned files that break every later run), sources `/etc/countsfor/scraper.env` if it exists, changes to the deploy root and runs `backend/.venv/bin/python backend/scraper/update_data.py` with its arguments. Executable, LF line endings. |
 | `backend/scraper/scrape_soc.py` | Scraper. Splits each results table into rows on `</tr>` (only the first row of each course opens with `<tr>`), maps table cells by the `<th>` header (summer pages have an extra Session column), strips the "This Section Cancelled" note from titles and marks those sections cancelled. Keeps semesters that dropped off the SOC form by reading the file it overwrites. |
@@ -327,7 +327,7 @@ The served catalog (`courses.json`, `minor_courses.json`) is in `frontend/data/`
 | `backend/scraper/apply_mapping_overlays.py` | Applies every section of `mapping_overlays.json` to `courses.json`, in a fixed order (14.5). |
 | `backend/scraper/validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. Warns about same-title pairs that may be renumberings. |
 | `backend/scraper/scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand (14.8). |
-| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py` and `scripts/bump_cf_build.py` (159 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
+| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py`, `scripts/bump_cf_build.py` and `frontend/data/minors.json` (173 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
 
 ---
 
@@ -657,7 +657,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 | Group | Functions | Endpoint |
 |---|---|---|
-| Course data | `fetchAllCourses()`, `fetchMinorCourses()` | static files (see 3.3) |
+| Course data | `fetchAllCourses()` | static files (see 3.3) |
 | Backend URL and token | `getBackendUrl()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
 | Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword` (these six are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
@@ -1055,7 +1055,7 @@ Locally, from the repo root:
 
 ```bash
 source .venv/bin/activate
-python -m pytest backend/scraper/tests -q            # 159 tests
+python -m pytest backend/scraper/tests -q            # 173 tests
 python backend/scraper/update_data.py --no-scrape    # rebuild frontend/data/courses.json from backend/data/soc.json
 python backend/scraper/update_data.py                # full run: scrape, rebuild, check, publish (30 to 90 minutes)
 git diff --stat
@@ -1779,7 +1779,7 @@ python scripts/dev_server.py
 | Suite | Result |
 |---|---|
 | `python -m pytest backend/tests` | **160 passed, 6 failed** (the known failures below) |
-| `python -m pytest backend/scraper/tests` | 159 passed |
+| `python -m pytest backend/scraper/tests` | 173 passed |
 | `node scripts/run-data-tests.js` | **121 passed, 1 failed** (profile 46/46, data 59/60, utils 5/5, dash guard 3/3, app views 8/8) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
@@ -1804,7 +1804,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, the SMTP relay check end to end, and that production never returns a reset token or reads `backend/.env`.
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
-- `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list, the daily update (`test_update_data.py`), `scripts/dev_server.py` (`test_dev_server.py`) and `scripts/bump_cf_build.py`. `backend/scraper/tests/` has no `__init__.py`; its `conftest.py` puts `backend/scraper/` on `sys.path`, which is why the scripts are imported as top-level modules there.
+- `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list, the daily update (`test_update_data.py`), `scripts/dev_server.py` (`test_dev_server.py`), `scripts/bump_cf_build.py` and `frontend/data/minors.json` (`test_minors_file.py`: every course code comes from that minor's official file, with old Psychology numbers as their current numbers, no listed code is lost, the number ranges, rule numbers, unit totals and double counting sentences match the file, every category has a rule, no category lists a code twice, and the user-facing text has no dashes). `backend/scraper/tests/` has no `__init__.py`; its `conftest.py` puts `backend/scraper/` on `sys.path`, which is why the scripts are imported as top-level modules there.
 - `frontend/tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), and prints counts per file and in total. It exits non-zero if any test fails.
 - `frontend/tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also written as an HTML entity) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason: today only the four `LABEL_OVERRIDES` keys that must match requirement paths in the data.
 - `frontend/tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen, and that the course editor saves a row under its own code and refuses a number another row already has.
@@ -2068,7 +2068,7 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 ### 21.4 Product roadmap (from docs and code comments)
 
 - AI and GS majors: waiting on authoritative requirement specs (`frontend/js/data.js` line 16).
-- Minors: the official requirement files are in `backend/data/minors/` but the app does not read them yet; a normalization step should turn them into one dataset. Today minor course lists are empty for most minors (`frontend/data/minor_courses.json`).
+- Minors: `frontend/data/minors.json` holds the requirements of every minor, built from the official files in `backend/data/minors/`, but the app does not show them yet.
 - Server-side storage of a user's own schedule plans (today they are browser-only, which also means they do not survive a change of site address, 15.15).
 - UX review (`docs/archive/UX_REVIEW_2026-07-17.md`): dark theme parity, copy consistency, accessibility (keyboard navigation of the tree, ARIA for typeahead), slimmer boot payload.
 - Not done yet: CMU Andrew SSO (Shibboleth, needs IT; easier now that the site is on a CMU-Q server), ML-based offering prediction (current `predictOffering()` is rule-based), deduplication of `courses.json`.

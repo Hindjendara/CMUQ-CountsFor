@@ -1,0 +1,1461 @@
+{
+  "schema_version": 1,
+  "note": "Minor requirements for the app, built from the official minor files in backend/data/minors/ (one file per minor). Each minor is a tree of categories. A category lists its courses by code (courses), matches them by number (select), or holds sub categories (children). One course fills one category. Old Psychology numbers in the files are shown as their current numbers. Codes that are in no catalog stay listed and simply match no course. Double counting limits are the audit file's; overlap with general education never uses up a limit.",
+  "minors": {
+    "arabic": {
+      "name": "Arabic Studies",
+      "title": "Minor in Arabic Studies",
+      "source_file": "cmu_minor_arabic_studies.json",
+      "version": "EY2022+ Doha - Minor in Arabic Studies",
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": 54,
+      "double_count": {
+        "text": "Up to 2 courses may double count with other programs unless specified otherwise",
+        "max_with_major": 2,
+        "max_with_other_minors": 2,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "Up to 2 courses may also count toward your major or another minor.",
+          "The Scotty minors page says: \"Students may double count one course taken for the Arabic Studies minor that are also being used to fulfill the requirements of other majors, minors, and programs. This does not include double-counting with General Education requirements, which has no limit.\" The app uses the audit limit of 2. Confirm with your advisor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [
+        "The minor expects Advanced level proficiency in Arabic. Students who need elementary or intermediate Arabic courses should consult the Arabic Studies advisor before declaring.",
+        "Students with native or near native listening and speaking proficiency before entering CMU should consult the minor advisors about a different curriculum that may speed up completion.",
+        "These lists apply to CMU-Q students who place out of the core Arabic courses, as decided by the campus advisor for Arabic Studies: four or more courses from the Arabic Studies list and two or fewer from the interdisciplinary list.",
+        "The audit notes also describe 27 units of core courses for students who place above 82-212, completed as two Arabic Studies courses and one interdisciplinary course, or three Arabic Studies courses. The audit does not list the core courses. Confirm your plan with the advisor."
+      ],
+      "categories": [
+        {
+          "id": "list_a",
+          "name": "Arabic Studies Electives",
+          "rule": {"type": "min_units", "n": null, "units": 36},
+          "courses": [
+            "82-217", "82-313", "82-314", "82-411", "82-412", "82-413", "82-414", "82-505",
+            "82-511", "82-512"
+          ],
+          "select": null,
+          "children": [],
+          "notes": [
+            "List A, courses taught in Arabic.",
+            "These courses may be repeated for credit when the topic changes.",
+            "Not all courses are offered every semester."
+          ]
+        },
+        {
+          "id": "list_b",
+          "name": "Interdisciplinary Electives",
+          "rule": {"type": "min_units", "n": null, "units": 18},
+          "courses": [
+            "19-411", "19-424", "48-240", "48-315", "48-579", "67-329", "70-321", "70-342",
+            "70-365", "76-318", "76-357", "76-386", "76-472", "76-484", "76-491", "79-229",
+            "79-230", "79-232", "79-233", "79-286", "79-302", "79-307", "79-310", "79-336",
+            "79-359", "79-381", "79-398", "80-136", "80-180", "80-244", "80-247", "80-280",
+            "80-281", "80-282", "80-324", "80-381", "80-383", "82-110", "82-114", "82-119",
+            "82-214", "82-215", "82-216", "82-280", "82-282", "82-283", "82-286", "82-300",
+            "82-313", "82-314", "82-358", "82-383", "82-411", "82-412", "82-449", "82-480",
+            "82-505", "82-511", "82-512", "84-275", "84-310", "84-322", "84-323", "84-326",
+            "84-362", "84-389", "85-170", "85-375", "85-421", "88-412", "88-432"
+          ],
+          "select": null,
+          "children": [],
+          "notes": [
+            "List B, courses taught in English.",
+            "This list gives examples and is not complete. Ask the OLR and your minor advisor for the current interdisciplinary electives. You may suggest other courses to the minor advisor for approval as substitutes.",
+            "Old numbers in the official file are shown as their current numbers: 85-219 is now 85-170."
+          ]
+        }
+      ]
+    },
+    "biology": {
+      "name": "Biological Sciences",
+      "title": "Minor in Biological Sciences",
+      "source_file": "cmu_minor_biological_sciences.json",
+      "version": "EY2024 Doha Minor in Biological Sciences",
+      "campus_note": null,
+      "blocked_majors": ["BS"],
+      "total_units": 73,
+      "double_count": {
+        "text": null,
+        "max_with_major": null,
+        "max_with_other_minors": null,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "No double counting rule is stated for this minor. Confirm with your advisor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [
+        "At least six biological sciences courses (four required and two electives) plus two chemistry prerequisites, 73 units in total.",
+        "Complete both chemistry prerequisites before enrolling in any biological sciences minor course.",
+        "Units earned for undergraduate research do not count toward the elective courses.",
+        "Courses taken in other departments or colleges are considered case by case."
+      ],
+      "categories": [
+        {
+          "id": "prereq",
+          "name": "Prerequisites",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": ["09-105", "09-217"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Two chemistry courses. Their units count toward the 73."
+          ]
+        },
+        {
+          "id": "required",
+          "name": "Required Courses",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "modern_biology",
+              "name": "Modern Biology",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["03-121", "03-151"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "genetics",
+              "name": "Genetics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["03-220", "03-221"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "biochemistry",
+              "name": "Biochemistry I",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["03-231", "03-232"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "cell_biology",
+              "name": "Cell Biology",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["03-240", "03-320"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "bio_elective",
+              "name": "Biology Elective",
+              "rule": {"type": "min_units", "n": null, "units": 9},
+              "courses": [],
+              "select": {
+                "prefixes": ["03"],
+                "min_number": 0,
+                "max_number": 999,
+                "exclude": [],
+                "exclude_ranges": [],
+                "min_units_per_course": null
+              },
+              "children": [],
+              "notes": [
+                "At least 9 units of any biological sciences course (03)."
+              ]
+            },
+            {
+              "id": "advanced_elective",
+              "name": "Advanced Biology Elective",
+              "rule": {"type": "pick", "n": 1, "units": 9},
+              "courses": [],
+              "select": {
+                "prefixes": ["03"],
+                "min_number": 300,
+                "max_number": 399,
+                "exclude": [],
+                "exclude_ranges": [],
+                "min_units_per_course": null
+              },
+              "children": [],
+              "notes": [
+                "Any 300-level biology course, 03-300 to 03-399, at least 9 units."
+              ]
+            }
+          ],
+          "notes": [
+            "Four required biology courses and two biology electives."
+          ]
+        }
+      ]
+    },
+    "business": {
+      "name": "Business Administration",
+      "title": "Minor in Business Administration",
+      "source_file": "cmu_minor_business_administration.json",
+      "version": "EY2020+ Doha Minor in Business Administration",
+      "campus_note": null,
+      "blocked_majors": ["BA"],
+      "total_units": 54,
+      "double_count": {
+        "text": "Courses may double count without any limit with other programs unless specified otherwise | Business electives cannot double-count with any other major or minor requirements.",
+        "max_with_major": null,
+        "max_with_other_minors": null,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": ["business_electives"],
+        "by_major": {},
+        "notes": [
+          "Courses may also count toward other programs without a limit, except the Business Electives, which may not count toward any other major or minor.",
+          "The Scotty minors page says: \"While there are no double counting restrictions between the minor and the student’s home college general education requirements, only one minor course may double-count with any other major or minor requirements.\" The app uses the audit rule. Confirm with your advisor."
+        ]
+      },
+      "grade_rules": [
+        "At most 1 course with transfer grades may count toward the minor."
+      ],
+      "notes": [
+        "Six courses of 9 units each, 54 units in total.",
+        "Information Systems majors who use this minor for the Information Systems concentration have restricted course options. Consult your primary major advisor."
+      ],
+      "categories": [
+        {
+          "id": "required",
+          "name": "Required Courses",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "accounting",
+              "name": "Introduction to Accounting",
+              "rule": {"type": "required", "n": null, "units": null},
+              "courses": ["70-122"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "microeconomics",
+              "name": "Principles of Microeconomics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["73-102", "73-104"],
+              "select": null,
+              "children": [],
+              "notes": []
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "constrained",
+          "name": "Constrained Electives",
+          "rule": {"type": "pick", "n": 2, "units": null},
+          "courses": ["70-311", "70-371", "70-381", "70-391"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Two of Organizational Behavior, Operations Management, Marketing I and Finance.",
+            "A constrained course beyond the ones used here counts as a business elective."
+          ]
+        },
+        {
+          "id": "business_electives",
+          "name": "Business Electives",
+          "rule": {"type": "pick", "n": 2, "units": 18},
+          "courses": [],
+          "select": {
+            "prefixes": ["70", "73"],
+            "min_number": 0,
+            "max_number": 999,
+            "exclude": [
+              "70-104", "70-105", "70-201", "70-204", "70-205", "70-207", "70-208", "70-304",
+              "70-305", "70-401", "70-499"
+            ],
+            "exclude_ranges": [{"prefix": "70", "min_number": 500, "max_number": 599}],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "Any two business (70) or economics (73) courses totaling 18 units or more, except the listed exclusions and 70-500 to 70-599."
+          ]
+        }
+      ]
+    },
+    "business_analytics": {
+      "name": "Business Analytics and Optimization",
+      "title": "Minor in Business Analytics and Optimization",
+      "source_file": "cmu_minor_business_analytics_optimization.json",
+      "version": "Tepper - Minor In Business Analytics and Optimization - EY2020+",
+      "campus_note": "Pittsburgh version",
+      "blocked_majors": ["BA"],
+      "total_units": 54,
+      "double_count": {
+        "text": "Up to 1 course may double count with other programs unless specified otherwise",
+        "max_with_major": 1,
+        "max_with_other_minors": 1,
+        "gen_ed_exempt": true,
+        "no_limit_categories": ["prereq"],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "The prerequisite may also count toward other programs without a limit. Up to 1 other course may also count toward your major or another minor."
+        ]
+      },
+      "grade_rules": [
+        "At most 1 course with transfer grades may count toward the minor."
+      ],
+      "notes": [
+        "Open to students whose major is not Business Administration."
+      ],
+      "categories": [
+        {
+          "id": "prereq",
+          "name": "Prerequisites",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["21-256", "21-259", "21-254"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "One multivariable calculus course."
+          ]
+        },
+        {
+          "id": "modeling_uncertainty",
+          "name": "Modeling Uncertainty",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["70-207", "36-207", "36-200", "36-220", "36-225"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "One probability and statistics course."
+          ]
+        },
+        {
+          "id": "core",
+          "name": "Analytics and Optimization Core",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "business_analytics",
+              "name": "Business Analytics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["70-467", "70-374", "15-388"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "optimization",
+              "name": "Optimization",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["70-257", "21-292", "21-257", "70-469"],
+              "select": null,
+              "children": [],
+              "notes": []
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "business_foundations",
+          "name": "Business Foundations Elective",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["70-122", "70-311", "70-371", "70-381", "70-391", "73-102", "73-104"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "One core business or economics course."
+          ]
+        },
+        {
+          "id": "technical_elective",
+          "name": "Technical Elective",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": [
+            "70-208", "70-374", "70-455", "70-460", "70-462", "70-467", "73-374", "15-388"
+          ],
+          "select": null,
+          "children": [],
+          "notes": []
+        }
+      ]
+    },
+    "comp_bio": {
+      "name": "Computational Biology",
+      "title": "Minor in Computational Biology",
+      "source_file": "cmu_minor_computational_biology.json",
+      "version": "EY2024 Doha Minor in Computational Biology",
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": 54,
+      "double_count": {
+        "text": "Double counting allowed within the following subrequirements unless specified otherwise | Double counting allowed up to 2 courses within the following subrequirements unless specified otherwise",
+        "max_with_major": 2,
+        "max_with_other_minors": 2,
+        "gen_ed_exempt": true,
+        "no_limit_categories": ["prereq"],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "The prerequisites may also count toward other programs without a limit. Up to 2 core courses may also count toward your major or another minor.",
+          "The file states these limits only for its two groups, and its wording could also mean sharing inside the minor. Confirm with your advisor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [
+        "The audit states a minimum of 54 units but does not say whether the prerequisites count toward it."
+      ],
+      "categories": [
+        {
+          "id": "prereq",
+          "name": "Prerequisites",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "modern_biology",
+              "name": "Modern Biology",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["03-121", "03-151"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "computing",
+              "name": "Computing",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["15-110", "15-112"],
+              "select": null,
+              "children": [],
+              "notes": []
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "core",
+          "name": "Computational Biology Core",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "intro_comp_bio",
+              "name": "Intro to Computational Biology",
+              "rule": {"type": "required", "n": null, "units": null},
+              "courses": ["02-250"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "comp_bio_lab",
+              "name": "Computational Biology Lab",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["02-261", "02-262", "03-343"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "comp_bio_electives",
+              "name": "Computational Biology Electives",
+              "rule": {"type": "pick", "n": 3, "units": null},
+              "courses": [],
+              "select": {
+                "prefixes": ["02"],
+                "min_number": 300,
+                "max_number": 999,
+                "exclude": [],
+                "exclude_ranges": [],
+                "min_units_per_course": null
+              },
+              "children": [],
+              "notes": [
+                "Any 3 courses numbered 02-300 to 02-999."
+              ]
+            }
+          ],
+          "notes": []
+        }
+      ]
+    },
+    "cs": {
+      "name": "Computer Science",
+      "title": "Minor in Computer Science",
+      "source_file": "cmu_minor_computer_science.json",
+      "version": "EY2017 Doha Minor in Computer Science",
+      "campus_note": null,
+      "blocked_majors": ["CS"],
+      "total_units": null,
+      "double_count": {
+        "text": "Courses may not double count with other programs unless specified otherwise | Pre-requisites and two other courses used for the minor may double-count toward another major or minor (general education courses do not count).",
+        "max_with_major": 2,
+        "max_with_other_minors": 2,
+        "gen_ed_exempt": true,
+        "no_limit_categories": ["prereq"],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "The prerequisites may also count toward other programs without a limit. Up to 2 other minor courses may also count toward your major or another minor."
+        ]
+      },
+      "grade_rules": [
+        "Complete every minor course with a C or higher, for a minor QPA of 2.0 or higher (Scotty minors page)."
+      ],
+      "notes": [
+        "Three core courses and at least three more SCS courses after the prerequisites, so at least 6 different courses. No unit total is stated.",
+        "Finish the prerequisites before enrolling in the core courses.",
+        "Consult the CS minor advisor after completing the prerequisites, 15-122 and 15-150, with at least one 200-level required course in progress."
+      ],
+      "categories": [
+        {
+          "id": "prereq",
+          "name": "Prerequisites",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": ["15-112", "21-127"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Complete both before the core courses. Their units do not count toward the minor."
+          ]
+        },
+        {
+          "id": "core",
+          "name": "Computer Science Core",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "core_required",
+              "name": "Required Courses",
+              "rule": {"type": "take_all", "n": null, "units": null},
+              "courses": ["15-122", "15-150", "15-210"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "systems_or_theory",
+              "name": "Systems or Theory",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["15-213", "18-213", "15-251"],
+              "select": null,
+              "children": [],
+              "notes": [
+                "One of 15-213, 18-213 or 15-251.",
+                "Other pre-approved courses may also count."
+              ]
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "cs_elective",
+          "name": "CS Elective",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": [],
+          "select": {
+            "prefixes": ["15"],
+            "min_number": 200,
+            "max_number": 999,
+            "exclude": ["15-351"],
+            "exclude_ranges": [],
+            "min_units_per_course": 9
+          },
+          "children": [],
+          "notes": [
+            "A Computer Science (15) course numbered 200 or above, at least 9 units, except 15-351."
+          ]
+        },
+        {
+          "id": "cs_scs_elective",
+          "name": "CS or SCS Elective",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": [],
+          "select": {
+            "prefixes": ["02", "05", "10", "11", "15", "16", "17"],
+            "min_number": 200,
+            "max_number": 999,
+            "exclude": [
+              "02-223", "05-200", "05-341", "05-436", "05-674", "08-200", "08-532", "08-533",
+              "15-351", "16-200", "16-223", "16-397", "17-200", "17-333", "17-562"
+            ],
+            "exclude_ranges": [],
+            "min_units_per_course": 9
+          },
+          "children": [],
+          "notes": [
+            "A course numbered 200 or above, at least 9 units, from 02, 05, 10, 11, 15, 16 or 17, except the listed exclusions."
+          ]
+        }
+      ]
+    },
+    "economics": {
+      "name": "Economics",
+      "title": "Minor in Economics",
+      "source_file": "cmu_minor_economics.json",
+      "version": "Qatar - Minor in Economics - EY2020+",
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": 54,
+      "double_count": {
+        "text": "Courses may not double count with other programs unless specified otherwise | While there are no double counting restrictions between the minor and the student's home college general education requirements, 73-265 Economics and Data Science and the 3 economics electives must be unique for the minor and cannot double count with any other major or minor.",
+        "max_with_major": 0,
+        "max_with_other_minors": 0,
+        "gen_ed_exempt": true,
+        "no_limit_categories": ["math", "theory", "statistics"],
+        "no_sharing_categories": ["data_science", "advanced"],
+        "by_major": {
+          "BA": {
+            "no_limit_categories": ["math", "theory", "statistics", "advanced"],
+            "no_sharing_categories": ["data_science"]
+          }
+        },
+        "notes": [
+          "Mathematics, Economic Theory and Statistics courses may also count toward other programs without a limit. 73-265 Economics and Data Science and the Advanced Economics Electives may not count toward any other major or minor.",
+          "For Business Administration majors, the Advanced Economics Electives may also count toward other programs without a limit.",
+          "The audit notes also say: \"Courses used to fulfill the minor cannot double-count with any other major or minor.\" The app uses the audit rules above. Confirm with your advisor."
+        ]
+      },
+      "grade_rules": [
+        "You can apply for the minor after completing two of its required courses with a QPA of 2.0 or higher in them."
+      ],
+      "notes": [
+        "The audit asks for 54 units, which fits only if the Mathematics and Statistics courses do not count toward it. Confirm with your advisor."
+      ],
+      "categories": [
+        {
+          "id": "math",
+          "name": "Mathematics",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "calculus",
+              "name": "Calculus",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["21-120", "21-112", "21-121"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "multivariate",
+              "name": "Multivariate Analysis",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["21-256", "21-259", "21-268", "21-269"],
+              "select": null,
+              "children": [],
+              "notes": []
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "theory",
+          "name": "Economic Theory",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "principles",
+              "name": "Principles of Economics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["73-102", "73-104", "73-100", "73-103"],
+              "select": null,
+              "children": [],
+              "notes": [
+                "One principles course in microeconomics, macroeconomics or economics."
+              ]
+            },
+            {
+              "id": "micro_macro_theory",
+              "name": "Micro or Macro Theory",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["73-160", "73-230", "73-240"],
+              "select": null,
+              "children": [],
+              "notes": []
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "quant",
+          "name": "Quantitative Analysis",
+          "rule": {"type": "pick", "n": 1, "units": null, "count": "children"},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "statistics",
+              "name": "Statistics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": [
+                "36-200", "36-207", "36-217", "36-218", "36-219", "36-220", "36-225", "36-235",
+                "70-207", "21-325", "15-259", "36-247"
+              ],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "data_science",
+              "name": "Economics and Data Science",
+              "rule": {"type": "required", "n": null, "units": null},
+              "courses": ["73-265"],
+              "select": null,
+              "children": [],
+              "notes": [
+                "By petition, 73-274 Econometrics I or 73-423 Forecasting for Economics and Business may replace 73-265."
+              ]
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "advanced",
+          "name": "Advanced Economics Electives",
+          "rule": {"type": "pick", "n": 3, "units": null},
+          "courses": [],
+          "select": {
+            "prefixes": ["73"],
+            "min_number": 300,
+            "max_number": 999,
+            "exclude": ["73-300", "73-360", "73-407", "73-450", "73-497"],
+            "exclude_ranges": [],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "Any 3 economics courses from 73-300 to 73-999, except the listed exclusions."
+          ]
+        }
+      ]
+    },
+    "finance": {
+      "name": "Financial Management",
+      "title": "Minor in Financial Management",
+      "source_file": "cmu_minor_financial_management.json",
+      "version": "Tepper - Minor in Financial Management - EY2023+",
+      "campus_note": "Pittsburgh version",
+      "blocked_majors": ["BA"],
+      "total_units": 54,
+      "double_count": {
+        "text": "Up to 1 course may double count with other programs unless specified otherwise",
+        "max_with_major": 1,
+        "max_with_other_minors": 1,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "Up to 1 course may also count toward your major or another minor."
+        ]
+      },
+      "grade_rules": [
+        "At most 1 course with transfer grades may count toward the minor."
+      ],
+      "notes": [
+        "Scotty states a minimum of 54 units. The audit states no total; its six required course slots of 9 units each add up to 54.",
+        "Scotty says Principles of Microeconomics (73-102) is required because it is a prerequisite for 70-391 Finance. The audit does not list it, and the 54 units are reached without it.",
+        "This minor mirrors the Finance concentration of the Business Administration major."
+      ],
+      "categories": [
+        {
+          "id": "required",
+          "name": "Required Courses",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": ["70-391", "70-493"],
+          "select": null,
+          "children": [],
+          "notes": []
+        },
+        {
+          "id": "statistics",
+          "name": "Statistics",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["70-207", "36-200", "36-225", "36-235", "36-217", "36-218"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "One probability or statistics course from the list."
+          ]
+        },
+        {
+          "id": "finance_electives",
+          "name": "Finance Electives",
+          "rule": {"type": "pick", "n": 3, "units": null},
+          "courses": ["21-270", "70-398", "70-428", "70-492", "70-495", "73-103", "73-337"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Any 3 courses from the list."
+          ]
+        }
+      ]
+    },
+    "history": {
+      "name": "History",
+      "title": "Minor in History",
+      "source_file": "cmu_minor_history.json",
+      "version": "EY2023 Minor in History",
+      "campus_note": "Campus not stated",
+      "blocked_majors": [],
+      "total_units": 63,
+      "double_count": {
+        "text": "Courses may not double count with other programs unless specified otherwise",
+        "max_with_major": 2,
+        "max_with_other_minors": 2,
+        "gen_ed_exempt": true,
+        "no_limit_categories": ["global_histories"],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "79-104 Global Histories may also count toward other programs without a limit. Up to 2 History Electives may also count toward your major or another minor.",
+          "The Scotty minors page says: \"In addition, courses that are used to satisfy other requirements may also be used to satisfy the CMU history minor requirements with no double counting restrictions.\" The app uses the audit limits. Confirm with your advisor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [
+        "Scotty lists 79-104 Global Histories as the prerequisite for the minor.",
+        "Any CMU history course can count, along with other approved CMU courses.",
+        "At most one independent study and at most two history courses from outside institutions can count."
+      ],
+      "categories": [
+        {
+          "id": "global_histories",
+          "name": "Global Histories",
+          "rule": {"type": "required", "n": null, "units": null},
+          "courses": ["79-104"],
+          "select": null,
+          "children": [],
+          "notes": []
+        },
+        {
+          "id": "electives",
+          "name": "History Electives",
+          "rule": {"type": "pick", "n": 6, "units": 54},
+          "courses": [
+            "82-233", "82-247", "82-273", "82-286", "82-413", "QG-447", "QN-242", "QT-235",
+            "QV-112", "QV-115", "QV-116"
+          ],
+          "select": {
+            "prefixes": ["79"],
+            "min_number": 100,
+            "max_number": 999,
+            "exclude": [],
+            "exclude_ranges": [],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "Any 6 courses numbered 79-100 to 79-999 totaling at least 54 units, or the listed courses from other departments and partner universities.",
+            "The partner university courses (QG, QN, QT and QV numbers) and 82-233 and 82-247 are listed by the audit but are not in the course catalog, so they cannot be tracked here yet."
+          ]
+        }
+      ]
+    },
+    "math": {
+      "name": "Mathematical Sciences",
+      "title": "Minor in Mathematical Sciences",
+      "source_file": "cmu_minor_mathematical_sciences.json",
+      "version": "EY2019 Doha - Minor in Mathematics",
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": 56,
+      "double_count": {
+        "text": "Courses may double count without any limit with other programs unless specified otherwise | Courses that count towards Electives: 0 (no double counting allowed for electives)",
+        "max_with_major": null,
+        "max_with_other_minors": null,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": ["electives"],
+        "by_major": {},
+        "notes": [
+          "Courses may also count toward other programs without a limit, except the 2 Mathematical Sciences Electives, which may not count toward any other program.",
+          "The Scotty minors page says: \"To avoid excessive double counting, the two Mathematical Sciences Electives may not also count toward the student’s major.\" The app uses the audit rule, which also covers other minors. Confirm with your advisor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [
+        "Scotty describes the minor as six courses. The audit asks for 56 units, but its five required courses add up to 48 to 53 units. Confirm with your advisor.",
+        "21-127 Concepts of Mathematics is a prerequisite for 21-228 and recommended for 21-241. The minimum preparation for 21-355 Principles of Real Analysis I is 21-122 and 21-127, or equivalent courses."
+      ],
+      "categories": [
+        {
+          "id": "concepts",
+          "name": "Concepts of Mathematics",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["21-127", "21-128"],
+          "select": null,
+          "children": [],
+          "notes": []
+        },
+        {
+          "id": "discrete",
+          "name": "Discrete Mathematics",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["21-228", "15-251"],
+          "select": null,
+          "children": [],
+          "notes": []
+        },
+        {
+          "id": "matrices",
+          "name": "Linear Algebra or Real Analysis",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["21-241", "21-242", "21-355"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "21-241 or 21-242 (matrices), or 21-355 (real analysis)."
+          ]
+        },
+        {
+          "id": "electives",
+          "name": "Mathematical Sciences Electives",
+          "rule": {"type": "pick", "n": 2, "units": 18},
+          "courses": [],
+          "select": {
+            "prefixes": ["21"],
+            "min_number": 300,
+            "max_number": 999,
+            "exclude": ["21-355"],
+            "exclude_ranges": [],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "Any 2 mathematics courses numbered 21-300 or higher except 21-355, at least 18 units in total. They may not double count with other programs."
+          ]
+        }
+      ]
+    },
+    "neuroscience": {
+      "name": "Neuroscience",
+      "title": "Minor in Neuroscience",
+      "source_file": "cmu_minor_neuroscience.json",
+      "version": "EY2022+ Doha Minor in Neuroscience",
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": 63,
+      "double_count": {
+        "text": "Up to 2 courses may double count with other programs unless specified otherwise",
+        "max_with_major": 2,
+        "max_with_other_minors": 2,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "Up to 2 courses may also count toward your major or another minor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [],
+      "categories": [
+        {
+          "id": "required",
+          "name": "Required Courses",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "modern_biology",
+              "name": "Modern Biology",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["03-121", "03-151"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "neuroscience_core",
+              "name": "Neuroscience Core",
+              "rule": {"type": "take_all", "n": null, "units": null},
+              "courses": ["03-362", "03-363"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "foundations",
+              "name": "Neuroscience Foundations",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["03-161", "85-170"],
+              "select": null,
+              "children": [],
+              "notes": [
+                "Foundations of Brain and Behavior or Molecules to Mind.",
+                "Old numbers in the official file are shown as their current numbers: 85-219 is now 85-170."
+              ]
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "electives",
+          "name": "Neurobiology Electives",
+          "rule": {"type": "min_units", "n": null, "units": 27},
+          "courses": [
+            "03-133", "03-351", "03-360", "02-319", "03-365", "03-366", "85-110", "85-130",
+            "85-190", "85-213", "85-310", "85-370", "85-406", "85-414", "85-413", "85-420",
+            "85-435", "85-472"
+          ],
+          "select": null,
+          "children": [],
+          "notes": [
+            "At least 27 units from the listed biology and psychology courses.",
+            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110 and 85-221 is now 85-130."
+          ]
+        }
+      ]
+    },
+    "writing": {
+      "name": "Professional Writing",
+      "title": "Minor in Professional Writing",
+      "source_file": "cmu_minor_professional_writing.json",
+      "version": "EY2024 Doha Minor in Professional Writing",
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": 54,
+      "double_count": {
+        "text": "Up to 1 course may double count with other programs unless specified otherwise",
+        "max_with_major": 1,
+        "max_with_other_minors": 1,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "Up to 1 course may also count toward your major or another minor.",
+          "The audit also bars sharing courses with the English department's Creative Writing, Technical Writing, Film and Visual Media, and Literature and Culture programs."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [],
+      "categories": [
+        {
+          "id": "intro",
+          "name": "Introductory Writing",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["76-270", "76-271"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Writing for the Professions or Introduction to Professional and Technical Writing."
+          ]
+        },
+        {
+          "id": "core_writing",
+          "name": "Core Writing",
+          "rule": {"type": "min_units", "n": null, "units": 18},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "core_writing_courses",
+              "name": "Core Courses",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["76-373", "76-389", "76-390"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "creative_writing",
+              "name": "Creative Writing",
+              "rule": {"type": "max_units", "n": null, "units": 9},
+              "courses": ["76-260", "76-261", "76-262", "76-265", "76-269"],
+              "select": null,
+              "children": [],
+              "notes": [
+                "At most 9 units from these creative writing courses."
+              ]
+            }
+          ],
+          "notes": [
+            "Two courses, 18 units: at least one of Argument, Rhetorical Grammar or Style, and at most 9 units of creative writing."
+          ]
+        },
+        {
+          "id": "advanced",
+          "name": "Advanced Writing",
+          "rule": {"type": "pick", "n": 2, "units": 18},
+          "courses": [],
+          "select": {
+            "prefixes": ["76"],
+            "min_number": 300,
+            "max_number": 499,
+            "exclude": [],
+            "exclude_ranges": [],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "Any 2 courses from 76-300 to 76-499, at least 18 units."
+          ]
+        },
+        {
+          "id": "english_elective",
+          "name": "English Elective",
+          "rule": {"type": "pick", "n": 1, "units": 9},
+          "courses": [],
+          "select": {
+            "prefixes": ["76"],
+            "min_number": 200,
+            "max_number": 499,
+            "exclude": [],
+            "exclude_ranges": [],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "Any course from 76-200 to 76-499, at least 9 units."
+          ]
+        }
+      ]
+    },
+    "psychology": {
+      "name": "Psychology",
+      "title": "Minor in Psychology",
+      "source_file": "cmu_minor_psychology.json",
+      "version": "EY23-25 Doha Minor Psychology",
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": 72,
+      "double_count": {
+        "text": "Courses may double count without any limit with other programs unless specified otherwise",
+        "max_with_major": null,
+        "max_with_other_minors": null,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "Courses may also count toward your major or other minors without a limit."
+        ]
+      },
+      "grade_rules": [
+        "Courses with AP credit do not count for the Psychology Elective."
+      ],
+      "notes": [
+        "Scotty describes the minor as 8 courses. The audit requires at least 72 units.",
+        "The minor is open to students in every major."
+      ],
+      "categories": [
+        {
+          "id": "survey",
+          "name": "Survey Courses",
+          "rule": {"type": "pick", "n": 2, "units": null},
+          "courses": ["85-110", "85-130", "85-150", "85-170", "85-190", "85-251"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Any 2 survey courses.",
+            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-219 is now 85-170, 85-221 is now 85-130 and 85-241 is now 85-150."
+          ]
+        },
+        {
+          "id": "statistics",
+          "name": "Statistics",
+          "rule": {"type": "take_all", "n": null, "units": null},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "intro_stats",
+              "name": "Introductory Statistics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["36-200", "36-201", "36-207", "36-225", "70-207", "36-247"],
+              "select": null,
+              "children": [],
+              "notes": []
+            },
+            {
+              "id": "behavioral_stats",
+              "name": "Behavioral Statistics",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": ["70-208", "36-309", "85-309", "36-202"],
+              "select": null,
+              "children": [],
+              "notes": []
+            }
+          ],
+          "notes": []
+        },
+        {
+          "id": "research_methods",
+          "name": "Research Methods",
+          "rule": {"type": "pick", "n": 1, "units": 9},
+          "courses": ["85-300", "85-310"],
+          "select": null,
+          "children": [],
+          "notes": []
+        },
+        {
+          "id": "advanced",
+          "name": "Advanced Courses",
+          "rule": {"type": "pick", "n": 2, "units": null},
+          "courses": [],
+          "select": {
+            "prefixes": ["85"],
+            "min_number": 350,
+            "max_number": 499,
+            "exclude": [
+              "85-480", "85-482", "85-484", "85-505", "85-506", "85-507", "85-508", "85-509",
+              "85-510"
+            ],
+            "exclude_ranges": [],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "Any 2 psychology courses numbered 85-350 to 85-499, except a few listed exclusions."
+          ]
+        },
+        {
+          "id": "elective",
+          "name": "Psychology Elective",
+          "rule": {"type": "min_units", "n": null, "units": 9},
+          "courses": [],
+          "select": {
+            "prefixes": ["85"],
+            "min_number": 0,
+            "max_number": 999,
+            "exclude": [],
+            "exclude_ranges": [],
+            "min_units_per_course": null
+          },
+          "children": [],
+          "notes": [
+            "At least 9 units of any psychology course (85). AP credit does not count."
+          ]
+        }
+      ]
+    },
+    "sociology": {
+      "name": "Sociology",
+      "title": "Minor in Sociology",
+      "source_file": "cmu_minor_sociology.json",
+      "version": "EY2023 Pittsburgh - Minor in Sociology",
+      "campus_note": "Pittsburgh version",
+      "blocked_majors": [],
+      "total_units": 54,
+      "double_count": {
+        "text": "Up to 2 courses may double count with other programs unless specified otherwise",
+        "max_with_major": 2,
+        "max_with_other_minors": 2,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "Up to 2 courses may also count toward your major or another minor."
+        ]
+      },
+      "grade_rules": [],
+      "notes": [],
+      "categories": [
+        {
+          "id": "core",
+          "name": "Organizational Behavior",
+          "rule": {"type": "required", "n": null, "units": null},
+          "courses": ["70-311"],
+          "select": null,
+          "children": [],
+          "notes": []
+        },
+        {
+          "id": "methodology",
+          "name": "Methodology",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["36-202", "70-208", "85-350", "88-251", "88-252"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "One statistics or research methods course.",
+            "Old numbers in the official file are shown as their current numbers: 85-340 is now 85-350."
+          ]
+        },
+        {
+          "id": "electives",
+          "name": "Sociology Electives",
+          "rule": {"type": "pick", "n": 4, "units": null, "count": "courses"},
+          "courses": [],
+          "select": null,
+          "children": [
+            {
+              "id": "gender_family_culture",
+              "name": "Gender, Family and Culture",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": [
+                "70-342", "70-385", "76-241", "79-244", "79-261", "79-292", "79-308", "79-320",
+                "79-323", "79-331", "79-343", "79-377", "80-224", "80-245", "80-246", "80-256",
+                "80-305", "80-335", "80-348", "84-369", "85-150", "85-350", "85-352", "85-358",
+                "85-452", "85-454", "85-446", "88-230", "88-231", "88-285", "88-290"
+              ],
+              "select": null,
+              "children": [],
+              "notes": [
+                "The official file lists 85-350 here as Psychology of Prejudice. In the Schedule of Classes 85-350 is now Research Methods in Social Psychology, and Psychology of Prejudice is 85-450. The code is kept as the file lists it. Confirm with your advisor.",
+                "Old numbers in the official file are shown as their current numbers: 85-241 is now 85-150, 85-377 is now 85-452 and 85-442 is now 85-454."
+              ]
+            },
+            {
+              "id": "work_org_technology",
+              "name": "Work, Organizations and Technology",
+              "rule": {"type": "pick", "n": 1, "units": null},
+              "courses": [
+                "70-332", "73-348", "79-234", "79-275", "79-342", "80-341", "88-234", "88-235",
+                "88-237", "88-255", "88-261", "88-262", "88-275", "88-312", "88-341", "88-344",
+                "88-365", "88-366", "88-367", "88-451", "88-452"
+              ],
+              "select": null,
+              "children": [],
+              "notes": []
+            }
+          ],
+          "notes": [
+            "At least 4 courses in total, with at least 1 from each of the two areas.",
+            "Other pre-approved courses may also count."
+          ]
+        }
+      ]
+    },
+    "self_defined": {
+      "name": "Student-defined",
+      "title": "Student-defined Minor",
+      "source_file": null,
+      "version": null,
+      "campus_note": null,
+      "blocked_majors": [],
+      "total_units": null,
+      "double_count": {
+        "text": null,
+        "max_with_major": null,
+        "max_with_other_minors": null,
+        "gen_ed_exempt": true,
+        "no_limit_categories": [],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": []
+      },
+      "grade_rules": [],
+      "notes": [
+        "Requirements are set individually with an advisor.",
+        "Student-defined minors are designed by the student and approved by the Associate Vice Provost's Office."
+      ],
+      "categories": []
+    },
+    "tech_entre": {
+      "name": "Tech Entrepreneurship",
+      "title": "Minor in Tech Entrepreneurship",
+      "source_file": "cmu_minor_tech_entrepreneurship.json",
+      "version": "EY2023 Minor in Tech Entrepreneurship",
+      "campus_note": "Campus not stated",
+      "blocked_majors": [],
+      "total_units": 63,
+      "double_count": {
+        "text": "Up to 2 courses may double count with other programs unless specified otherwise",
+        "max_with_major": 2,
+        "max_with_other_minors": 2,
+        "gen_ed_exempt": true,
+        "no_limit_categories": ["prereq"],
+        "no_sharing_categories": [],
+        "by_major": {},
+        "notes": [
+          "The prerequisite may also count toward other programs without a limit. Up to 2 other courses may also count toward your major or another minor."
+        ]
+      },
+      "grade_rules": [
+        "Prerequisite: 15-110 with a B or better, or 15-112 with a passing grade."
+      ],
+      "notes": [
+        "Scotty states a minimum of 63 units. The audit states no total; its courses add up to at least 54 units (54 to 63) without the prerequisite and 64 to 75 units with it.",
+        "Open to students from all majors."
+      ],
+      "categories": [
+        {
+          "id": "prereq",
+          "name": "Prerequisites",
+          "rule": {"type": "pick", "n": 1, "units": null},
+          "courses": ["15-110", "15-112"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "15-110 with a B or better, or 15-112 with a passing grade."
+          ]
+        },
+        {
+          "id": "fundamentals",
+          "name": "Fundamentals of Entrepreneurship",
+          "rule": {"type": "pick", "n": 1, "units": 9},
+          "courses": ["15-390", "70-409", "70-415"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "One entrepreneurship course of at least 9 units."
+          ]
+        },
+        {
+          "id": "digital_design",
+          "name": "Digital Design and Technology",
+          "rule": {"type": "pick", "n": 2, "units": 18},
+          "courses": [
+            "10-315", "11-411", "11-485", "15-182", "15-281", "15-282", "15-316", "15-330",
+            "15-348", "15-415", "15-440", "15-441", "15-488", "16-311", "17-313"
+          ],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Two computing and technology courses, at least 18 units in total."
+          ]
+        },
+        {
+          "id": "org_intelligence",
+          "name": "Organizational Intelligence",
+          "rule": {"type": "pick", "n": 2, "units": 18},
+          "courses": [
+            "67-318", "67-382", "70-122", "70-311", "70-318", "70-387", "70-395", "70-416",
+            "70-440", "70-443"
+          ],
+          "select": null,
+          "children": [],
+          "notes": [
+            "Two business and management courses, at least 18 units in total."
+          ]
+        },
+        {
+          "id": "capstone",
+          "name": "Capstone Project",
+          "rule": {"type": "required", "n": null, "units": null},
+          "courses": ["67-474"],
+          "select": null,
+          "children": [],
+          "notes": [
+            "The Tech Startup Launchpad capstone course."
+          ]
+        }
+      ]
+    }
+  }
+}

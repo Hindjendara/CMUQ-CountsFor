@@ -7,7 +7,7 @@ The repo layout mirrors the server (/var/www/html/countsfor):
   <root>/backend/scraper/          this folder (pipeline scripts)
   <root>/backend/data/             private data: soc.json, mapping_overlays.json,
                                    faculty_directory.json, directory_admins.json
-  <root>/frontend/data/            served data: courses.json, minor_courses.json
+  <root>/frontend/data/            served data: courses.json, minors.json
 
 Each script still lets an environment variable override its paths.
 """
