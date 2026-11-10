@@ -1204,6 +1204,167 @@ function groupOfferingsBySection(offerings) {
   return groups;
 }
 
+// ── Offering groups: a lecture with its sections ─────────────
+// The Schedule of Classes lists each lecture ("Lec 1") followed by its own
+// sections (recitations, labs: "A", "B", ...). A student takes the lecture
+// and one of its sections, which usually meet at other times of the week.
+
+/** True for a lecture of the Schedule of Classes: "Lec", "Lec 1", "Lec 12". */
+function isLectureSection(section) {
+  return /^lec/i.test(String(section == null ? '' : section).trim());
+}
+
+/** How the planner names a section: "Lec 2" for a lecture, "Sec W" for the others. */
+function planSectionLabel(section) {
+  const s = String(section == null ? '' : section).trim();
+  return isLectureSection(s) ? s : `Sec ${s}`;
+}
+
+/**
+ * A course's offerings linked the way the Schedule of Classes lists them.
+ * Pass the full offering list in its stored (Schedule of Classes) order,
+ * before any filter: within one semester and campus, a section that is not a
+ * lecture belongs to the nearest lecture listed before it. A section with no
+ * such lecture stands alone, and so does a lecture with no sections. Only the
+ * list order counts, never alphabetical order.
+ *
+ * Returns offering groups in list order, { semester_code, campus, lecture,
+ * sections }: lecture (or null) and each entry of sections are section groups
+ * shaped like groupOfferingsBySection() ones, so a section that meets at
+ * several times is one entry with several meetings.
+ */
+function linkOfferingGroups(offerings) {
+  const groups = [];
+  const bySection = new Map();
+  const lastLecture = new Map();
+  for (const o of offerings || []) {
+    if (!o) continue;
+    const key = [o.semester_code || '', o.section || '', o.campus || ''].join('::');
+    const known = bySection.get(key);
+    if (known) {
+      known.meetings.push(o);
+      continue;
+    }
+    const part = {
+      semester_code: o.semester_code,
+      section: o.section,
+      campus: o.campus,
+      modality: o.modality || o.delivery_mode || '',
+      meetings: [o],
+    };
+    bySection.set(key, part);
+    const scope = (o.semester_code || '') + '::' + (o.campus || '');
+    if (isLectureSection(o.section)) {
+      const group = { semester_code: o.semester_code, campus: o.campus, lecture: part, sections: [] };
+      groups.push(group);
+      lastLecture.set(scope, group);
+    } else if (lastLecture.has(scope)) {
+      lastLecture.get(scope).sections.push(part);
+    } else {
+      groups.push({ semester_code: o.semester_code, campus: o.campus, lecture: null, sections: [part] });
+    }
+  }
+  return groups;
+}
+
+/** The section groups of an offering group: its lecture first, then its sections. */
+function offeringGroupParts(group) {
+  if (!group) return [];
+  return (group.lecture ? [group.lecture] : []).concat(group.sections || []);
+}
+
+/**
+ * The offering groups the semester, campus and modality filters show: a group
+ * shows when its semester and campus match and, for the modality filter, when
+ * any of its meetings matches. A group that shows keeps all its sections.
+ */
+function filterOfferingGroups(groups, { semesterCode, locationFilter, modalityFilter }) {
+  return (groups || []).filter(g => {
+    if (semesterCode && semesterCode !== 'all' && g.semester_code !== semesterCode) return false;
+    if (!campusFilterMatches(g.campus, locationFilter)) return false;
+    return offeringGroupParts(g).some(p => p.meetings.some(m => modalityFilterMatches(m.modality, modalityFilter)));
+  });
+}
+
+/** Key of an offering group: the planSectionKey of its lecture, or of its only section. */
+function offeringGroupKey(courseCode, group) {
+  return planSectionKey(courseCode, offeringGroupParts(group)[0]);
+}
+
+/** The offering group that holds a section, as { group, part }, or null. */
+function findOfferingGroup(groups, semesterCode, section, campus) {
+  for (const group of groups || []) {
+    if ((group.semester_code || '') !== (semesterCode || '') || (group.campus || '') !== (campus || '')) continue;
+    const part = offeringGroupParts(group).find(p => (p.section || '') === (section || ''));
+    if (part) return { group, part };
+  }
+  return null;
+}
+
+/**
+ * What planning one section of an offering group means: { parts, others }.
+ * parts is the group's lecture (if any) with the chosen section; others are
+ * the lecture's other sections, which the choice replaces (a student takes
+ * one section per lecture). Choosing the lecture of a group with sections
+ * pairs it with the section isPlanned(meeting) finds planned, else the first.
+ */
+function offeringGroupChoice(group, section, isPlanned) {
+  const sections = (group && group.sections) || [];
+  const lecture = (group && group.lecture) || null;
+  let chosen = sections.find(p => (p.section || '') === (section || '')) || null;
+  if (!chosen) {
+    if (!lecture || (lecture.section || '') !== (section || '')) return { parts: [], others: [] };
+    chosen = (isPlanned && sections.find(p => p.meetings.some(isPlanned))) || sections[0] || null;
+  }
+  return {
+    parts: (lecture ? [lecture] : []).concat(chosen ? [chosen] : []),
+    others: sections.filter(p => p !== chosen),
+  };
+}
+
+/**
+ * The offering group a planned meeting belongs to: { key, group, part }.
+ * A meeting whose section the catalog no longer lists keeps its own section
+ * key (group and part are null).
+ */
+function planItemOfferingGroup(item, groups) {
+  const found = findOfferingGroup(groups, item.semester_code, item.section, item.campus);
+  if (found) return { key: offeringGroupKey(item.course_code, found.group), group: found.group, part: found.part };
+  return { key: planSectionKey(item.course_code, item), group: null, part: null };
+}
+
+/**
+ * Planned meetings as one entry per offering group, so a lecture and the
+ * section planned with it are one entry ("Lec 2 + Sec W"). groupsFor(code)
+ * returns a course's linkOfferingGroups(). Entries keep the plan order:
+ * { key, course_code, semester_code, campus, parts, meetings }, where parts
+ * ({ section, meetings }) list the lecture first.
+ */
+function groupPlanItemsByOffering(items, groupsFor) {
+  const entries = new Map();
+  const groupsByCourse = new Map();
+  for (const item of items || []) {
+    if (!groupsByCourse.has(item.course_code)) groupsByCourse.set(item.course_code, groupsFor(item.course_code) || []);
+    const ref = planItemOfferingGroup(item, groupsByCourse.get(item.course_code));
+    let entry = entries.get(ref.key);
+    if (!entry) {
+      entry = { key: ref.key, course_code: item.course_code, semester_code: item.semester_code, campus: item.campus, parts: [], meetings: [] };
+      entries.set(ref.key, entry);
+    }
+    entry.meetings.push(item);
+    let part = entry.parts.find(p => p.section === item.section);
+    if (!part) {
+      const rank = ref.group ? offeringGroupParts(ref.group).indexOf(ref.part) : (isLectureSection(item.section) ? 0 : 1);
+      part = { section: item.section, rank, meetings: [] };
+      entry.parts.push(part);
+    }
+    part.meetings.push(item);
+  }
+  const out = Array.from(entries.values());
+  for (const entry of out) entry.parts.sort((a, b) => a.rank - b.rank);
+  return out;
+}
+
 function planEntriesOverlap(a, b) {
   if (!a || !b) return false;
   if (a.semester_code !== b.semester_code) return false;

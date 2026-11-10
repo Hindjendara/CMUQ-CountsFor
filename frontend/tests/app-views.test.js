@@ -72,7 +72,8 @@ const HOME_MARKER = '<div class="home-test-marker">home</div>';
 
 // Fresh App in its own context. The network and heavy renderers are stubbed;
 // renderShell(), renderLeftEmpty(), reset() and setGuestRole() are the real code.
-// With { realTree: true } the requirement map (renderTree) is the real code too.
+// With { realTree: true } the requirement map (renderTree) is the real code too,
+// and with { realCard: true } the course card (renderCourseCard).
 function loadApp(opts = {}) {
   const document = fakeDocument();
   const ctx = {
@@ -99,10 +100,12 @@ function loadApp(opts = {}) {
   App._loadStudentFlagsSummary = () => {};
   App.bindGlobalEvents = () => {};
   if (!opts.realTree) App.renderTree = () => {};
-  App.renderCourseCard = (course) => {
-    const el = document.getElementById('leftBody');
-    if (el) el.innerHTML = '<div class="course-card">' + course.course_code + '</div>';
-  };
+  if (!opts.realCard) {
+    App.renderCourseCard = (course) => {
+      const el = document.getElementById('leftBody');
+      if (el) el.innerHTML = '<div class="course-card">' + course.course_code + '</div>';
+    };
+  }
   let shellRenders = 0;
   const realRenderShell = App.renderShell;
   App.renderShell = function () { shellRenders++; return realRenderShell.call(this); };
@@ -572,4 +575,227 @@ test('semesters: when the catalog cannot be loaded the picker stops saying it is
   assertEqual(App.activeSemester, 'all');
   assertEqual(semesterOptionsShown(document), ['*All semesters']);
   assertTrue(document.getElementById('leftBody').innerHTML.includes('Failed to load data: offline'));
+});
+
+// ── Schedule planner: a lecture with its sections ────────────
+// The real togglePlanSection(), course card and plan views, with a small
+// catalog whose offerings are in Schedule of Classes order.
+function planRow(semester_code, campus, section, days_times) {
+  return { semester_code, campus, section, modality: 'In Person', days_times, instructor: '', location: '' };
+}
+
+function planCatalog() {
+  const reqs = () => ({ CS: [], IS: [], BA: [], BS: [] });
+  const course = (course_code, course_name, units, offerings) =>
+    ({ course_code, course_name, units, requirements: reqs(), offered: ['F25', 'F26'], offerings });
+  return [
+    course('09-207', 'Techniques in Quantitative Analysis', 9, [
+      planRow('F26', 'Pittsburgh', 'Lec 1', 'T 03:30PM-04:50PM'),
+      planRow('F26', 'Pittsburgh', 'A', 'MW 02:00PM-04:20PM'),
+      planRow('F26', 'Pittsburgh', 'A', 'MW 02:00PM-02:50PM'),
+      planRow('F26', 'Qatar', 'Lec 2', 'U 04:00PM-04:50PM'),
+      planRow('F26', 'Qatar', 'W', 'MW 02:30PM-05:30PM'),
+      planRow('F25', 'Qatar', 'Lec 2', 'U 10:00AM-10:50AM'),
+      planRow('F25', 'Qatar', 'W', 'MW 02:30PM-05:30PM'),
+    ]),
+    course('15-112', 'Fundamentals of Programming and Computer Science', 12, [
+      planRow('F26', 'Pittsburgh', 'Lec 1', 'TR 09:30AM-10:50AM'),
+      planRow('F26', 'Pittsburgh', 'A', 'W 09:00AM-09:50AM'),
+      planRow('F26', 'Pittsburgh', 'B', 'W 10:00AM-10:50AM'),
+      planRow('F26', 'Pittsburgh', 'C', 'W 11:00AM-11:50AM'),
+      planRow('F26', 'Pittsburgh', 'Lec 2', 'TR 02:00PM-03:20PM'),
+      planRow('F26', 'Pittsburgh', 'M', 'W 09:00AM-09:50AM'),
+      planRow('F26', 'Qatar', 'Lec 3', 'UTR 11:30AM-12:45PM'),
+      planRow('F26', 'Qatar', 'W', 'W 11:30AM-12:45PM'),
+    ]),
+    course('03-151', 'Honors Modern Biology', 10, [
+      planRow('F26', 'Qatar', 'Lec 2', 'UTR 11:30AM-12:20PM'),
+      planRow('F26', 'Qatar', 'W', 'M 02:30PM-04:20PM'),
+    ]),
+    course('21-120', 'Differential and Integral Calculus', 10, [
+      planRow('F26', 'Pittsburgh', 'Lec 1', 'MWF 10:00AM-10:50AM'),
+    ]),
+  ];
+}
+
+function loadPlanApp() {
+  const env = loadApp({ realCard: true });
+  const { App, ctx } = env;
+  App.courses = planCatalog();
+  App.courseIndex = vm.runInContext('buildCourseIndex', ctx)(App.courses);
+  App.activeSemester = 'F26';
+  App.locationFilter = 'all';
+  App.modalityFilter = 'all';
+  const toasts = [];
+  ctx.showToast = msg => toasts.push(msg);
+  const course = code => App.courses.find(c => c.course_code === code);
+  return { ...env, toasts, course };
+}
+
+// [course, section, days_times] of every planned meeting, in plan order.
+const plannedRows = App => App._getPlanItems().map(i => [i.course_code, i.section, i.days_times]);
+const entryParts = (App, items) => App._groupPlanItems(items || App._getPlanItems()).map(e => e.parts.map(p => p.section));
+const blocksOf = html => html.split('class="cc-sched-block"').slice(1);
+const planBtnCount = html => (html.match(/class="cc-plan-btn/g) || []).length;
+
+test('planner: + Plan on Sec W plans Lec 2 and W at their own times; a second click removes both', () => {
+  const { App, toasts } = loadPlanApp();
+  App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
+  assertEqual(plannedRows(App), [
+    ['09-207', 'Lec 2', 'U 04:00PM-04:50PM'],
+    ['09-207', 'W', 'MW 02:30PM-05:30PM'],
+  ]);
+  assertEqual(toasts.pop(), 'Added to your schedule plan');
+  App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
+  assertEqual(plannedRows(App), []);
+  assertEqual(toasts.pop(), 'Removed from schedule plan');
+});
+
+test('planner: another section of the same lecture replaces the planned one; other lectures stay', () => {
+  const { App, toasts } = loadPlanApp();
+  App.togglePlanSection('15-112', 'F26', 'W', 'Qatar');
+  App.togglePlanSection('15-112', 'F26', 'A', 'Pittsburgh');
+  App.togglePlanSection('15-112', 'F26', 'B', 'Pittsburgh');
+  assertEqual(toasts.pop(), 'Switched to Sec B in your schedule plan');
+  assertEqual(plannedRows(App), [
+    ['15-112', 'Lec 3', 'UTR 11:30AM-12:45PM'],
+    ['15-112', 'W', 'W 11:30AM-12:45PM'],
+    ['15-112', 'Lec 1', 'TR 09:30AM-10:50AM'],
+    ['15-112', 'B', 'W 10:00AM-10:50AM'],
+  ]);
+  App.removePlanSection('15-112', 'F26', 'Lec 1', 'Pittsburgh');
+  assertEqual(plannedRows(App), [['15-112', 'Lec 3', 'UTR 11:30AM-12:45PM'], ['15-112', 'W', 'W 11:30AM-12:45PM']],
+    'Remove in the plan list takes the lecture and its section');
+});
+
+test('planner: a plan saved with only part of a group loads, and + Plan adds the missing part', () => {
+  const { App, ctx, document, course } = loadPlanApp();
+  ctx.localStorage.setItem('cf_plans_v2', JSON.stringify({ activePlanId: 'old', plans: [{ id: 'old', name: 'Old plan', items: [
+    { course_code: '09-207', semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'MW 02:30PM-05:30PM', modality: 'In Person' },
+  ] }] }));
+  assertEqual(entryParts(App), [['W']]);
+  App._selectCourse(course('09-207'));
+  assertTrue(leftBodyHtml(document).includes('title="Add the missing meeting times of Lec 2 and Sec W to your schedule plan"'));
+  App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
+  assertEqual(plannedRows(App), [
+    ['09-207', 'W', 'MW 02:30PM-05:30PM'],
+    ['09-207', 'Lec 2', 'U 04:00PM-04:50PM'],
+  ]);
+  assertEqual(entryParts(App), [['Lec 2', 'W']]);
+  assertTrue(/data-section="W"[^>]*>✓ Planned</.test(leftBodyHtml(document)));
+});
+
+test('course card: a lecture and its section are one block with one + Plan; All semesters names each block', () => {
+  const { App, document, course } = loadPlanApp();
+  App.activeSemester = 'all';
+  App.locationFilter = 'qatar';
+  App._selectCourse(course('09-207'));
+  const blocks = blocksOf(leftBodyHtml(document));
+  assertEqual(blocks.length, 2);
+  assertTrue(blocks[0].startsWith('><div class="cc-sched-term">Fall 2026</div>'), blocks[0].slice(0, 80));
+  assertTrue(blocks[1].startsWith('><div class="cc-sched-term">Fall 2025</div>'));
+  const b = blocks[0];
+  assertTrue(b.indexOf('>Lec 2<') >= 0 && b.indexOf('>Lec 2<') < b.indexOf('>Sec W<'), 'lecture line, then section line');
+  assertTrue(b.includes('U 4:00 PM to 4:50 PM') && b.includes('MW 2:30 PM to 5:30 PM'));
+  assertEqual(planBtnCount(b), 1);
+  assertTrue(b.includes('data-section="W"') && b.includes('title="Add Lec 2 and Sec W (all meeting times) to your schedule plan"'));
+  App.activeSemester = 'F26';
+  App.renderCourseCard(course('09-207'));
+  assertFalse(leftBodyHtml(document).includes('cc-sched-term'), 'one semester: no semester labels');
+});
+
+test('course card: each section of a lecture has its own + Plan, and planning B replaces A', () => {
+  const { App, document, course } = loadPlanApp();
+  App.locationFilter = 'pittsburgh';
+  App._selectCourse(course('15-112'));
+  let html = leftBodyHtml(document);
+  const lec1 = blocksOf(html)[0];
+  assertEqual(planBtnCount(lec1), 3, 'on A, B and C, none on the lecture line');
+  assertTrue(lec1.includes('cc-sched-sub'));
+  assertTrue(html.includes('+2 more sections'), 'Lec 2 and its section M wait behind more');
+  App.togglePlanSection('15-112', 'F26', 'A', 'Pittsburgh');
+  html = leftBodyHtml(document);
+  assertTrue(/data-section="A"[^>]*>✓ Planned</.test(html));
+  assertTrue(html.includes('title="Plan Lec 1 and Sec B instead of Sec A"'));
+  App.togglePlanSection('15-112', 'F26', 'B', 'Pittsburgh');
+  html = leftBodyHtml(document);
+  assertTrue(/data-section="B"[^>]*>✓ Planned</.test(html));
+  assertFalse(/data-section="A"[^>]*>✓ Planned</.test(html));
+  assertEqual(plannedRows(App), [['15-112', 'Lec 1', 'TR 09:30AM-10:50AM'], ['15-112', 'B', 'W 10:00AM-10:50AM']]);
+});
+
+test('course card: a lecture with no sections keeps its own + Plan', () => {
+  const { App, document, course } = loadPlanApp();
+  App._selectCourse(course('21-120'));
+  const block = blocksOf(leftBodyHtml(document))[0];
+  assertEqual(planBtnCount(block), 1);
+  assertTrue(block.includes('data-section="Lec 1"'));
+  App.togglePlanSection('21-120', 'F26', 'Lec 1', 'Pittsburgh');
+  assertEqual(plannedRows(App), [['21-120', 'Lec 1', 'MWF 10:00AM-10:50AM']]);
+});
+
+test('typeahead + Plan adds the first matching lecture with its first section', () => {
+  const { App, toasts } = loadPlanApp();
+  App.locationFilter = 'qatar';
+  App.addFirstSectionToPlan('09-207');
+  App.locationFilter = 'pittsburgh';
+  App.addFirstSectionToPlan('15-112');
+  assertEqual(plannedRows(App), [
+    ['09-207', 'Lec 2', 'U 04:00PM-04:50PM'],
+    ['09-207', 'W', 'MW 02:30PM-05:30PM'],
+    ['15-112', 'Lec 1', 'TR 09:30AM-10:50AM'],
+    ['15-112', 'A', 'W 09:00AM-09:50AM'],
+  ]);
+  App.addFirstSectionToPlan('15-112');
+  assertEqual(toasts.pop(), 'Already in your schedule plan');
+  assertEqual(plannedRows(App).length, 4);
+});
+
+test('plan view: one entry per course with its lecture and section, courses counted, units once', async () => {
+  const { App, document } = loadPlanApp();
+  App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
+  App.togglePlanSection('15-112', 'F26', 'A', 'Pittsburgh');
+  assertEqual(App._planUnitsTotal(App._getPlanItems()), 21, '9 + 12: a lecture and its section count once');
+  assertEqual(App._countPlannedCourses('F26'), 2);
+  const plan = App._ensureActivePlan(false);
+  App.openPlanDetail(plan.id);
+  const html = leftBodyHtml(document);
+  assertTrue(html.includes('<span class="plan-stat">2 courses</span>') && html.includes('<span class="plan-stat">21 units</span>'));
+  assertFalse(html.includes('time conflict'));
+  assertEqual((html.match(/class="plan-list-row /g) || []).length, 2);
+  assertTrue(html.includes('Lec 2 + Sec W · Qatar · 9u'));
+  assertTrue(html.includes('Lec 2: U 4:00 PM to 4:50 PM') && html.includes('Sec W: MW 2:30 PM to 5:30 PM'));
+  assertTrue(html.includes('Lec 1 + Sec A · Pittsburgh · 12u'));
+  assertEqual((html.match(/class="plan-block"/g) || []).length, 6, 'every meeting on each of its days: U, M, W, T, R, W');
+  assertTrue(html.includes('<span class="plan-block-sec">Lec 2</span>') && html.includes('<span class="plan-block-sec">Sec W</span>'));
+  await App.showPlanView();
+  assertTrue(leftBodyHtml(document).includes('2 courses · 21 units'));
+});
+
+test('plan view: a lecture is not in conflict with its own section; a real overlap with another course is', () => {
+  const { App, document } = loadPlanApp();
+  App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
+  const plan = App._ensureActivePlan(false);
+  App.openPlanDetail(plan.id);
+  assertFalse(leftBodyHtml(document).includes('time conflict'));
+  App.togglePlanSection('03-151', 'F26', 'W', 'Qatar');  // M 2:30 PM to 4:20 PM, inside 09-207 Sec W
+  App.openPlanDetail(plan.id);
+  const html = leftBodyHtml(document);
+  assertTrue(html.includes('1 time conflict'));
+  assertEqual((html.match(/class="plan-list-row is-conflict"/g) || []).length, 2);
+});
+
+test('planner: a shared snapshot and the imported plan keep the lecture and section together', () => {
+  const { App } = loadPlanApp();
+  App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
+  const snapshot = App._planSnapshot(App._ensureActivePlan(false).id);
+  assertEqual(snapshot.items.map(i => i.id), [
+    '09-207::F26::Lec 2::Qatar::U 04:00PM-04:50PM',
+    '09-207::F26::W::Qatar::MW 02:30PM-05:30PM',
+  ]);
+  // What /api/plans/accept-share returns for that snapshot (SchedulePlanItem.to_dict).
+  const imported = App._mergeServerPlan({ id: 'srv-1', name: 'From Hind: Fall', items: snapshot.items.map(i => ({ ...i })) });
+  const items = App._getPlanItems(imported.id);
+  assertEqual(entryParts(App, items), [['Lec 2', 'W']]);
+  assertEqual(App._planUnitsTotal(items), 9);
 });

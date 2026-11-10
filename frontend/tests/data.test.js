@@ -596,6 +596,194 @@ test('layoutPlanDayBlocks: non-overlapping blocks use full width', () => {
   assertEqual(laid[1].totalCols, 1);
 });
 
+// ── Offering groups: a lecture with its sections ─────────────
+// Rows as data/courses.json stores them, in Schedule of Classes order.
+
+function socRow(semester_code, campus, section, days_times, modality) {
+  return { semester_code, campus, section, days_times, modality: modality || 'In Person' };
+}
+
+// [semester, campus, lecture or null, [sections]] for each group.
+function groupShape(groups) {
+  return groups.map(g => [g.semester_code, g.campus, g.lecture ? g.lecture.section : null, g.sections.map(s => s.section)]);
+}
+
+// 09-207 Techniques in Quantitative Analysis, as the Schedule of Classes lists it.
+const ROWS_09_207 = [
+  socRow('S27', 'Pittsburgh', 'A', 'TBA'),
+  socRow('F26', 'Pittsburgh', 'Lec 1', 'T 03:30PM-04:50PM'),
+  socRow('F26', 'Pittsburgh', 'A', 'MW 02:00PM-04:20PM'),
+  socRow('F26', 'Pittsburgh', 'A', 'MW 02:00PM-02:50PM'),
+  socRow('F26', 'Pittsburgh', 'B', 'MW 06:30PM-07:20PM'),
+  socRow('F26', 'Pittsburgh', 'B', 'MW 06:30PM-08:50PM'),
+  socRow('F26', 'Qatar', 'Lec 2', 'U 04:00PM-04:50PM'),
+  socRow('F26', 'Qatar', 'W', 'MW 02:30PM-05:30PM'),
+  socRow('S26', 'Pittsburgh', 'A', 'TBA'),
+  socRow('F25', 'Pittsburgh', 'Lec 1', 'T 03:30PM-04:50PM'),
+  socRow('F25', 'Pittsburgh', 'A', 'MW 02:00PM-02:50PM'),
+  socRow('F25', 'Qatar', 'Lec 2', 'U 10:00AM-10:50AM'),
+  socRow('F25', 'Qatar', 'W', 'MW 02:30PM-05:30PM'),
+];
+
+test('isLectureSection and planSectionLabel: "Lec" rows are lectures, the rest are sections', () => {
+  assertTrue(isLectureSection('Lec 2') && isLectureSection('Lec') && isLectureSection('LEC 12'));
+  assertFalse(isLectureSection('W') || isLectureSection('LE') || isLectureSection('LA') || isLectureSection(''));
+  assertEqual(planSectionLabel('Lec 2'), 'Lec 2');
+  assertEqual(planSectionLabel('W'), 'Sec W');
+});
+
+test('linkOfferingGroups: 03-151 Fall 2026 links Lec 1 with A in Pittsburgh and Lec 2 with W in Qatar', () => {
+  const groups = linkOfferingGroups([
+    socRow('F26', 'Pittsburgh', 'Lec 1', 'MWF 02:00PM-02:50PM'),
+    socRow('F26', 'Pittsburgh', 'A', 'W 07:00PM-07:50PM'),
+    socRow('F26', 'Qatar', 'Lec 2', 'UTR 11:30AM-12:20PM'),
+    socRow('F26', 'Qatar', 'W', 'M 02:30PM-04:20PM'),
+  ]);
+  assertEqual(groupShape(groups), [
+    ['F26', 'Pittsburgh', 'Lec 1', ['A']],
+    ['F26', 'Qatar', 'Lec 2', ['W']],
+  ]);
+  assertEqual(groups[1].lecture.meetings.map(m => m.days_times), ['UTR 11:30AM-12:20PM']);
+  assertEqual(groups[1].sections[0].meetings.map(m => m.days_times), ['M 02:30PM-04:20PM']);
+});
+
+test('linkOfferingGroups: 09-207 Qatar pairs Lec 2 with W in each fall; a section with no lecture stands alone', () => {
+  const groups = linkOfferingGroups(ROWS_09_207);
+  assertEqual(groupShape(groups), [
+    ['S27', 'Pittsburgh', null, ['A']],
+    ['F26', 'Pittsburgh', 'Lec 1', ['A', 'B']],
+    ['F26', 'Qatar', 'Lec 2', ['W']],
+    ['S26', 'Pittsburgh', null, ['A']],
+    ['F25', 'Pittsburgh', 'Lec 1', ['A']],
+    ['F25', 'Qatar', 'Lec 2', ['W']],
+  ]);
+  const qatar = filterOfferingGroups(groups, { semesterCode: 'all', locationFilter: 'qatar', modalityFilter: 'all' });
+  assertEqual(qatar.map(g => [g.semester_code, g.lecture.meetings[0].days_times, g.sections[0].meetings[0].days_times]), [
+    ['F26', 'U 04:00PM-04:50PM', 'MW 02:30PM-05:30PM'],
+    ['F25', 'U 10:00AM-10:50AM', 'MW 02:30PM-05:30PM'],
+  ]);
+});
+
+test('linkOfferingGroups: a section that meets at several times is one section with all its meetings', () => {
+  const f26 = linkOfferingGroups(ROWS_09_207)[1];
+  assertEqual(f26.sections.map(s => [s.section, s.meetings.map(m => m.days_times)]), [
+    ['A', ['MW 02:00PM-04:20PM', 'MW 02:00PM-02:50PM']],
+    ['B', ['MW 06:30PM-07:20PM', 'MW 06:30PM-08:50PM']],
+  ]);
+});
+
+test('linkOfferingGroups: each lecture keeps the sections listed under it (15-112 Fall 2026)', () => {
+  const groups = linkOfferingGroups([
+    socRow('F26', 'Pittsburgh', 'Lec 1', 'TR 09:30AM-10:50AM'),
+    socRow('F26', 'Pittsburgh', 'A', 'W 09:00AM-09:50AM'),
+    socRow('F26', 'Pittsburgh', 'B', 'W 10:00AM-10:50AM'),
+    socRow('F26', 'Pittsburgh', 'K', 'W 08:00PM-08:50PM'),
+    socRow('F26', 'Pittsburgh', 'Lec 2', 'TR 02:00PM-03:20PM'),
+    socRow('F26', 'Pittsburgh', 'M', 'W 09:00AM-09:50AM'),
+    socRow('F26', 'Qatar', 'Lec 3', 'UTR 11:30AM-12:45PM'),
+    socRow('F26', 'Qatar', 'W', 'W 11:30AM-12:45PM'),
+  ]);
+  assertEqual(groupShape(groups), [
+    ['F26', 'Pittsburgh', 'Lec 1', ['A', 'B', 'K']],
+    ['F26', 'Pittsburgh', 'Lec 2', ['M']],
+    ['F26', 'Qatar', 'Lec 3', ['W']],
+  ]);
+});
+
+test('linkOfferingGroups: list order decides, never alphabetical order', () => {
+  const groups = linkOfferingGroups([
+    socRow('F26', 'Pittsburgh', 'Lec 2', 'TR 02:00PM-03:20PM'),
+    socRow('F26', 'Pittsburgh', 'B', 'W 10:00AM-10:50AM'),
+    socRow('F26', 'Pittsburgh', 'A', 'W 09:00AM-09:50AM'),
+    socRow('F26', 'Pittsburgh', 'Lec 1', 'TR 09:30AM-10:50AM'),
+    socRow('F26', 'Pittsburgh', 'C', 'W 11:00AM-11:50AM'),
+  ]);
+  assertEqual(groupShape(groups), [
+    ['F26', 'Pittsburgh', 'Lec 2', ['B', 'A']],
+    ['F26', 'Pittsburgh', 'Lec 1', ['C']],
+  ]);
+});
+
+test('linkOfferingGroups: standalone sections, a lecture with no sections, and no links across semesters', () => {
+  assertEqual(groupShape(linkOfferingGroups([
+    socRow('F26', 'Qatar', 'A', 'MW 10:00AM-11:15AM'),
+    socRow('F26', 'Qatar', 'B', 'TR 10:00AM-11:15AM'),
+  ])), [['F26', 'Qatar', null, ['A']], ['F26', 'Qatar', null, ['B']]]);
+  assertEqual(groupShape(linkOfferingGroups([
+    socRow('F26', 'Pittsburgh', 'Lec 1', 'MWF 09:00AM-09:50AM'),
+    socRow('F26', 'Pittsburgh', 'Lec 2', 'MWF 10:00AM-10:50AM'),
+    socRow('S26', 'Pittsburgh', 'A', 'W 09:00AM-09:50AM'),
+  ])), [['F26', 'Pittsburgh', 'Lec 1', []], ['F26', 'Pittsburgh', 'Lec 2', []], ['S26', 'Pittsburgh', null, ['A']]]);
+});
+
+test('linkOfferingGroups: a section after a lecture of another campus stays alone', () => {
+  assertEqual(groupShape(linkOfferingGroups([
+    socRow('F26', 'Pittsburgh', 'Lec 1', 'TR 09:30AM-10:50AM'),
+    socRow('F26', 'Qatar', 'W', 'W 11:30AM-12:45PM'),
+    socRow('F26', 'Pittsburgh', 'A', 'W 09:00AM-09:50AM'),
+  ])), [['F26', 'Pittsburgh', 'Lec 1', ['A']], ['F26', 'Qatar', null, ['W']]]);
+});
+
+test('filterOfferingGroups: links first, then filters; a group shows when any meeting matches the modality', () => {
+  const groups = linkOfferingGroups([
+    socRow('F26', 'Pittsburgh', 'Lec 1', 'TR 09:30AM-10:50AM', 'Remote'),
+    socRow('F26', 'Pittsburgh', 'A', 'W 09:00AM-09:50AM', 'In Person'),
+    socRow('S26', 'Qatar', 'W', 'M 10:00AM-10:50AM', 'In Person'),
+  ]);
+  const shape = filters => groupShape(filterOfferingGroups(groups, filters));
+  assertEqual(shape({ semesterCode: 'F26', locationFilter: 'all', modalityFilter: 'in_person' }), [['F26', 'Pittsburgh', 'Lec 1', ['A']]]);
+  assertEqual(shape({ semesterCode: 'F26', locationFilter: 'all', modalityFilter: 'remote' }), [['F26', 'Pittsburgh', 'Lec 1', ['A']]]);
+  assertEqual(shape({ semesterCode: 'F26', locationFilter: 'all', modalityFilter: 'hybrid' }), []);
+  assertEqual(shape({ semesterCode: 'all', locationFilter: 'qatar', modalityFilter: 'all' }), [['S26', 'Qatar', null, ['W']]]);
+  assertEqual(shape({ semesterCode: 'F26', locationFilter: 'qatar', modalityFilter: 'all' }), []);
+});
+
+test('offeringGroupChoice: a section plans with its lecture and replaces the lecture\'s other sections', () => {
+  const [lec1] = linkOfferingGroups([
+    socRow('F26', 'Pittsburgh', 'Lec 1', 'TR 09:30AM-10:50AM'),
+    socRow('F26', 'Pittsburgh', 'A', 'W 09:00AM-09:50AM'),
+    socRow('F26', 'Pittsburgh', 'B', 'W 10:00AM-10:50AM'),
+  ]);
+  const names = choice => [choice.parts.map(p => p.section), choice.others.map(p => p.section)];
+  assertEqual(names(offeringGroupChoice(lec1, 'B')), [['Lec 1', 'B'], ['A']]);
+  assertEqual(names(offeringGroupChoice(lec1, 'Lec 1')), [['Lec 1', 'A'], ['B']], 'the lecture alone pairs with its first section');
+  const bPlanned = m => m.section === 'B';
+  assertEqual(names(offeringGroupChoice(lec1, 'Lec 1', bPlanned)), [['Lec 1', 'B'], ['A']], 'or with the section already planned');
+  assertEqual(names(offeringGroupChoice(lec1, 'Z')), [[], []]);
+  const [alone] = linkOfferingGroups([socRow('F26', 'Qatar', 'W', 'M 10:00AM-10:50AM')]);
+  assertEqual(names(offeringGroupChoice(alone, 'W')), [['W'], []]);
+});
+
+test('groupPlanItemsByOffering: a lecture and its planned section are one entry, the lecture first', () => {
+  const groups = linkOfferingGroups(ROWS_09_207);
+  const item = (section, days_times) => ({ course_code: '09-207', semester_code: 'F26', section, campus: 'Qatar', days_times });
+  const entries = groupPlanItemsByOffering([
+    item('W', 'MW 02:30PM-05:30PM'),
+    { course_code: '15-112', semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'W 11:30AM-12:45PM' },
+    item('Lec 2', 'U 04:00PM-04:50PM'),
+    item('Z', 'F 09:00AM-09:50AM'),
+  ], code => (code === '09-207' ? groups : []));
+  assertEqual(entries.map(e => [e.course_code, e.parts.map(p => p.section)]), [
+    ['09-207', ['Lec 2', 'W']],
+    ['15-112', ['W']],
+    ['09-207', ['Z']],
+  ]);
+  assertEqual(entries[0].key, planSectionKey('09-207', { semester_code: 'F26', section: 'Lec 2', campus: 'Qatar' }));
+  assertEqual(entries[2].key, planSectionKey('09-207', { semester_code: 'F26', section: 'Z', campus: 'Qatar' }), 'a section the catalog no longer lists keeps its own entry');
+});
+
+test('conflicts: a lecture does not conflict with its own section unless their times overlap', () => {
+  const lecture = { id: 'l', semester_code: 'F26', days_times: 'U 04:00PM-04:50PM' };
+  const section = { id: 'w', semester_code: 'F26', days_times: 'MW 02:30PM-05:30PM' };
+  assertEqual(countPlanConflictPairs([lecture, section]), 0);
+  assertEqual(findPlanConflicts([lecture, section]).size, 0);
+  const lab = [
+    { id: 'l1', semester_code: 'F26', days_times: 'TR 01:00PM-01:50PM' },
+    { id: 'a', semester_code: 'F26', days_times: 'TR 01:00PM-04:00PM' },
+  ];
+  assertEqual(countPlanConflictPairs(lab), 1, 'times that truly overlap are still a conflict');
+});
+
 // ── normalizeCmuEmail (js/utils.js) ──────────────────────
 // Same cases as backend/tests/test_cmu.py: the two checks must agree.
 
