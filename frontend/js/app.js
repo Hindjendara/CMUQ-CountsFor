@@ -1147,9 +1147,10 @@ const App = {
         }
         if (action === 'course-status') this.cycleCourseStatus(code, actionBtn.dataset.statusKey);
         if (action === 'course-status-set') this.setCourseStatus(code, actionBtn.dataset.status || '');
-        if (action === 'minor-browse') this.browseMinor(actionBtn.dataset.minor);
-        if (action === 'minor-add') this.addStudentMinor(actionBtn.dataset.minor);
-        if (action === 'minor-remove') this.removeStudentMinor(actionBtn.dataset.minor);
+        // Adding or removing a minor draws the tree again: the focus moves to the
+        // Minors tab dropdown or to "Add a minor" instead of being lost.
+        if (action === 'minor-add') { this.addStudentMinor(actionBtn.dataset.minor); this._focusById('mnBrowsePick'); }
+        if (action === 'minor-remove') { this.removeStudentMinor(actionBtn.dataset.minor); this._focusById('mnMinorAdd'); }
         if (action === 'wishlist') this.toggleWishlist(code);
         if (action === 'flag')     this.openFlagModal(code);
         if (action === 'plan-toggle-section') {
@@ -6150,12 +6151,17 @@ const App = {
     return text;
   },
 
+  /** A minor's text as HTML: escaped, with course codes ("85-170") kept whole at a line end. */
+  _minorTextHtml(text) {
+    return esc(text).replace(/\b\d{2}-\d{3}\b/g, '<span class="mn-code">$&</span>');
+  },
+
   /** Notes, codes missing from the catalog and empty states inside a minor category. */
   _minorNodeInfoHtml(node) {
     const lines = [];
-    for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${esc(note)}</div>`);
+    for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${this._minorTextHtml(note)}</div>`);
     if (node.missing && node.missing.length) {
-      lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${esc(joinWithAnd(node.missing))}.</div>`);
+      lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${this._minorTextHtml(joinWithAnd(node.missing))}.</div>`);
     }
     if (!(node.children || []).length) {
       if (!(node.courses || []).length) {
@@ -6167,36 +6173,71 @@ const App = {
     return lines.length ? `<div class="mn-node-info">${lines.join('')}</div>` : '';
   },
 
-  /** A student's major and minors, above their requirement tree. */
+  /**
+   * A student's major and minors, above their requirement tree: two labelled
+   * rows (the major dropdown; the chosen minors and the "Add a minor" dropdown).
+   */
   _studentProgramsBarHtml() {
     const p = this.profile;
     const minors = getProfileMinors(p);
     const majorOpts = STUDENT_PROGRAMS.map(m =>
       `<option value="${m}" ${p.primary === m ? 'selected' : ''}>${esc(this._programFullName(m))} (${m})</option>`).join('');
     const chips = minors.map(mc => `
-      <span class="mn-prog-chip">${esc(getMinorLabel(mc))} minor<button type="button" class="mn-prog-chip-x" data-action="minor-remove" data-minor="${esc(mc)}" title="Remove this minor" aria-label="Remove the ${esc(getMinorLabel(mc))} minor">×</button></span>`).join('');
+      <span class="mn-prog-chip">${esc(getMinorLabel(mc))}<button type="button" class="mn-prog-chip-x" data-action="minor-remove" data-minor="${esc(mc)}" title="Remove this minor" aria-label="Remove the ${esc(getMinorLabel(mc))} minor">${this._iconClose()}</button></span>`).join('');
     const addOpts = MINOR_LIST
       .filter(m => !minors.includes(m.code) && !isMinorBlockedForMajor(m.code, p.primary))
       .map(m => `<option value="${esc(m.code)}">${esc(m.label)}</option>`).join('');
     const addSelect = addOpts
-      ? `<select class="mn-prog-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" onchange="App.addStudentMinor(this.value)"><option value="">Add a minor</option>${addOpts}</select>`
+      ? `<select class="mn-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" onchange="App._onStudentMinorAddPick(this.value)"><option value="">Add a minor</option>${addOpts}</select>`
       : '';
     const where = this.authMode === 'authed' ? 'in this browser' : 'on this device';
     return `
       <div class="mn-programs" role="group" aria-label="Your major and minors">
-        <div class="mn-prog-row">
-          <label class="mn-prog-field">
-            <span class="mn-prog-label">Major</span>
-            <select class="mn-prog-select" id="mnMajorPick" onchange="App.setStudentMajor(this.value)">${majorOpts}</select>
-          </label>
-          <div class="mn-prog-field mn-prog-minors">
-            <span class="mn-prog-label">Minors</span>
-            ${chips || '<span class="mn-prog-none">None yet</span>'}
-            ${addSelect}
-          </div>
+        <label class="mn-label" for="mnMajorPick">Major</label>
+        <div class="mn-prog-value">
+          <select class="mn-select" id="mnMajorPick" onchange="App._onStudentMajorPick(this.value)">${majorOpts}</select>
+        </div>
+        <span class="mn-label" id="mnMinorsLabel">Minors</span>
+        <div class="mn-prog-value" role="group" aria-labelledby="mnMinorsLabel">
+          ${chips}${addSelect || (chips ? '' : '<span class="mn-prog-none">None</span>')}
         </div>
         <p class="mn-prog-hint">Click the circle next to a course once for in progress and twice for completed. Your marks are saved ${where}.</p>
       </div>`;
+  },
+
+  // The programs bar dropdowns: the tree is drawn again after a change, so the
+  // focus goes back to the new dropdown (keyboard users keep their place).
+  _onStudentMajorPick(major) {
+    const saved = this.setStudentMajor(major);
+    this._focusById('mnMajorPick');
+    return saved;
+  },
+
+  _onStudentMinorAddPick(code) {
+    const saved = this.addStudentMinor(code);
+    this._focusById('mnMinorAdd');
+    return saved;
+  },
+
+  /** Focus a control by id, e.g. after a re-render replaced the one that was used. */
+  _focusById(id) {
+    if (typeof document === 'undefined' || !document.getElementById) return;
+    const el = document.getElementById(id);
+    if (el && el.focus) {
+      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+    }
+  },
+
+  _iconClose() {
+    return '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+  },
+
+  _iconCheck() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+  },
+
+  _iconPlus() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>';
   },
 
   setStudentMajor(major) {
@@ -6338,7 +6379,10 @@ const App = {
     }, 100);
   },
 
-  /** The Minors tab: every minor as a button; the chosen one's full requirements below. */
+  /**
+   * The Minors tab: a dropdown of every minor (a student's own minors first,
+   * under "Your minors") and the chosen one's full requirements below.
+   */
   _renderMinorsBrowse() {
     const idx = this.minorIndex;
     if (!idx) {
@@ -6349,21 +6393,34 @@ const App = {
     }
     const mine = this._statusTrackingOn() ? getProfileMinors(this.profile) : [];
     const sel = (this.browseMinorCode && idx.byCode[this.browseMinorCode]) ? this.browseMinorCode : null;
-    const buttons = idx.order.map(code => {
-      const on = code === sel;
-      const yours = mine.includes(code);
-      return `<button type="button" class="mn-pick${on ? ' is-active' : ''}${yours ? ' is-mine' : ''}" data-action="minor-browse" data-minor="${esc(code)}" aria-pressed="${on}">${esc(idx.byCode[code].def.name)}${yours ? '<span class="mn-pick-mine">Yours</span>' : ''}</button>`;
-    }).join('');
+    const option = code => `<option value="${esc(code)}"${code === sel ? ' selected' : ''}>${esc(idx.byCode[code].def.name)}</option>`;
+    const yours = idx.order.filter(code => mine.includes(code));
+    const others = idx.order.filter(code => !mine.includes(code));
+    const options = yours.length
+      ? `<optgroup label="Your minors">${yours.map(option).join('')}</optgroup>`
+        + (others.length ? `<optgroup label="Other minors">${others.map(option).join('')}</optgroup>` : '')
+      : others.map(option).join('');
+    const placeholder = sel ? '' : '<option value="" selected disabled>Choose a minor</option>';
     const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
+    const empty = `
+      <div class="empty-state">
+        <img class="empty-illustration" src="assets/img/scotty-full.png" alt="" aria-hidden="true" />
+        <div class="empty-text">Choose a minor to see its full requirements.</div>
+      </div>`;
     return `
       <div class="mn-browse">
         <div class="mn-browse-head">
-          <h2 class="mn-browse-title">All minors</h2>
-          ${sel ? '' : '<p class="mn-browse-lead">Choose a minor to see its full requirements.</p>'}
-          <div class="mn-pick-list" role="group" aria-label="Minors">${buttons}</div>
+          <label class="mn-label" for="mnBrowsePick">Minor</label>
+          <select class="mn-select" id="mnBrowsePick" onchange="App._onBrowseMinorPick(this.value)">${placeholder}${options}</select>
         </div>
-        ${sel ? filterHint + this._renderMinorSection(sel, 'browse') : ''}
+        ${sel ? filterHint + this._renderMinorSection(sel, 'browse') : empty}
       </div>`;
+  },
+
+  /** The Minors tab dropdown: show the chosen minor; the focus stays on the dropdown. */
+  _onBrowseMinorPick(code) {
+    this.browseMinor(code);
+    this._focusById('mnBrowsePick');
   },
 
   /**
@@ -6394,14 +6451,19 @@ const App = {
 
     let actionHtml = '';
     if (mode === 'browse' && student) {
-      if (mine) actionHtml = '<span class="mn-pill mn-pill-mine">Your minor</span>';
-      else if (isMinorBlockedForMajor(code, p.primary)) actionHtml = `<span class="mn-pill">Not open to ${esc(p.primary)} majors</span>`;
-      else actionHtml = `<button type="button" class="mn-add-btn" data-action="minor-add" data-minor="${esc(code)}">Add to my minors</button>`;
+      if (mine) actionHtml = `<span class="mn-head-state is-mine">${this._iconCheck()}Your minor</span>`;
+      else if (isMinorBlockedForMajor(code, p.primary)) actionHtml = `<span class="mn-head-state">Not open to ${esc(p.primary)} majors</span>`;
+      else actionHtml = `<button type="button" class="mn-add-btn" data-action="minor-add" data-minor="${esc(code)}">${this._iconPlus()}Add to my minors</button>`;
     }
 
+    // Under the title: the official name when it says more than the title
+    // ("Minor in Psychology" does not) and the units.
     const meta = [];
-    if (def.title) meta.push(`<span>${esc(def.title)}</span>`);
+    const name = String(def.name || '').toLowerCase();
+    const official = String(def.title || '').trim();
+    if (official && ![`minor in ${name}`, `${name} minor`].includes(official.toLowerCase())) meta.push(`<span>${esc(official)}</span>`);
     if (def.total_units != null) meta.push(`<span>${esc(String(def.total_units))} units</span>`);
+    const metaHtml = meta.length ? `<div class="mn-meta">${meta.join('<span class="mn-dot" aria-hidden="true">·</span>')}</div>` : '';
     const version = def.version ? `<div class="mn-version">Version: ${esc(plainDataText(def.version))}</div>` : '';
 
     const dc = def.double_count || {};
@@ -6430,11 +6492,11 @@ const App = {
         otherMinors: others,
       });
       warnHtml = minorDoubleCountWarnings(check, def, majorCode)
-        .map(w => `<div class="mn-warn" role="note">${this._iconWarn()}<span>${esc(w)}</span></div>`).join('');
+        .map(w => `<div class="mn-warn" role="note">${this._iconWarn()}<span>${this._minorTextHtml(w)}</span></div>`).join('');
     }
 
     const group = (title, items) => (items && items.length
-      ? `<div class="mn-about-group"><div class="mn-about-title">${title}</div><ul>${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>`
+      ? `<div class="mn-about-group"><div class="mn-about-title">${title}</div><ul>${items.map(t => `<li>${this._minorTextHtml(t)}</li>`).join('')}</ul></div>`
       : '');
     const noCategories = !(m.tree.children || []).length;
     const aboutInner = (noCategories ? '' : group('Notes', def.notes))
@@ -6448,7 +6510,7 @@ const App = {
 
     let body = '';
     if (noCategories) {
-      body = (def.notes || []).map(t => `<p class="mn-note">${esc(t)}</p>`).join('')
+      body = (def.notes || []).map(t => `<p class="mn-note">${this._minorTextHtml(t)}</p>`).join('')
         || '<p class="mn-note">This minor has no fixed requirements.</p>';
     } else {
       const ctx = { minor: m, progress, statuses: student ? this._getCourseStatuses() : null };
@@ -6460,11 +6522,13 @@ const App = {
       <section class="mn-section${mine ? ' mn-section-mine' : ''}" id="${esc(sectionId)}" data-minor="${esc(code)}" aria-label="${esc(def.name)} minor">
         <header class="mn-head">
           <div class="mn-head-row">
-            <h3 class="mn-title">${esc(def.name)} minor</h3>
+            <div class="mn-head-main">
+              <h3 class="mn-title">${esc(def.name)} minor</h3>
+              ${metaHtml}
+              ${version}
+            </div>
             ${actionHtml}
           </div>
-          <div class="mn-meta">${meta.join('<span class="mn-dot" aria-hidden="true">·</span>')}</div>
-          ${version}
           ${progressHtml}
           ${dcHtml}
           ${warnHtml}

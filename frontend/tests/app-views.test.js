@@ -277,6 +277,12 @@ function loadMinorsApp(profile, extra = {}) {
 
 const treeHtml = document => document.getElementById('rightBody').innerHTML;
 const STUDENT = (primary, minors) => ({ role: 'student', primary, secondary: minors[0] || null, secondaries: minors, scope: null });
+// The Minors tab dropdown, and the minor codes it offers in order.
+const minorsPickerHtml = html => {
+  const start = html.indexOf('id="mnBrowsePick"');
+  return start < 0 ? '' : html.slice(start, html.indexOf('</select>', start));
+};
+const pickerValues = picker => [...picker.matchAll(/<option value="([^"]+)"/g)].map(m => m[1]);
 
 test('minors: a student sees each chosen minor after the major, with its limit and status controls', () => {
   const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology', 'math']));
@@ -319,7 +325,8 @@ test('minors: shared courses over the double counting limit show a warning', () 
   for (const code of ['15-112', '15-122', '15-150', '15-210']) App.setCourseStatus(code, 'completed');
   const html = treeHtml(document);
   assertTrue(html.includes('At most 2 courses may also count toward your major or another minor. Courses used for Prerequisites do not count toward this limit.'));
-  assertTrue(html.includes('3 courses you marked count toward this minor and toward your IS major or another minor (15-122, 15-150 and 15-210). At most 2 may.'));
+  assertTrue(html.replace(/<[^>]+>/g, '').includes('3 courses you marked count toward this minor and toward your IS major or another minor (15-122, 15-150 and 15-210). At most 2 may.'));
+  assertTrue(html.includes('<span class="mn-code">15-122</span>'), 'a course code is never split at its hyphen');
   assertTrue(html.includes('class="mn-warn"'));
 });
 
@@ -329,10 +336,15 @@ test('minors: the Minors tab lists every minor and shows the chosen one in full 
   assertTrue(tabs.includes('data-major="MINORS"') && tabs.includes('All 17 minors'));
   App.switchMajor('MINORS');
   let html = treeHtml(document);
-  assertEqual((html.match(/data-action="minor-browse"/g) || []).length, 17);
+  let picker = minorsPickerHtml(html);
+  assertEqual(pickerValues(picker).length, 17, 'every minor in the dropdown');
+  assertTrue(picker.includes('<option value="" selected disabled>Choose a minor</option>'), 'the placeholder');
+  assertFalse(picker.includes('<optgroup'), 'no groups without minors of your own');
   assertTrue(html.includes('Choose a minor to see its full requirements.'));
   App.browseMinor('neuroscience');
   html = treeHtml(document);
+  assertTrue(minorsPickerHtml(html).includes('<option value="neuroscience" selected>'), 'the dropdown shows the chosen minor');
+  assertFalse(minorsPickerHtml(html).includes('Choose a minor'), 'no placeholder once a minor is chosen');
   assertTrue(html.includes('id="mn-section-neuroscience"'));
   for (const name of ['Required Courses', 'Modern Biology', 'Neuroscience Core', 'Neurobiology Electives']) {
     assertTrue(html.includes(name), name);
@@ -348,7 +360,7 @@ test('minors: Product Management shows its catalog requirements and the catalog 
   App.renderTree();
   const html = treeHtml(document);
   assertTrue(html.includes('id="mn-section-product"') && html.includes('Product Management minor'));
-  assertTrue(html.includes('Minor in Product Management'));
+  assertFalse(html.includes('Minor in Product Management'), 'the official name only repeats the title');
   assertTrue(html.includes('Version: 2026-2027 Catalog'));
   for (const name of ['Required', 'Marketing I', 'Introduction to Product Management', 'Principles of Microeconomics',
     'Course in Design Thinking', 'Marketing Course']) {
@@ -368,7 +380,7 @@ test('minors: no minor shows a campus note; Product Management is not open to BA
     App.browseMinor(code);
     const html = treeHtml(document);
     assertTrue(html.includes(`id="mn-section-${code}"`), code);
-    assertFalse(/Pittsburgh version|Campus not stated|mn-pill-campus/i.test(html), code);
+    assertFalse(/Pittsburgh version|Campus not stated|mn-pill-campus|mn-campus/i.test(html), code);
   }
   const ba = loadMinorsApp(STUDENT('BA', []), { isGuest: true });
   ba.App._refreshSemesterOptions = () => {};
@@ -377,6 +389,27 @@ test('minors: no minor shows a campus note; Product Management is not open to BA
   ba.App.switchMajor('MINORS');
   ba.App.browseMinor('product');
   assertTrue(treeHtml(ba.document).includes('Not open to BA majors'));
+});
+
+test('minors: the Minors tab dropdown lists a student\'s own minors first; the header has the add button or says it is theirs', () => {
+  const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology', 'math']));
+  App.switchMajor('MINORS');
+  App.browseMinor('finance');
+  let html = treeHtml(document);
+  const picker = minorsPickerHtml(html);
+  const values = pickerValues(picker);
+  assertEqual(values.length, 17, 'every minor once');
+  assertEqual(values.slice(0, 2), ['math', 'psychology'], 'your minors first, by name');
+  assertTrue(picker.indexOf('<optgroup label="Your minors">') >= 0
+    && picker.indexOf('<optgroup label="Your minors">') < picker.indexOf('<optgroup label="Other minors">'));
+  assertTrue(html.includes('data-action="minor-add" data-minor="finance"'), 'Add to my minors');
+  assertFalse(/Pittsburgh version|mn-campus/.test(html), 'no campus note');
+  App.browseMinor('psychology');
+  html = treeHtml(document);
+  assertTrue(html.includes('Your minor</span>'));
+  assertFalse(html.includes('data-action="minor-add"'), 'no add button on your own minor');
+  assertTrue(html.includes('72 units'));
+  assertFalse(html.includes('Minor in Psychology'), 'the official name only repeats the title');
 });
 
 test('minors: a guest student adds and removes minors in the tree and keeps them across a view switch', () => {
