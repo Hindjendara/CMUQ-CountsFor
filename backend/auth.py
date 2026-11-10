@@ -168,11 +168,11 @@ def _create_user_with_password(email: str, name: str, password: str) -> User:
 
 
 # Minors a major may not declare: blocked_majors in frontend/data/minors.json
-# (the minor in the student's own field, and for BA also the two other Tepper
+# (the minor in the student's own field, and for BA also the three other Tepper
 # minors). MINOR_BLOCKED_MAJORS in frontend/js/profile.js holds the same rule.
 MAJOR_MINOR_COLLISION = {
     "CS": frozenset({"cs"}),
-    "BA": frozenset({"business", "business_analytics", "finance"}),
+    "BA": frozenset({"business", "business_analytics", "finance", "product"}),
     "BS": frozenset({"biology"}),
 }
 MINOR_BLOCKED_MESSAGE = "That minor is not open to students in your major."
@@ -578,8 +578,8 @@ VALID_PROGRAMS_FOR_PATCH = {"CS", "IS", "BA", "BS", "AI", "GS", "AS"}
 # The minors of frontend/data/minors.json (MINOR_LIST in frontend/js/profile.js).
 VALID_MINORS_FOR_PATCH = {
     "arabic", "biology", "business", "business_analytics", "comp_bio", "cs",
-    "economics", "finance", "history", "math", "neuroscience", "writing",
-    "psychology", "sociology", "self_defined", "tech_entre",
+    "economics", "finance", "history", "math", "neuroscience", "product",
+    "writing", "psychology", "sociology", "self_defined", "tech_entre",
 }
 VALID_ADVISOR_SCOPES = {"major", "minor", "arts_sciences", "all_programs"}
 

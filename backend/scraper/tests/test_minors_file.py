@@ -5,7 +5,14 @@ per minor). These tests keep it tied to them: every course code comes from the
 minor's own file (an old Psychology number appears as its current number), no
 listed code is lost, the number ranges are the file's ranges, every category has
 a rule, and no category lists a code twice.
+
+Product Management has no official file. It is built from its 2026-27 CMU catalog
+page, archived in backend/data/sources/catalog-2026-27/minors/, and the
+CATALOG_MINORS tests tie it to that page the same way: its category names, course
+lists, rules, footnote and double counting text are the page's, and nothing else.
 """
+import hashlib
+import html
 import json
 import re
 import sys
@@ -15,7 +22,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
-from pipeline_paths import BACKEND_DATA_DIR, FRONTEND_DATA_DIR  # noqa: E402
+from pipeline_paths import BACKEND_DATA_DIR, FRONTEND_DATA_DIR, ROOT  # noqa: E402
 
 MINORS_JSON = FRONTEND_DATA_DIR / "minors.json"
 OFFICIAL_DIR = BACKEND_DATA_DIR / "minors"
@@ -31,15 +38,27 @@ OLD_PSYCHOLOGY_NUMBERS = {
 
 EXPECTED_MINORS = {
     "arabic", "biology", "business", "business_analytics", "comp_bio", "cs",
-    "economics", "finance", "history", "math", "neuroscience", "writing",
+    "economics", "finance", "history", "math", "neuroscience", "product", "writing",
     "psychology", "sociology", "tech_entre", "self_defined",
+}
+# Minors with no official file, built from their archived 2026-27 catalog page
+# (source_file). The sha256 is of the bytes the catalog served on
+# 2026-11-10T12:22:53Z; the archive is frozen evidence and is never edited.
+CATALOG_MINORS = {
+    "product": {
+        "file": "backend/data/sources/catalog-2026-27/minors/product-management-minor.html",
+        "url": "https://coursecatalog.web.cmu.edu/schools-colleges/tepper/minors/product-management-minor/",
+        "sha256": "1138cd2723ef13e77b1d157d2fffc13c56bd56e222876ff02b5793488efe26dc",
+        "catalog_year": "2026-2027",
+    },
 }
 # No minor in the student's own major field (cs, biology, business), and the
 # 2026-27 catalog page of the Business Administration major also bars BA majors
-# from the Business Analytics and Optimization and Financial Management minors.
+# from the Business Analytics and Optimization, Financial Management and Product
+# Management minors.
 BLOCKED_MAJORS = {
     "cs": ["CS"], "biology": ["BS"], "business": ["BA"],
-    "business_analytics": ["BA"], "finance": ["BA"],
+    "business_analytics": ["BA"], "finance": ["BA"], "product": ["BA"],
 }
 MAJORS = {"CS", "IS", "BA", "BS", "AI", "GS"}
 RULE_TYPES = {"take_all", "required", "pick", "min_units", "max_units", "max_courses"}
@@ -50,7 +69,7 @@ DASH_RE = re.compile("[\u2012\u2013\u2014\u2015]")
 SPACED_HYPHEN_RE = re.compile(r"[A-Za-z0-9)]\s+-{1,2}\s+[A-Za-z0-9(]")
 
 MINOR_KEYS = {
-    "name", "title", "source_file", "version", "campus_note", "blocked_majors",
+    "name", "title", "source_file", "version", "blocked_majors",
     "total_units", "double_count", "grade_rules", "notes", "categories",
 }
 DOUBLE_COUNT_KEYS = {
@@ -79,7 +98,8 @@ def official(minor):
 
 
 def with_file(minors):
-    return {code: m for code, m in minors.items() if m["source_file"]}
+    """The minors built from an official file in backend/data/minors/."""
+    return {code: m for code, m in minors.items() if m["source_file"] and code not in CATALOG_MINORS}
 
 
 def walk_categories(categories, parent=None):
@@ -175,7 +195,7 @@ def all_strings(node):
 def test_file_shape(doc, minors):
     assert set(doc) == {"schema_version", "note", "minors"}
     assert doc["schema_version"] == 1
-    assert set(minors) == EXPECTED_MINORS  # product has no official file and is dropped
+    assert set(minors) == EXPECTED_MINORS
     for code, m in minors.items():
         assert set(m) == MINOR_KEYS, code
         assert set(m["double_count"]) == DOUBLE_COUNT_KEYS, code
@@ -192,6 +212,9 @@ def test_each_official_file_is_one_minor(minors):
     files = sorted(p.name for p in OFFICIAL_DIR.glob("cmu_minor_*.json"))
     assert sorted(m["source_file"] for m in with_file(minors).values()) == files
     for code, m in minors.items():
+        if code in CATALOG_MINORS:
+            assert m["source_file"] == CATALOG_MINORS[code]["file"], code
+            continue
         if not m["source_file"]:
             assert code == "self_defined"
             assert m["categories"] == [] and m["version"] is None
@@ -199,10 +222,6 @@ def test_each_official_file_is_one_minor(minors):
         info = official(m)["minor"]
         assert m["title"] == info["name"], code
         assert m["version"] == info["version"], code
-        campus = info.get("campus")
-        expected = None if campus in ("Doha", "Qatar") else {
-            None: "Campus not stated", "Pittsburgh": "Pittsburgh version"}[campus]
-        assert m["campus_note"] == expected, code
 
 
 def test_course_codes_come_from_the_minor_file(minors):
@@ -230,7 +249,7 @@ def test_old_psychology_numbers_appear_as_current_numbers(minors):
     for code, m in minors.items():
         codes = {c for cat in leaves(m) for c in cat["courses"] + (cat["select"] or {}).get("exclude", [])}
         assert not codes & set(OLD_PSYCHOLOGY_NUMBERS), code
-        if m["source_file"]:
+        if code in with_file(minors):
             listed, _ = official_codes(official(m))
             for old in listed & set(OLD_PSYCHOLOGY_NUMBERS):
                 assert OLD_PSYCHOLOGY_NUMBERS[old] in codes, (code, old)
@@ -383,7 +402,7 @@ def test_user_facing_text_has_no_dashes(minors):
     # version and double_count.text are verbatim source strings and are not checked.
     texts = []
     for code, m in minors.items():
-        texts += [m["name"], m["title"], m["campus_note"] or ""]
+        texts += [m["name"], m["title"]]
         texts += m["grade_rules"] + m["notes"] + m["double_count"]["notes"]
         for cat, _ in walk_categories(m["categories"]):
             texts += [cat["name"]] + cat["notes"]
@@ -391,3 +410,133 @@ def test_user_facing_text_has_no_dashes(minors):
         assert not DASH_RE.search(text), text
         assert not SPACED_HYPHEN_RE.search(text), text
         assert not re.search(r"\bQ\d+\b", text), text  # no review question ids
+
+
+def test_no_campus_notes(minors):
+    """Whether a course runs at CMU-Q comes from the Schedule of Classes, as for the
+    majors, so minors.json adds no note on which campus an official file was written
+    for (the version field keeps the file's own name)."""
+    for code, m in minors.items():
+        texts = [m["name"], m["title"]] + m["notes"] + m["grade_rules"] + m["double_count"]["notes"]
+        texts += [text for cat, _ in walk_categories(m["categories"]) for text in [cat["name"]] + cat["notes"]]
+        for text in texts:
+            assert not re.search(r"Pittsburgh version|campus not stated", text, re.I), (code, text)
+
+
+# ── Minors built from an archived catalog page (no official file) ──
+
+def _page_text(fragment):
+    """Visible text of an HTML fragment, entities decoded and white space collapsed."""
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", fragment))).strip()
+
+
+def catalog_page(code):
+    """The archived catalog page of a minor: {"title": the page heading, "text": the
+    page text, "sections": one per h5 heading of its requirements, in page order:
+    {"heading", "rows": one list per course row with its "or" rows, of
+    (code, title, starred), "footnotes", "paragraphs" (sections without courses)}}."""
+    page = (ROOT / CATALOG_MINORS[code]["file"]).read_bytes().decode("utf-8")
+    title = re.search(r'<h1 class="page-title">(.*?)</h1>', page, re.S)
+    body = re.search(r'<div id="textcontainer"[^>]*>(.*?)</div><!--end #textcontainer -->', page, re.S)
+    assert title and body, code
+    parts = re.split(r"<h5\b[^>]*>(.*?)</h5>", body[1], flags=re.S)
+    sections = []
+    for heading, content in zip(parts[1::2], parts[2::2]):
+        rows = []
+        for attrs, row in re.findall(r"<tr\b([^>]*)>(.*?)</tr>", content, re.S):
+            codes = re.findall(r'class="bubblelink code"[^>]*>(\d{2}-\d{3})</a>', row)
+            cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row, re.S)
+            assert len(codes) == 1 and len(cells) >= 2, (code, row)
+            entry = (codes[0], _page_text(re.sub(r"<sup>.*?</sup>", "", cells[1])), "<sup>*</sup>" in row)
+            if "orclass" in attrs:
+                rows[-1].append(entry)
+            else:
+                rows.append([entry])
+        sections.append({
+            "heading": _page_text(heading),
+            "rows": rows,
+            "footnotes": [_page_text(dd) for dd in re.findall(r"<dd>(.*?)</dd>", content, re.S)],
+            "paragraphs": [] if rows else [_page_text(p) for p in re.findall(r"<p\b[^>]*>(.*?)</p>", content, re.S)],
+        })
+    return {"title": _page_text(title[1]), "text": _page_text(page), "sections": sections}
+
+
+def catalog_categories(page):
+    """The categories the page defines, in the shape of category_shape(): a
+    "(choose one)" list is a pick 1 of its courses; "Required" takes every row,
+    each row a part named by its course title (pick 1 when it has "or" rows)."""
+    cats = []
+    for section in page["sections"]:
+        if not section["rows"]:
+            continue
+        heading = section["heading"]
+        name = re.sub(r"\s*\(choose one\)", "", heading).rstrip(":").strip()
+        codes = [[c for c, _, _ in row] for row in section["rows"]]
+        if "(choose one)" in heading:
+            cats.append({"name": name, "rule": ("pick", 1), "courses": sum(codes, []), "children": []})
+            continue
+        assert name == "Required", heading
+        cats.append({"name": name, "rule": ("take_all", None), "courses": [], "children": [
+            {"name": row[0][1], "rule": ("required", None) if len(row) == 1 else ("pick", 1),
+             "courses": row_codes, "children": []}
+            for row, row_codes in zip(section["rows"], codes)]})
+    return cats
+
+
+def category_shape(cat):
+    return {"name": cat["name"], "rule": (cat["rule"]["type"], cat["rule"]["n"]),
+            "courses": cat["courses"], "children": [category_shape(c) for c in cat["children"]]}
+
+
+def test_catalog_minor_pages_are_the_archived_bytes():
+    for code, src in CATALOG_MINORS.items():
+        data = (ROOT / src["file"]).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == src["sha256"], code
+        assert src["url"].startswith("https://coursecatalog.web.cmu.edu/"), code
+
+
+def test_catalog_minor_title_and_version_come_from_the_page(minors):
+    for code, src in CATALOG_MINORS.items():
+        m, page = minors[code], catalog_page(code)
+        assert page["title"] == f"{m['name']}, Minor", code
+        assert m["title"] == f"Minor in {m['name']}", code
+        assert m["version"] == f"{src['catalog_year']} Catalog", code
+        assert m["version"] in page["text"], code
+
+
+def test_catalog_minor_categories_are_the_page_lists(minors):
+    """Category names, course lists (in page order) and rules are the page's."""
+    for code in CATALOG_MINORS:
+        m, page = minors[code], catalog_page(code)
+        assert [category_shape(c) for c in m["categories"]] == catalog_categories(page), code
+        for cat, _ in walk_categories(m["categories"]):
+            assert cat["select"] is None and cat["rule"]["units"] is None, (code, cat["id"])
+
+
+def test_catalog_minor_states_only_what_the_page_states(minors):
+    """The page's footnotes are the notes of the rows they mark, word for word; it
+    states no unit total, grade rule or other note, so minors.json has none."""
+    for code in CATALOG_MINORS:
+        m, page = minors[code], catalog_page(code)
+        footnotes = [f for s in page["sections"] for f in s["footnotes"]]
+        starred = [row[0][1] for s in page["sections"] for row in s["rows"] if any(e[2] for e in row)]
+        assert len(footnotes) == len(starred) >= 1, code
+        notes = {cat["name"]: cat["notes"] for cat, _ in walk_categories(m["categories"])}
+        for name, footnote in zip(starred, footnotes):
+            assert notes[name] == [footnote], (code, name)
+        assert sorted(n for ns in notes.values() for n in ns) == sorted(footnotes), code
+        assert m["total_units"] is None and m["grade_rules"] == [] and m["notes"] == [], code
+
+
+def test_catalog_minor_double_counting_is_the_page_rule(minors):
+    words = {"one": 1, "two": 2, "three": 3}
+    for code in CATALOG_MINORS:
+        dc, page = minors[code]["double_count"], catalog_page(code)
+        [section] = [s for s in page["sections"] if s["heading"] == "Double-Counting"]
+        text = " ".join(section["paragraphs"])
+        assert dc["text"] == text, code
+        limit = re.search(r"only (\w+) minor courses? may double-count with any other major or minor", text)
+        assert dc["max_with_major"] == dc["max_with_other_minors"] == words[limit[1]], code
+        assert ("no double counting restrictions between the minor and the student's home college "
+                "general education requirements") in text and dc["gen_ed_exempt"] is True, code
+        assert dc["no_limit_categories"] == dc["no_sharing_categories"] == [] and dc["by_major"] == {}, code

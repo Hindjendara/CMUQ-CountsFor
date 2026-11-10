@@ -6326,8 +6326,8 @@ const App = {
   },
 
   /**
-   * One minor: a header (name, version, campus note, progress, the double
-   * counting limit, warnings and notes) and its categories as tree cards.
+   * One minor: a header (name, version, progress, the double counting limit,
+   * warnings and notes) and its categories as tree cards.
    * mode: 'student' in the student's own tree, 'browse' in the Minors tab.
    */
   _renderMinorSection(code, mode) {
@@ -6361,7 +6361,6 @@ const App = {
     const meta = [];
     if (def.title) meta.push(`<span>${esc(def.title)}</span>`);
     if (def.total_units != null) meta.push(`<span>${esc(String(def.total_units))} units</span>`);
-    if (def.campus_note) meta.push(`<span class="mn-pill mn-pill-campus">${esc(def.campus_note)}</span>`);
     const version = def.version ? `<div class="mn-version">Version: ${esc(plainDataText(def.version))}</div>` : '';
 
     const dc = def.double_count || {};
@@ -6370,10 +6369,13 @@ const App = {
     const ruleText = dc.text
       ? String(dc.text).split(' | ').map(t => plainDataText(t.trim())).filter(Boolean).map(withPeriod).join(' ')
       : '';
+    // The rule's own words: from the audit file, or from the catalog page for a
+    // minor built from one (Product Management).
+    const ruleLabel = minorSourceKind(def) === 'catalog' ? 'Catalog rule' : 'Audit rule';
     const dcHtml = `
       <div class="mn-dc">
         <div><span class="mn-dc-label">Double counting</span> ${esc(limitText)}</div>
-        ${ruleText ? `<div class="mn-dc-rule">Audit rule: ${esc(ruleText)}</div>` : ''}
+        ${ruleText ? `<div class="mn-dc-rule">${ruleLabel}: ${esc(ruleText)}</div>` : ''}
       </div>`;
 
     let warnHtml = '';
