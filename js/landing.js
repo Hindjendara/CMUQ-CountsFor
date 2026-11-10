@@ -1,72 +1,15 @@
 /**
- * CountsFor — Heritage Single landing (vanilla JS, no browser storage)
+ * CountsFor landing page (index.html): sign in, create account, forgot and
+ * reset password, and guest mode. Shares js/utils.js and js/api.js with the app.
  */
 (function () {
   'use strict';
 
   const APP_URL = 'app.html';
 
-  // Same resolution order as js/api.js: local override → localhost dev
-  // backend → committed production meta → fallback. Keeping localhost ahead
-  // of the meta means local dev never requires hand-editing index.html.
-  function getBackendUrl() {
-    try {
-      const override = (localStorage.getItem('cf_backend_override') || '').trim();
-      if (override) return override.replace(/\/$/, '');
-    } catch (e) { /* storage blocked — fall through */ }
-    const host = location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1' || host === '') {
-      // 5050, not 5000 — macOS AirPlay Receiver squats on 5000.
-      return 'http://localhost:5050';
-    }
-    const meta = document.querySelector('meta[name="cf-backend-url"]');
-    const fromMeta = (meta && meta.getAttribute('content') || '').trim();
-    if (fromMeta) return fromMeta.replace(/\/$/, '');
-    return 'https://countsfor-summer-26.onrender.com';
-  }
-
-  const BACKEND_URL = getBackendUrl();
-  const AUTH_TOKEN_KEY = 'cf_auth_token';
-
-  // Two buckets on purpose. localStorage survives a browser restart and backs the
-  // "Keep me signed in" opt-in; sessionStorage dies with the tab and is the default.
-  function getAuthToken() {
-    try {
-      return localStorage.getItem(AUTH_TOKEN_KEY)
-        || sessionStorage.getItem(AUTH_TOKEN_KEY)
-        || '';
-    } catch { return ''; }
-  }
-
-  // `persist` is only passed at sign-in time, from the checkbox. Later refreshes
-  // pass nothing and must not downgrade a remembered session to a tab-only one, so
-  // they write to whichever bucket already holds a token.
-  function saveAuthToken(token, persist) {
-    if (!token) return;
-    if (persist === true) {
-      try {
-        localStorage.setItem(AUTH_TOKEN_KEY, token);
-        sessionStorage.removeItem(AUTH_TOKEN_KEY);
-        return;
-      } catch { /* storage blocked — fall through to sessionStorage */ }
-    } else if (persist === false) {
-      try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
-    } else {
-      try {
-        if (localStorage.getItem(AUTH_TOKEN_KEY)) {
-          localStorage.setItem(AUTH_TOKEN_KEY, token);
-          return;
-        }
-      } catch {}
-    }
-    try { sessionStorage.setItem(AUTH_TOKEN_KEY, token); } catch {}
-  }
-
-  // Must clear BOTH, or signing out leaves a 30-day token behind.
-  function clearAuthToken() {
-    try { sessionStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
-    try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
-  }
+  // Backend URL, auth token storage, apiFetch and the api* calls come from
+  // js/api.js; esc, showToast and the CMU email check (normalizeCmuEmail,
+  // isCmuEmail) come from js/utils.js. index.html loads both before this file.
 
   // Reads the checkbox rendered in the sign-in panel.
   function wantsPersistentSession() {
@@ -74,90 +17,12 @@
     return !!(box && box.checked);
   }
 
-  function getGoogleClientId() {
-    const meta = document.querySelector('meta[name="cf-google-client-id"]');
-    return (meta && meta.getAttribute('content') || '').trim();
-  }
-
-  async function apiFetch(path, opts) {
-    const url = BACKEND_URL + path;
-    const init = {
-      method: (opts && opts.method) || 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    };
-    // Cap the wait at a full Render cold start so a sleeping backend
-    // surfaces as status 0 instead of hanging forever.
-    const timeoutMs = (opts && opts.timeoutMs) || 75000;
-    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
-      init.signal = AbortSignal.timeout(timeoutMs);
-    }
-    const authToken = getAuthToken();
-    if (authToken) init.headers['Authorization'] = 'Bearer ' + authToken;
-    if (opts && opts.body !== undefined) {
-      init.headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(opts.body);
-    }
-    try {
-      const res = await fetch(url, init);
-      if (state.backendUnreachable) {
-        state.backendUnreachable = false;
-        setBackendAlert('');
-      }
-      let data = null;
-      if (res.status !== 204) {
-        try {
-          data = await res.json();
-        } catch {
-          data = null;
-        }
-      }
-      if (data && data.auth_token) saveAuthToken(data.auth_token);
-      return {
-        ok: res.ok,
-        status: res.status,
-        data,
-        message: (data && data.message) || null,
-      };
-    } catch (e) {
-      const timedOut = e && (e.name === 'TimeoutError' || e.name === 'AbortError');
-      return {
-        ok: false,
-        status: 0,
-        data: null,
-        message: timedOut ? 'The server took too long to respond.' : e.message,
-      };
-    }
-  }
-
-  function apiGetMe() {
-    return apiFetch('/api/me');
-  }
-  function apiLogin(body) {
-    return apiFetch('/api/auth/login', { method: 'POST', body });
-  }
-  function apiRegister(body) {
-    return apiFetch('/api/auth/register', { method: 'POST', body });
-  }
-  function apiForgotPassword(email) {
-    return apiFetch('/api/auth/forgot-password', { method: 'POST', body: { email } });
-  }
-  function apiResetPassword(body) {
-    return apiFetch('/api/auth/reset-password', { method: 'POST', body });
-  }
-  function apiGoogle(credential) {
-    return apiFetch('/api/auth/google', { method: 'POST', body: { credential } });
-  }
-  function apiSetPassword(password) {
-    return apiFetch('/api/auth/set-password', { method: 'POST', body: { password } });
-  }
-
-  function esc(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  // Any answer from the server (status other than 0) proves the backend is up,
+  // so drop a stale "could not reach the server" banner. Wraps every api.js call here.
+  async function reach(promise) {
+    const r = await promise;
+    if (r && r.status !== 0 && state.backendUnreachable) clearBackendAlert();
+    return r;
   }
 
   const state = {
@@ -174,7 +39,7 @@
 
   function authErrorMessage(r, fallback) {
     if (isNetworkError(r)) {
-      return 'Could not reach the server — it may be waking up. Try again in ~30s.';
+      return 'Could not reach the server. Try again in a moment.';
     }
     return (r.data && r.data.message) || fallback;
   }
@@ -185,25 +50,6 @@
     setFormError('');
     renderPanel({ focus: false });
     return true;
-  }
-
-  function normalizeCmuEmailLocal(raw) {
-    if (typeof normalizeCmuEmail === 'function') return normalizeCmuEmail(raw);
-    const e = (raw || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+$/.test(e)) return null;
-    const local = e.split('@')[0];
-    const domain = e.split('@')[1];
-    if (domain === 'cmu.edu' || domain === 'qatar.cmu.edu') return local + '@andrew.cmu.edu';
-    if (domain === 'andrew.cmu.edu') return e;
-    return null;
-  }
-
-  function isCmuEmail(raw) {
-    return normalizeCmuEmailLocal(raw) !== null;
-  }
-
-  function isAndrewEmail(raw) {
-    return isCmuEmail(raw);
   }
 
   function setFieldMsg(inputId, msgId, text, kind) {
@@ -276,11 +122,9 @@
     }
   }
 
-  let wakeTimer = null;
   function setLoading(loading, idleLabel) {
     const btn = document.getElementById('cfAuthSubmit');
     if (!btn) return;
-    window.clearTimeout(wakeTimer);
     btn.classList.toggle('is-loading', loading);
     if (loading) {
       btn.disabled = true;
@@ -288,14 +132,6 @@
         '<span class="landing-submit-spinner" aria-hidden="true"></span><span>' +
         idleLabel.replace(' →', '…') +
         '</span>';
-      // A slow response usually means the free-tier backend is cold-starting —
-      // say so instead of looking frozen.
-      wakeTimer = window.setTimeout(function () {
-        const label = btn.querySelector('span:last-child');
-        if (label && btn.classList.contains('is-loading')) {
-          label.textContent = 'Waking up the server…';
-        }
-      }, 4000);
     } else {
       btn.textContent = idleLabel;
       updateSubmitState(state.view);
@@ -310,14 +146,14 @@
     if (view === 'signin') {
       const email = (document.getElementById('cfLoginEmail')?.value || '').trim();
       const pass = document.getElementById('cfLoginPass')?.value || '';
-      const emailOk = isAndrewEmail(email);
+      const emailOk = isCmuEmail(email);
       ready = emailOk && pass.length > 0;
       if (email && !emailOk) validateAndrewField('cfLoginEmail', 'cfLoginEmailMsg');
     } else if (view === 'register') {
       const email = (document.getElementById('cfRegEmail')?.value || '').trim();
       const pass = document.getElementById('cfRegPass')?.value || '';
       const confirm = document.getElementById('cfRegPass2')?.value || '';
-      const emailOk = isAndrewEmail(email);
+      const emailOk = isCmuEmail(email);
       const passOk = pass.length >= 8;
       const matchOk = passOk && confirm.length > 0 && pass === confirm;
       ready = emailOk && passOk && matchOk;
@@ -325,7 +161,7 @@
       if (confirm) validatePasswordMatch('cfRegPass', 'cfRegPass2', 'cfRegPass2Msg');
     } else if (view === 'forgot') {
       const email = (document.getElementById('cfForgotEmail')?.value || '').trim();
-      ready = isAndrewEmail(email);
+      ready = isCmuEmail(email);
     } else if (view === 'reset') {
       const pass = document.getElementById('cfResetPass')?.value || '';
       const confirm = document.getElementById('cfResetPass2')?.value || '';
@@ -368,7 +204,7 @@
       el.addEventListener('input', function () {
         if (id === 'cfLoginEmail' || id === 'cfRegEmail' || id === 'cfForgotEmail') {
           const val = (el.value || '').trim();
-          if (isAndrewEmail(val)) clearFieldMsg(id, id + 'Msg');
+          if (isCmuEmail(val)) clearFieldMsg(id, id + 'Msg');
         }
         if (id === 'cfRegPass' || id === 'cfResetPass') {
           const val = el.value || '';
@@ -525,18 +361,19 @@
   // probe, and every failed submit, so the user never sees two different
   // descriptions of the same outage.
   //
-  // The wording names the consequence (accounts are unavailable) rather than the
-  // mechanism, and points at guest mode, which needs no server and covers the whole
-  // catalog. Leaving a working-looking sign-in form on screen during an outage just
-  // makes people retype passwords that were never wrong.
+  // The wording is plain (the server could not be reached) and points at guest
+  // mode, which needs no server and covers the whole catalog. Leaving a
+  // working-looking sign-in form on screen during an outage just makes people
+  // retype passwords that were never wrong.
   const ACCOUNTS_UNAVAILABLE_MSG =
-    'Accounts are unavailable right now. The server may be waking up, so try again in about 30 seconds, or browse everything as a guest.';
+    'Could not reach the server. Try again in a moment, or browse everything as a guest.';
   const UNREACHABLE_MSG = ACCOUNTS_UNAVAILABLE_MSG;
   const SLOW_MSG =
-    'The server took too long to respond. Try again in about 30 seconds, or browse everything as a guest.';
+    'The server took too long to respond. Try again in a moment, or browse everything as a guest.';
 
   // status 0 means the request never completed: connection refused, DNS, a CORS
-  // rejection, or the abort timeout. It carries no information about the
+  // rejection, the abort timeout, or a gateway error from the reverse proxy
+  // (apiFetch maps those to 0). It carries no information about the
   // credentials, so it must never be reported as a bad password.
   function isUnreachable(r) {
     return !r || r.status === 0;
@@ -559,15 +396,6 @@
   function clearBackendAlert() {
     state.backendUnreachable = false;
     setBackendAlert('');
-  }
-
-  // Called between the first attempt and the retry: the button is still in its
-  // loading state, so relabel it instead of leaving it looking frozen.
-  function showWakingLabel() {
-    const btn = document.getElementById('cfAuthSubmit');
-    if (!btn || !btn.classList.contains('is-loading')) return;
-    const label = btn.querySelector('span:last-child');
-    if (label) label.textContent = 'Waking up the server…';
   }
 
   function setBackendAlert(message, opts) {
@@ -629,7 +457,7 @@
         passwordField('cfRegPass2', 'Confirm password', { autocomplete: 'new-password' }) +
         '</div>' +
         '<div class="landing-form-actions">' +
-        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Create account →</button>' +
+        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Create account</button>' +
         '</div>' +
         '</form>' +
         '</div>',
@@ -706,7 +534,7 @@
         '<button type="button" class="landing-link-btn" data-view="forgot">Forgot password?</button>' +
         '</div>' +
         '<div class="landing-form-actions">' +
-        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Sign in →</button>' +
+        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Sign in</button>' +
         '</div>' +
         '</form>' +
         '</div>',
@@ -759,24 +587,21 @@
     renderPanel({ focus: false });
   }
 
-  function showToast(message) {
-    let toast = document.getElementById('landingToast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'landingToast';
-      toast.className = 'landing-toast';
-      toast.setAttribute('role', 'status');
-      document.body.appendChild(toast);
-    }
-    toast.textContent = message;
-    toast.hidden = false;
-    window.clearTimeout(showToast._timer);
-    showToast._timer = window.setTimeout(function () {
-      toast.hidden = true;
-    }, 4500);
-  }
-
   function goToApp() {
+    const params = new URLSearchParams(location.search);
+    const sharePlan = params.get('share_plan') || '';
+    if (sharePlan) {
+      location.href = APP_URL + '?share_plan=' + encodeURIComponent(sharePlan);
+      return;
+    }
+    try {
+      const stored = sessionStorage.getItem('cf_pending_share_plan');
+      if (stored) {
+        sessionStorage.removeItem('cf_pending_share_plan');
+        location.href = APP_URL + '?share_plan=' + encodeURIComponent(stored);
+        return;
+      }
+    } catch (e) { /* storage blocked */ }
     location.href = APP_URL;
   }
 
@@ -792,17 +617,10 @@
     }
     // Read the checkbox before any await, while the panel is still on screen.
     const persist = wantsPersistentSession();
-    setLoading(true, 'Sign in →');
-    const body = { email: normalizeCmuEmailLocal(email) || email, password };
-    let r = await apiLogin(body);
-    // A cold free-tier backend often drops the first request and answers the
-    // second. Retry exactly once so a real cold start becomes a slow success,
-    // while a genuinely dead server still fails in bounded time.
-    if (isUnreachable(r)) {
-      showWakingLabel();
-      r = await apiLogin(body);
-    }
-    setLoading(false, 'Sign in →');
+    setLoading(true, 'Sign in');
+    const body = { email: normalizeCmuEmail(email) || email, password };
+    const r = await reach(apiLogin(body));
+    setLoading(false, 'Sign in');
     if (isUnreachable(r)) {
       showUnreachable(r);
       updateSubmitState('signin');
@@ -831,7 +649,7 @@
     // Re-save with the explicit choice: apiFetch already stashed the token in the
     // tab-only bucket, so this promotes it to localStorage when the box was ticked.
     if (r.data && r.data.auth_token) saveAuthToken(r.data.auth_token, persist);
-    const me = await apiGetMe();
+    const me = await reach(apiGetMe());
     if (!me.ok) {
       clearAuthToken();
       setFormError('Sign-in succeeded but could not start a session. Try again.');
@@ -853,19 +671,15 @@
       return;
     }
     if (!validatePasswordMatch('cfRegPass', 'cfRegPass2', 'cfRegPass2Msg')) return;
-    setLoading(true, 'Create account →');
+    setLoading(true, 'Create account');
     const regBody = {
-      email: normalizeCmuEmailLocal(email) || email,
+      email: normalizeCmuEmail(email) || email,
       password,
       confirm_password: confirm,
       name: name || undefined,
     };
-    let r = await apiRegister(regBody);
-    if (isUnreachable(r)) {
-      showWakingLabel();
-      r = await apiRegister(regBody);
-    }
-    setLoading(false, 'Create account →');
+    const r = await reach(apiRegister(regBody));
+    setLoading(false, 'Create account');
     if (isUnreachable(r)) {
       showUnreachable(r);
       updateSubmitState('register');
@@ -887,7 +701,7 @@
       return;
     }
     if (r.data && r.data.auth_token) saveAuthToken(r.data.auth_token);
-    const me = await apiGetMe();
+    const me = await reach(apiGetMe());
     if (!me.ok) {
       clearAuthToken();
       setFormError('Account created but sign-in could not be verified. Try signing in.');
@@ -939,7 +753,7 @@
       return;
     }
     setFormError('');
-    const r = await apiGoogle(response.credential);
+    const r = await reach(apiSignInWithGoogle(response.credential));
     if (!r.ok) {
       if (handleAuthNetworkFailure(r)) return;
       setFormError(authErrorMessage(r, 'Google sign-in failed. Use your @andrew.cmu.edu account.'));
@@ -957,7 +771,7 @@
     const email = (document.getElementById('cfForgotEmail')?.value || '').trim();
     if (!validateAndrewField('cfForgotEmail', 'cfForgotEmailMsg')) return;
     setLoading(true, 'Send reset link →');
-    const r = await apiForgotPassword(normalizeCmuEmailLocal(email) || email);
+    const r = await reach(apiForgotPassword(normalizeCmuEmail(email) || email));
     setLoading(false, 'Send reset link →');
     if (!r.ok) {
       if (handleAuthNetworkFailure(r)) {
@@ -983,8 +797,10 @@
       return;
     }
     const msg = (r.data && r.data.message) || 'If an account exists for that email, a reset link has been sent.';
-    const body = document.getElementById('cfForgotBody');
-    if (body) {
+    const form = document.getElementById('cfAuthForm');
+    if (form) form.hidden = true;
+    const box = document.getElementById('cfResetLinkBox');
+    if (box) {
       let extra = '';
       if (r.data && r.data.reset_url) {
         extra = '<a class="landing-reset-link" href="' + esc(r.data.reset_url) + '">Reset my password →</a>';
@@ -998,7 +814,8 @@
         extra = '<a class="landing-reset-link" href="' + esc(url) + '">Reset my password →</a>';
         state.resetToken = r.data.reset_token;
       }
-      body.innerHTML = '<p class="landing-reset-msg">' + esc(msg) + '</p>' + extra;
+      box.hidden = false;
+      box.innerHTML = '<p class="landing-reset-msg">' + esc(msg) + '</p>' + extra;
     }
   }
 
@@ -1016,8 +833,8 @@
     // Recovery via Google: the user is already authenticated, so set the
     // password directly. The email-link path uses the one-time token.
     const r = state.recovered
-      ? await apiSetPassword(password)
-      : await apiResetPassword({ token: state.resetToken, password });
+      ? await reach(apiSetPassword(password))
+      : await reach(apiResetPassword({ token: state.resetToken, password }));
     setLoading(false, 'Update password →');
     if (!r.ok) {
       if (handleAuthNetworkFailure(r)) {
@@ -1030,11 +847,11 @@
     }
     if (state.recovered) {
       // Already signed in via Google — go straight into the app.
-      showToast('Password set. Taking you in…');
+      showToast('Password set. Taking you in…', 4500);
       goToApp();
       return;
     }
-    showToast('Password updated. Sign in with your new password.');
+    showToast('Password updated. Sign in with your new password.', 4500);
     state.view = 'signin';
     state.resetToken = '';
     state.resetEmail = '';
@@ -1051,18 +868,20 @@
     return onLogin(event);
   }
 
+  // True when redirecting to the app would throw away text the user typed in
+  // the card. Only typed text counts (hasTypedText in utils.js): the "Keep me
+  // signed in" checkbox always has the value "on", and ticking it loses nothing
+  // when the session is already valid.
   function userIsEngaged() {
     const card = document.getElementById('landingCard');
     if (!card) return false;
-    return Array.prototype.some.call(card.querySelectorAll('input'), function (i) {
-      return (i.value || '').length > 0;
-    });
+    return hasTypedText(card.querySelectorAll('input, textarea'));
   }
 
   // Runs in the background after the panel is already on screen; must never
   // re-render the panel (that would wipe anything the user has typed).
   async function probeSession() {
-    const me = await apiGetMe();
+    const me = await reach(apiGetMe());
     if (me.ok) {
       if (!userIsEngaged()) {
         goToApp();
@@ -1087,6 +906,10 @@
     if (guestBtn) guestBtn.addEventListener('click', enterGuestMode);
 
     const params = new URLSearchParams(location.search);
+    const sharePlan = params.get('share_plan') || '';
+    if (sharePlan) {
+      try { sessionStorage.setItem('cf_pending_share_plan', sharePlan); } catch (e) { /* storage blocked */ }
+    }
     const resetTok = params.get('token') || params.get('reset') || '';
     if (resetTok) {
       state.resetToken = resetTok;

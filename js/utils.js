@@ -2,7 +2,12 @@
 // CountsFor — Utilities
 // ============================================================
 
-/** Match backend normalize_cmu_email — always send @andrew.cmu.edu to the API. */
+/**
+ * The one CMU email check on the frontend; it mirrors backend/cmu.py
+ * normalize_cmu_email. Accepts name@andrew.cmu.edu, name@cmu.edu and
+ * name@qatar.cmu.edu (any case, surrounding spaces ignored) and returns the
+ * canonical name@andrew.cmu.edu the API expects, or null for anything else.
+ */
 function normalizeCmuEmail(raw) {
   const e = (raw || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+$/.test(e)) return null;
@@ -14,6 +19,10 @@ function normalizeCmuEmail(raw) {
   }
   if (domain === 'andrew.cmu.edu') return e;
   return null;
+}
+
+function isCmuEmail(raw) {
+  return normalizeCmuEmail(raw) !== null;
 }
 
 function debounce(fn, ms = 250) {
@@ -35,14 +44,44 @@ function saveStore(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
+// Input types whose value is text the user types. A checkbox or radio is not
+// one of them: its .value is the fixed submit value ("on" by default), set
+// whether or not it is ticked.
+const TYPED_INPUT_TYPES = ['text', 'email', 'password', 'search', 'tel', 'url', 'number'];
+
+/**
+ * True when any of the given form fields holds text the user typed (a text
+ * like <input> or a <textarea> with a non-empty value). Checkboxes, radios,
+ * hidden and button inputs never count. Used by the landing page to decide
+ * whether redirecting a signed-in visitor would throw away what they typed.
+ */
+function hasTypedText(fields) {
+  return Array.prototype.some.call(fields || [], function (f) {
+    if (!f) return false;
+    const tag = String(f.tagName || '').toLowerCase();
+    if (tag !== 'textarea') {
+      const type = String(f.type || (f.getAttribute && f.getAttribute('type')) || 'text').toLowerCase();
+      if (TYPED_INPUT_TYPES.indexOf(type) === -1) return false;
+    }
+    return String(f.value || '').length > 0;
+  });
+}
+
+// Shared by the landing page and the app; each page's stylesheet styles .toast.
 let _toastTimer;
-function showToast(msg) {
+function showToast(msg, ms = 2200) {
   let el = document.getElementById('toast');
-  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; document.body.appendChild(el); }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
   el.textContent = msg;
   el.classList.add('visible');
   clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.remove('visible'), 2200);
+  _toastTimer = setTimeout(() => el.classList.remove('visible'), ms);
 }
 
 function formatPrereq(text) {

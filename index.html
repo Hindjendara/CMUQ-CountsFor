@@ -5,30 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="CountsFor: see every CMU-Q course and exactly which major and General Education requirements it satisfies." />
   <meta name="theme-color" content="#C41230" />
-  <meta name="cf-backend-url" content="https://countsfor-summer-26.onrender.com" />
-  <link rel="preconnect" href="https://countsfor-summer-26.onrender.com" crossorigin />
-  <script>
-    // Wake the free-tier backend as early as possible (fire-and-forget).
-    (function () {
-      var h = location.hostname;
-      if (h === 'localhost' || h === '127.0.0.1' || h === '') return; // local dev uses localhost:5050
-      var meta = document.querySelector('meta[name="cf-backend-url"]');
-      var url = meta && meta.getAttribute('content');
-      if (url) fetch(url.replace(/\/$/, '') + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
-    })();
-  </script>
+  <!-- The API is called on this page's own origin (/api/..., see js/api.js). -->
   <meta name="cf-google-client-id" content="378923997481-bgnvhg3gsgka5ptijjjsb80q4k7kc2vg.apps.googleusercontent.com" />
   <!-- Google Identity Services — used on the landing for Google-based password recovery. -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <title>CountsFor: CMU-Q Curriculum Explorer</title>
-  <link rel="icon" type="image/png" href="docs/scotty-portrait.png" />
-  <link rel="apple-touch-icon" href="docs/scotty-portrait.png" />
+  <link rel="icon" type="image/png" href="assets/img/scotty-portrait.png" />
+  <link rel="apple-touch-icon" href="assets/img/scotty-portrait.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/landing.css?v=scroll-fix-v1" />
+  <link rel="stylesheet" href="css/landing.css?v=deploy-2026-11-10" />
   <style>
-    /* Critical layout — keeps GH Pages sizing correct even if the stylesheet is cached late */
+    /* Critical layout: keeps the landing page sized correctly even if css/landing.css loads late or from a stale cache */
     html, body { margin: 0; min-height: 100%; overflow-x: hidden; }
     body { overflow-y: auto; }
     .auth-shell {
@@ -63,10 +52,10 @@
         decoding="async"
       />
       <div class="landing-brand__rule" aria-hidden="true"></div>
-      <p class="landing-brand__eyebrow">CMU-Q CURRICULUM EXPLORER</p>
+      <p class="landing-brand__eyebrow">CMU CURRICULUM EXPLORER</p>
       <h1 class="landing-brand__wordmark">CountsFor</h1>
       <p class="landing-brand__tagline">
-        Explore courses at CMU-Q and what they count for.
+        Explore courses at CMU and what they count for.
       </p>
     </header>
 
@@ -80,8 +69,8 @@
       </li>
       <li class="landing-intro__step">
         <span class="landing-intro__num" aria-hidden="true">2</span>
-        <strong class="landing-intro__title">See what it counts for</strong>
-        <span class="landing-intro__detail">Every major requirement and General Education category it fulfills, side by side.</span>
+        <strong class="landing-intro__title">See what it counts for:</strong>
+        <span class="landing-intro__detail">View every major requirement and General Education category it fulfills, side by side.</span>
       </li>
       <li class="landing-intro__step">
         <span class="landing-intro__num" aria-hidden="true">3</span>
@@ -95,11 +84,12 @@
     </main>
 
     <div class="landing-guest-row">
-      <button type="button" id="cfGuestBtn" class="landing-guest">Continue as guest →</button>
-      <p class="landing-guest-note">Browse every course and requirement. Nothing is saved to a server.</p>
+      <button type="button" id="cfGuestBtn" class="landing-guest">Continue as guest</button>
+      <p class="landing-guest-note">Browse every course and requirement.</p>
     </div>
   </div>
-  <script src="js/utils.js"></script>
-  <script src="js/landing.js?v=2026-07-27"></script>
+  <script src="js/utils.js?v=deploy-2026-11-10"></script>
+  <script src="js/api.js?v=deploy-2026-11-10"></script>
+  <script src="js/landing.js?v=deploy-2026-11-10"></script>
 </body>
 </html>

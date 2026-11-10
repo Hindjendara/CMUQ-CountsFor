@@ -1,14 +1,12 @@
 // ============================================================
 // CountsFor — API Client
-// Priority order:
-//   1. Live CMU-Q API (when deployed / connected)
-//   2. GitHub raw data (open-cmuq/CountsFor)
-//   3. Bundled local JSON (always available in dev)
+// Course data comes only from the catalog bundled with the frontend
+// (data/courses.json, refreshed by the scraper); minor requirements come
+// from data/minors.json, built by hand from the official minor files.
 // ============================================================
 
-const API_BASE = 'https://countsfor.qatar.cmu.edu/api';
-const GITHUB_RAW = 'https://raw.githubusercontent.com/open-cmuq/CountsFor/main/backend/data';
 const LOCAL_DATA = 'data/courses.json';
+const MINORS_DATA = 'data/minors.json';
 
 function _bundledDataUrl(path) {
   const meta = typeof document !== 'undefined'
@@ -27,118 +25,68 @@ async function _get(url) {
     if (Date.now() - c.ts < CACHE_TTL) return c.data;
   }
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   const data = await res.json();
   _cache.set(url, { data, ts: Date.now() });
   return data;
 }
 
-// ── Merge courses from multiple JSON files from GitHub ───────
-// The GitHub repo stores data as separate JSON files per major
-// (courses.json, requirements.json, etc.). We try to fetch
-// courses.json at the repo root first, then fall back to
-// a known pattern.
-async function _fetchFromGitHub() {
-  // Try known GitHub paths
-  const candidates = [
-    `${GITHUB_RAW}/courses.json`,
-    `${GITHUB_RAW}/all_courses.json`,
-    `https://raw.githubusercontent.com/open-cmuq/CountsFor/main/data/courses.json`,
-    `https://raw.githubusercontent.com/open-cmuq/CountsFor/main/courses.json`,
-  ];
-  for (const url of candidates) {
-    try {
-      const data = await _get(url);
-      const courses = data.courses || data;
-      if (Array.isArray(courses) && courses.length > 0) {
-        console.log(`[API] Loaded ${courses.length} courses from GitHub: ${url}`);
-        return courses;
-      }
-    } catch { /* try next */ }
+// ── Main exported function ───────────────────────────────────
+// Throws when the catalog cannot be loaded; App.loadData() catches it and
+// shows the "Failed to load data" message.
+async function fetchAllCourses() {
+  let data;
+  try {
+    data = await _get(_bundledDataUrl(LOCAL_DATA));
+  } catch (e) {
+    throw new Error(`Could not load ${LOCAL_DATA} (${e.message})`);
   }
-  throw new Error('No valid course data found on GitHub');
+  const courses = (data && data.courses) || [];
+  if (courses.length === 0) throw new Error(`${LOCAL_DATA} has no courses.`);
+  return courses;
 }
 
-// ── Main exported function ───────────────────────────────────
-async function fetchAllCourses() {
-  // 1. Bundled data first — it ships with every deploy (kept fresh by the
-  //    scrape workflow), so nobody waits on a remote fetch failing.
+// The minor requirements (data/minors.json). Throws when the file cannot be
+// loaded or has no minors; App._prepareCatalog() catches it and the app runs
+// without minor requirements (each minor section then says so).
+async function fetchMinors() {
+  let data;
   try {
-    const data = await _get(_bundledDataUrl(LOCAL_DATA));
-    const courses = data.courses || [];
-    if (courses.length > 0) {
-      console.log(`[API] ✓ Local data — ${courses.length} courses`);
-      return courses;
-    }
+    data = await _get(_bundledDataUrl(MINORS_DATA));
   } catch (e) {
-    console.warn('[API] Local data failed:', e.message);
+    throw new Error(`Could not load ${MINORS_DATA} (${e.message})`);
   }
-
-  // 2. Live CMU-Q API (future hosting migration path)
-  try {
-    const data = await _get(`${API_BASE}/courses/search?searchQuery=`);
-    const courses = data.courses || [];
-    if (courses.length > 0) {
-      console.log(`[API] ✓ Live API — ${courses.length} courses`);
-      return courses;
-    }
-  } catch (e) {
-    console.warn('[API] Live API failed:', e.message);
+  if (!data || !data.minors || typeof data.minors !== 'object' || !Object.keys(data.minors).length) {
+    throw new Error(`${MINORS_DATA} has no minors.`);
   }
-
-  // 3. Last resort: GitHub raw
-  try {
-    return await _fetchFromGitHub();
-  } catch (e) {
-    console.error('[API] GitHub failed:', e.message);
-  }
-
-  throw new Error('Could not load course data from any source (local file, API, or GitHub).');
+  return data;
 }
 
 // ============================================================
 // CountsFor Backend client — auth, flags, wishlist
 // ============================================================
-// The Python backend lives in /backend (see docs/BACKEND_API_CONTRACT.md).
-// Dev: http://localhost:5000 ; production: a Render URL set below once
-// deployed. Override at runtime by setting window.CF_BACKEND_URL before
-// app.js loads.
+// The Flask API lives in backend/ (routes are listed in README.md, section 10).
+// Pages call it on their own origin, so apiFetch('/api/...') is a relative URL:
+//   production: Apache serves frontend/ and proxies /api to gunicorn;
+//   local dev:  scripts/dev_server.py serves frontend/ and proxies /api and
+//               /health to the Flask dev server on 127.0.0.1:5050.
+// Loaded by both index.html (landing.js) and app.html (app.js).
 
-// Backend URL resolution, in priority order:
-//   1. localStorage 'cf_backend_override' — manual escape hatch for odd setups
-//      (e.g. localhost frontend against the production backend)
-//   2. window.CF_BACKEND_URL — set before this script loads
-//   3. localhost/127.0.0.1 hostname — local Flask dev server on :5000, so the
-//      committed production meta never needs hand-editing for local dev
-//   4. <meta name="cf-backend-url"> — the deployed production URL
-//   5. hardcoded fallback
+// Backend base URL, in priority order:
+//   1. localStorage 'cf_backend_override': debugging escape hatch, e.g. a local
+//      page against another backend (whose FRONTEND_ORIGIN must then allow this
+//      page's origin for CORS)
+//   2. window.CF_BACKEND_URL, if set before this script loads
+//   3. '' (same origin): the normal case, in production and in local dev
 function getBackendUrl() {
   try {
     const override = (localStorage.getItem('cf_backend_override') || '').trim();
     if (override) return override.replace(/\/$/, '');
-  } catch (e) { /* storage blocked — fall through */ }
+  } catch (e) { /* storage blocked: fall through */ }
   if (typeof window !== 'undefined' && window.CF_BACKEND_URL) {
     return String(window.CF_BACKEND_URL).replace(/\/$/, '');
   }
-  const host = (typeof location !== 'undefined' ? location.hostname : '');
-  if (host === 'localhost' || host === '127.0.0.1' || host === '') {
-    // 5050, not 5000 — macOS AirPlay Receiver squats on 5000.
-    return 'http://localhost:5050';
-  }
-  const meta = typeof document !== 'undefined'
-    ? document.querySelector('meta[name="cf-backend-url"]')
-    : null;
-  const fromMeta = (meta && meta.getAttribute('content') || '').trim();
-  if (fromMeta) return fromMeta.replace(/\/$/, '');
-  return 'https://countsfor-summer-26.onrender.com';
-}
-
-/** True when index.html sets a production backend URL (not demo-only GH Pages). */
-function isBackendConfigured() {
-  const meta = typeof document !== 'undefined'
-    ? document.querySelector('meta[name="cf-backend-url"]')
-    : null;
-  return !!(meta && (meta.getAttribute('content') || '').trim());
+  return '';
 }
 
 const CF_BACKEND_URL = getBackendUrl();
@@ -156,16 +104,29 @@ function getAuthToken() {
   } catch { return ''; }
 }
 
-// Writes to whichever bucket already holds a token, so refreshed tokens do not
-// silently downgrade a remembered session to a tab-only one.
-function saveAuthToken(token) {
+// `persist` is passed only at sign-in time, from the landing page's "Keep me
+// signed in" checkbox: true moves the token to localStorage, false keeps it in
+// sessionStorage only. Every other call (apiFetch storing a refreshed token)
+// passes nothing and writes to whichever bucket already holds a token, so a
+// refresh never downgrades a remembered session to a tab-only one.
+function saveAuthToken(token, persist) {
   if (!token) return;
-  try {
-    if (localStorage.getItem(CF_AUTH_TOKEN_KEY)) {
+  if (persist === true) {
+    try {
       localStorage.setItem(CF_AUTH_TOKEN_KEY, token);
+      sessionStorage.removeItem(CF_AUTH_TOKEN_KEY);
       return;
-    }
-  } catch {}
+    } catch { /* storage blocked: fall through to sessionStorage */ }
+  } else if (persist === false) {
+    try { localStorage.removeItem(CF_AUTH_TOKEN_KEY); } catch {}
+  } else {
+    try {
+      if (localStorage.getItem(CF_AUTH_TOKEN_KEY)) {
+        localStorage.setItem(CF_AUTH_TOKEN_KEY, token);
+        return;
+      }
+    } catch {}
+  }
   try { sessionStorage.setItem(CF_AUTH_TOKEN_KEY, token); } catch {}
 }
 
@@ -184,24 +145,26 @@ function getGoogleClientId() {
   const meta = typeof document !== 'undefined'
     ? document.querySelector('meta[name="cf-google-client-id"]')
     : null;
-  return (meta && meta.getAttribute('content')) || '';
+  return ((meta && meta.getAttribute('content')) || '').trim();
 }
 
 // Generic fetch wrapper:
 //   - Always sends credentials so the session cookie is included.
 //   - JSON in, JSON out (where applicable).
 //   - Returns { ok, status, data, error } — never throws on HTTP errors so
-//     callers can branch on status.
+//     callers can branch on status. status 0 means the API could not be
+//     reached (network error, timeout, or a proxy gateway error).
 async function apiFetch(path, opts = {}) {
-  const url = CF_BACKEND_URL.replace(/\/$/, '') + path;
+  const url = CF_BACKEND_URL + path;
   const init = {
     method: opts.method || 'GET',
     credentials: 'include',
     headers: { 'Accept': 'application/json' },
   };
-  // Never hang forever on a cold-starting backend. Default covers a full
-  // Render free-tier wake; callers with a local fallback pass something short.
-  const timeoutMs = opts.timeoutMs || 75000;
+  // Never hang forever on an unreachable or overloaded server. The API normally
+  // answers in well under a second, so 20 s means something is wrong; callers
+  // with a local fallback pass something shorter.
+  const timeoutMs = opts.timeoutMs || 20000;
   if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
     init.signal = AbortSignal.timeout(timeoutMs);
   }
@@ -228,6 +191,21 @@ async function apiFetch(path, opts = {}) {
   if (res.status !== 204) {
     try { data = await res.json(); } catch { data = null; }
   }
+  // 502/503/504 without a JSON body come from the reverse proxy (Apache, or
+  // scripts/dev_server.py locally), not from Flask: the API itself is down or
+  // too slow. Report them like a network failure (status 0) so callers show
+  // "could not reach the server" instead of, say, "wrong password". Flask's own
+  // 503s (e.g. email_unavailable) carry JSON and are passed through unchanged.
+  if (!data && (res.status === 502 || res.status === 503 || res.status === 504)) {
+    const timedOut = res.status === 504;
+    return {
+      ok: false,
+      status: 0,
+      error: timedOut ? 'timeout' : 'network',
+      message: timedOut ? 'The server took too long to respond.' : 'Could not reach the server.',
+      data: null,
+    };
+  }
   if (data && data.auth_token) saveAuthToken(data.auth_token);
   return {
     ok: res.ok,
@@ -249,14 +227,16 @@ async function apiLogin(body) {
   return apiFetch('/api/auth/login', { method: 'POST', body });
 }
 async function apiForgotPassword(email) {
-  return apiFetch('/api/auth/forgot-password', { method: 'POST', body: { email } });
+  // The server sends the reset email inside this request; a slow mail server
+  // can take well over 20 s (email_util.py allows 15 s per SMTP step), so wait
+  // longer rather than report "Could not reach the server" for a mail that goes out.
+  return apiFetch('/api/auth/forgot-password', { method: 'POST', body: { email }, timeoutMs: 60000 });
 }
 async function apiResetPassword(body) {
   return apiFetch('/api/auth/reset-password', { method: 'POST', body });
 }
-/** @deprecated use apiLogin */
-async function apiSignInWithEmail(email, name) {
-  return apiFetch('/api/auth/email', { method: 'POST', body: { email, name: name || undefined } });
+async function apiSetPassword(password) {
+  return apiFetch('/api/auth/set-password', { method: 'POST', body: { password } });
 }
 async function apiLogout()  {
   const r = await apiFetch('/api/auth/logout', { method: 'POST' });
@@ -276,14 +256,46 @@ async function apiPatchUser(id, patch) {
   return apiFetch('/api/users/' + encodeURIComponent(id), { method: 'PATCH', body: patch });
 }
 
+// ── Admin console ────────────────────────────────────────────
+async function apiAdminOverview() {
+  return apiFetch('/api/admin/overview');
+}
+async function apiAdminInsights(semester = '') {
+  return apiFetch('/api/admin/insights' + (semester ? '?semester=' + encodeURIComponent(semester) : ''));
+}
+async function apiAdminSignIns(days = 7) {
+  return apiFetch('/api/admin/sign-ins?days=' + encodeURIComponent(days));
+}
+async function apiAdminActivity(query = '') {
+  return apiFetch('/api/admin/activity' + (query ? '?' + query : ''));
+}
+
+// ── Course catalog edits (read: everyone, write: admin) ──────
+async function apiGetCourseOverrides() {
+  // Short timeout: the catalog renders without edits rather than waiting on a slow server.
+  return apiFetch('/api/courses/overrides', { timeoutMs: 10000 });
+}
+async function apiAddCourse(body) {
+  return apiFetch('/api/courses/overrides', { method: 'POST', body });
+}
+async function apiEditCourse(code, body) {
+  return apiFetch('/api/courses/overrides/' + encodeURIComponent(code), { method: 'PATCH', body });
+}
+async function apiArchiveCourse(code) {
+  return apiFetch('/api/courses/overrides/' + encodeURIComponent(code) + '/archive', { method: 'POST', body: {} });
+}
+async function apiRestoreCourse(code) {
+  return apiFetch('/api/courses/overrides/' + encodeURIComponent(code) + '/restore', { method: 'POST', body: {} });
+}
+async function apiRevertCourse(code) {
+  return apiFetch('/api/courses/overrides/' + encodeURIComponent(code), { method: 'DELETE' });
+}
+
 async function apiListStaffDirectory() {
   return apiFetch('/api/directory/entries');
 }
 async function apiAddStaffMember(body) {
   return apiFetch('/api/directory/entries', { method: 'POST', body });
-}
-async function apiUpdateDirectoryEntry(id, body) {
-  return apiFetch('/api/directory/entries/' + encodeURIComponent(id), { method: 'PATCH', body });
 }
 async function apiUpsertDirectoryByEmail(body) {
   return apiFetch('/api/directory/entries/by-email', { method: 'PATCH', body });
@@ -295,22 +307,11 @@ async function apiDeleteDirectoryEntry(id) {
   return apiFetch('/api/directory/entries/' + encodeURIComponent(id), { method: 'DELETE' });
 }
 
-async function fetchMinorCourses() {
-  try {
-    const res = await fetch('data/minor_courses.json');
-    if (!res.ok) throw new Error('minor courses missing');
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
-
 // ── Flags ────────────────────────────────────────────────────
+// GET /api/flags scopes by role: students see every flag except dismissed ones;
+// faculty and admins see all flags (faculty can pass "mine=1" for only their own).
 async function apiCreateFlag(flag)        { return apiFetch('/api/flags', { method: 'POST', body: flag }); }
 async function apiListFlags(query = '')   { return apiFetch('/api/flags' + (query ? '?' + query : '')); }
-// Same endpoint as apiListFlags, named for intent: the server auto-scopes
-// GET /api/flags to the caller's own submissions for non-admin faculty.
-async function apiGetMyFlags(query = '')  { return apiFetch('/api/flags' + (query ? '?' + query : '')); }
 async function apiUpdateFlag(id, patch)   { return apiFetch('/api/flags/' + encodeURIComponent(id), { method: 'PATCH', body: patch }); }
 
 // ── Wishlist ─────────────────────────────────────────────────
@@ -337,4 +338,18 @@ async function apiGetPopularCourses(program, semester, limit) {
   const q = new URLSearchParams({ program, semester, limit: String(limit || 5) });
   // Short leash — the home screen already shows a local fallback list.
   return apiFetch('/api/search-analytics/popular?' + q.toString(), { timeoutMs: 8000 });
+}
+
+// ── Schedule plans (share + inbox) ────────────────────────────
+async function apiGetPlans() {
+  return apiFetch('/api/plans');
+}
+async function apiSharePlan(body) {
+  return apiFetch('/api/plans/share', { method: 'POST', body });
+}
+async function apiCreatePlanShareLink(body) {
+  return apiFetch('/api/plans/share-link', { method: 'POST', body });
+}
+async function apiAcceptPlanShare(token) {
+  return apiFetch('/api/plans/accept-share', { method: 'POST', body: { token } });
 }
