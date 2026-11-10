@@ -2,9 +2,9 @@
 
 minors.json is built by hand from the official CMU-Q minor files (one audit export
 per minor). These tests keep it tied to them: every course code comes from the
-minor's own file (an old Psychology number appears as its current number), no
-listed code is lost, the number ranges are the file's ranges, every category has
-a rule, and no category lists a code twice.
+minor's own file (an old Psychology number appears as its new number from the
+department's renumbering list), no listed code is lost, the number ranges are
+the file's ranges, every category has a rule, and no category lists a code twice.
 
 Product Management has no official file. It is built from its 2026-27 CMU catalog
 page, archived in backend/data/sources/catalog-2026-27/minors/, and the
@@ -22,19 +22,22 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
-from pipeline_paths import BACKEND_DATA_DIR, FRONTEND_DATA_DIR, ROOT  # noqa: E402
+from pipeline_paths import BACKEND_DATA_DIR, COURSES_JSON, FRONTEND_DATA_DIR, ROOT  # noqa: E402
+from psychology_renumbering import code_now, load_renumbering  # noqa: E402
 
 MINORS_JSON = FRONTEND_DATA_DIR / "minors.json"
 OFFICIAL_DIR = BACKEND_DATA_DIR / "minors"
 SCOTTY_MD = OFFICIAL_DIR / "Minors_general-information_Scotty.md"
 
-# Removed from the catalog on 2026-11-09; the minor files still list some of them.
-# Same mapping as test_mapping_overlay_sections.py and the README cutover steps.
-OLD_PSYCHOLOGY_NUMBERS = {
-    "85-104": "85-190", "85-253": "85-190", "85-261": "85-190", "85-211": "85-110",
-    "85-219": "85-170", "85-221": "85-130", "85-241": "85-150", "85-377": "85-452",
-    "85-442": "85-454", "85-359": "85-411", "85-340": "85-350",
-}
+# The Psychology department's renumbering list (backend/data/psychology_renumbering.json):
+# an old number in a minor file appears as its new number; "x" (discontinued) stays. A
+# reused number (the old number of one course and the new number of another) changes only
+# when the file means its old course, by its title there or by the list it is in
+# (summer_2025_and_earlier or fall_2025_and_later). The minors build step uses the same rule.
+RENUMBERING = load_renumbering()
+ERA_KEYS = {"summer_2025_and_earlier": "old", "fall_2025_and_later": "new"}
+CATALOG_NAMES = {c["course_code"]: c.get("course_name")
+                 for c in json.loads(COURSES_JSON.read_text(encoding="utf-8"))["courses"]}
 
 EXPECTED_MINORS = {
     "arabic", "biology", "business", "business_analytics", "comp_bio", "cs",
@@ -136,6 +139,34 @@ def official_codes(data):
     return listed, excluded
 
 
+def official_now(data):
+    """code -> the number the course has now, for every code the file lists or excludes."""
+    eras, titles = {}, {}
+
+    def walk(node, era):
+        if isinstance(node, dict):
+            if isinstance(node.get("code"), str) and node.get("title"):
+                titles.setdefault(node["code"], set()).add(node["title"])
+            for k, v in node.items():
+                if k not in ("start", "end"):
+                    walk(v, ERA_KEYS.get(k, era))
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, era)
+        elif isinstance(node, str) and era and CODE_RE.fullmatch(node):
+            eras.setdefault(node, set()).add(era)
+
+    walk(data["program_requirements"], None)
+    listed, excluded = official_codes(data)
+    out = {}
+    for c in listed | excluded:
+        era, title = eras.get(c, set()), titles.get(c, set())
+        out[c] = code_now(c, RENUMBERING, title=next(iter(title)) if len(title) == 1 else None,
+                          era=next(iter(era)) if len(era) == 1 else None,
+                          current_titles=[CATALOG_NAMES.get(c, "")])
+    return out
+
+
 def _split(code):
     prefix, number = code.split("-")
     return prefix, int(number)
@@ -226,33 +257,53 @@ def test_each_official_file_is_one_minor(minors):
 
 def test_course_codes_come_from_the_minor_file(minors):
     for code, m in with_file(minors).items():
-        listed, excluded = official_codes(official(m))
-        allowed = {OLD_PSYCHOLOGY_NUMBERS.get(c, c) for c in listed}
+        data = official(m)
+        listed, excluded = official_codes(data)
+        now = official_now(data)
+        allowed = {now[c] for c in listed}
         for cat in leaves(m):
             for c in cat["courses"]:
                 assert c in allowed, (code, cat["id"], c)
             for c in (cat["select"] or {}).get("exclude", []):
-                assert c in excluded, (code, cat["id"], c)
+                assert c in {now[x] for x in excluded}, (code, cat["id"], c)
 
 
 def test_no_listed_code_is_lost(minors):
     for code, m in with_file(minors).items():
-        listed, excluded = official_codes(official(m))
+        data = official(m)
+        listed, excluded = official_codes(data)
+        now = official_now(data)
         courses = {c for cat in leaves(m) for c in cat["courses"]}
         excludes = {c for cat in leaves(m) for c in (cat["select"] or {}).get("exclude", [])}
-        missing = {c for c in listed if OLD_PSYCHOLOGY_NUMBERS.get(c, c) not in courses}
+        missing = {c for c in listed if now[c] not in courses}
         assert not missing, (code, sorted(missing))
-        assert excluded == excludes, code
+        assert {now[c] for c in excluded} == excludes, code
 
 
-def test_old_psychology_numbers_appear_as_current_numbers(minors):
+def test_old_psychology_numbers_appear_as_new_numbers(minors):
     for code, m in minors.items():
         codes = {c for cat in leaves(m) for c in cat["courses"] + (cat["select"] or {}).get("exclude", [])}
-        assert not codes & set(OLD_PSYCHOLOGY_NUMBERS), code
+        assert not codes & set(RENUMBERING.retired), code
         if code in with_file(minors):
-            listed, _ = official_codes(official(m))
-            for old in listed & set(OLD_PSYCHOLOGY_NUMBERS):
-                assert OLD_PSYCHOLOGY_NUMBERS[old] in codes, (code, old)
+            for old, new in official_now(official(m)).items():
+                assert new in codes, (code, old, new)
+
+
+def test_reused_numbers_follow_the_course_the_file_means(minors):
+    def codes(minor, cat_id):
+        return next(c["courses"] for c, _ in walk_categories(minors[minor]["categories"]) if c["id"] == cat_id)
+
+    # Neuroscience lists 85-370 and 85-414 with the titles of the courses that have these
+    # numbers now, next to 85-413 Perception and 85-472 Cognitive Neuropsychology.
+    assert {"85-370", "85-414", "85-413", "85-472"} <= set(codes("neuroscience", "electives"))
+    # Sociology: 85-350 Psychology of Prejudice is now 85-450, and 85-340 Research Methods in
+    # Social Psychology is now 85-350 (one renaming, never a chain).
+    assert "85-450" in codes("sociology", "gender_family_culture")
+    assert "85-350" not in codes("sociology", "gender_family_culture")
+    assert "85-350" in codes("sociology", "methodology")
+    # Psychology lists 85-104 among the numbers from before Fall 2025: Psychopathology, now 85-190.
+    assert "85-190" in codes("psychology", "survey") and "85-104" not in codes("psychology", "survey")
+    assert "85-352" in codes("sociology", "gender_family_culture")  # discontinued: stays
 
 
 def test_number_ranges_match_the_minor_file(minors):

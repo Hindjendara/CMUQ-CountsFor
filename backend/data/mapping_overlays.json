@@ -332,9 +332,9 @@
       }
     },
     {
-      "id": "hss-sheet-85-251",
+      "id": "hss-sheet-85-151",
       "note": "H&SS Course Offerings sheet (Qatar), approved 2026-11-07",
-      "course_codes": ["85-251"],
+      "course_codes": ["85-151"],
       "create_missing": false,
       "requirements": {
         "BA": [
@@ -701,8 +701,7 @@
     }
   ],
   "remove_mappings": [
-    {"course_code": "85-414", "programs": "all", "reason": "Number reused: the old course was Cognitive Neuropsychology; its mappings belong to the old course. The H&SS sheet lists none for 85-414."},
-    {"course_code": "85-426", "programs": "all", "reason": "Renamed to Reverse Engineering Brains and Machines; the mappings came from Learning in Humans and Machines. Left unmapped until the user confirms."}
+    {"course_code": "85-426", "programs": "all", "reason": "The mappings came from Learning in Humans and Machines, which the Psychology department's renumbering list discontinues; the SOC now lists 85-426 as Reverse Engineering Brains and Machines. Left unmapped until the user confirms."}
   ],
   "qatar_visibility": [
     {"course_code": "85-100", "rule": "show_only_if_offered_qatar", "note": "85-100 is not in the H&SS sheet, so it shows only if the Schedule of Classes lists it for Qatar."}

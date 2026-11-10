@@ -6,6 +6,7 @@ The repo layout mirrors the server (/var/www/html/countsfor):
 
   <root>/backend/scraper/          this folder (pipeline scripts)
   <root>/backend/data/             private data: soc.json, mapping_overlays.json,
+                                   psychology_renumbering.json,
                                    faculty_directory.json, directory_admins.json
   <root>/frontend/data/            served data: courses.json, minors.json
 
@@ -24,6 +25,7 @@ FRONTEND_DATA_DIR = ROOT / "frontend" / "data"
 
 SOC_JSON = BACKEND_DATA_DIR / "soc.json"
 MAPPING_OVERLAYS_JSON = BACKEND_DATA_DIR / "mapping_overlays.json"
+PSYCHOLOGY_RENUMBERING_JSON = BACKEND_DATA_DIR / "psychology_renumbering.json"
 FACULTY_DIRECTORY_JSON = BACKEND_DATA_DIR / "faculty_directory.json"
 COURSES_JSON = FRONTEND_DATA_DIR / "courses.json"
 SEED_USERS_JSON = BACKEND_DIR / "seed_users.json"

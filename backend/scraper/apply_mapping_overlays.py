@@ -8,6 +8,10 @@ The SOC scrape stays the rule; the overlay file is the one place for manual
 complements on top of it. One run applies its sections in this order, and
 running it again changes nothing:
 
+0. The Psychology renumbering list (backend/data/psychology_renumbering.json,
+   psychology_renumbering.apply_renumbering): rows for new numbers that have
+   none, and a row under a retired old number moves to its new number and is
+   deleted. The overlay file may not name a retired old number.
 1. "overlays": additive requirement mappings.
 2. "rule_buckets": buckets the catalog defines by a rule ("any SCS course,
    200-level or above, at least 9 units"), not a list. Each rule is expanded
@@ -41,6 +45,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from json_io import load_json, save_json  # noqa: E402
 from pipeline_paths import COURSES_JSON, MAPPING_OVERLAYS_JSON  # noqa: E402
+from psychology_renumbering import (  # noqa: E402
+    Renumbering,
+    apply_renumbering,
+    default_path as renumbering_path,
+    load_renumbering,
+    retired_codes_named,
+)
 from soc_parse import is_cancelled_section, normalize_course_code  # noqa: E402
 
 OVERLAYS_PATH = Path(
@@ -722,18 +733,28 @@ def validate_rule_buckets(rules: list[_RuleBucket], doc: dict) -> None:
             raise OverlayError(f"rule bucket {rule.id}: {rule.path!r} is not in catalog_buckets {rule.program}")
 
 
-def apply_overlay_document(courses: list[dict], doc: dict) -> dict:
+def apply_overlay_document(courses: list[dict], doc: dict, renumbering: Renumbering | None = None) -> dict:
     """Apply every section of mapping_overlays.json in the documented order.
 
+    With renumbering (the Psychology list; main() always passes it), its daily
+    step runs first, before the additive overlays.
+
     Raises OverlayError, before any requirement or flag changes, when the file
-    is invalid.
+    is invalid, or names a retired old number (its row is gone by then).
     """
     removed = removed_programs_by_code(doc.get("remove_mappings") or [])
     _visibility_flags(doc.get("qatar_visibility") or [])
     rules = compile_rule_buckets(doc.get("rule_buckets"))
     validate_rule_buckets(rules, doc)
+    if renumbering is not None:
+        stale = retired_codes_named(doc, renumbering)
+        if stale:
+            raise OverlayError("entries name old Psychology numbers that the renumbering list retires; "
+                               "name the new numbers: " + "; ".join(stale))
 
     stats: dict = {"codes_normalized": normalize_catalog_codes(courses)}
+    if renumbering is not None:
+        stats.update(apply_renumbering(courses, renumbering))
     by_code = _by_code(courses)
     stats.update(_apply_additive_overlays(courses, by_code, doc.get("overlays") or [], removed))
     stats.update(apply_rule_buckets(courses, rules, removed))
@@ -747,7 +768,7 @@ def requirement_buckets_path(catalog_path: Path) -> Path:
     return Path(catalog_path).with_name(REQUIREMENT_BUCKETS_NAME)
 
 
-def apply_file(catalog_path: Path, doc) -> dict:
+def apply_file(catalog_path: Path, doc, renumbering: Renumbering | None = None) -> dict:
     """Apply the overlay document (or a bare "overlays" list) to one catalog
     file, and write requirement_buckets.json beside it."""
     if isinstance(doc, list):
@@ -759,7 +780,7 @@ def apply_file(catalog_path: Path, doc) -> dict:
     else:
         courses = data["courses"]
         wrapper = data
-    stats = apply_overlay_document(courses, doc)
+    stats = apply_overlay_document(courses, doc, renumbering)
     buckets = requirement_buckets(courses, doc)
     save_json(catalog_path, wrapper if wrapper is not None else courses)
     save_json(requirement_buckets_path(catalog_path), buckets)
@@ -834,6 +855,11 @@ def verify_expected_geneds(catalog_path: Path) -> dict:
 
 def main() -> int:
     overlays_doc = load_json(OVERLAYS_PATH)
+    try:
+        renumbering = load_renumbering()
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: Psychology renumbering list {renumbering_path()}: {exc} (no catalog saved)")
+        return 1
     catalogs = [Path(p) for p in os.environ.get("CATALOG_PATHS", "").split(";") if p.strip()]
     if not catalogs:
         catalogs = DEFAULT_CATALOGS
@@ -844,11 +870,16 @@ def main() -> int:
             print(f"skip missing catalog: {path}")
             continue
         try:
-            stats = apply_file(path, overlays_doc)
+            stats = apply_file(path, overlays_doc, renumbering)
         except OverlayError as exc:
             print(f"ERROR {path.name}: {exc} (catalog not saved)")
             failed = True
             continue
+        merged = ", ".join(f"{c}->{renumbering.new_number[c]}" for c in stats["renumbering_removed"])
+        print(
+            f"{path.name}: renumbering created={len(stats['renumbering_created'])} "
+            f"merged={len(stats['renumbering_removed'])}{f' ({merged})' if merged else ''}"
+        )
         print(
             f"{path.name}: normalized={stats['codes_normalized']} "
             f"created={stats['courses_created']} reqs_added={stats['requirements_added']} "

@@ -59,14 +59,14 @@
             "82-214", "82-215", "82-216", "82-280", "82-282", "82-283", "82-286", "82-300",
             "82-313", "82-314", "82-358", "82-383", "82-411", "82-412", "82-449", "82-480",
             "82-505", "82-511", "82-512", "84-275", "84-310", "84-322", "84-323", "84-326",
-            "84-362", "84-389", "85-170", "85-375", "85-421", "88-412", "88-432"
+            "84-362", "84-389", "85-170", "85-409", "85-421", "88-412", "88-432"
           ],
           "select": null,
           "children": [],
           "notes": [
             "List B, courses taught in English.",
             "This list gives examples and is not complete. Ask the OLR and your minor advisor for the current interdisciplinary electives. You may suggest other courses to the minor advisor for approval as substitutes.",
-            "Old numbers in the official file are shown as their current numbers: 85-219 is now 85-170."
+            "Old numbers in the official file are shown as their current numbers: 85-219 is now 85-170 and 85-375 is now 85-409."
           ]
         }
       ]
@@ -1007,13 +1007,13 @@
           "courses": [
             "03-133", "03-351", "03-360", "02-319", "03-365", "03-366", "85-110", "85-130",
             "85-190", "85-213", "85-310", "85-370", "85-406", "85-414", "85-413", "85-420",
-            "85-435", "85-472"
+            "85-472"
           ],
           "select": null,
           "children": [],
           "notes": [
             "At least 27 units from the listed biology and psychology courses.",
-            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110 and 85-221 is now 85-130."
+            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-221 is now 85-130 and 85-435 is now 85-420."
           ]
         }
       ]
@@ -1243,12 +1243,12 @@
           "id": "survey",
           "name": "Survey Courses",
           "rule": {"type": "pick", "n": 2, "units": null},
-          "courses": ["85-110", "85-130", "85-150", "85-170", "85-190", "85-251"],
+          "courses": ["85-110", "85-130", "85-150", "85-170", "85-190", "85-151"],
           "select": null,
           "children": [],
           "notes": [
             "Any 2 survey courses.",
-            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-219 is now 85-170, 85-221 is now 85-130 and 85-241 is now 85-150."
+            "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-219 is now 85-170, 85-221 is now 85-130, 85-241 is now 85-150 and 85-251 is now 85-151."
           ]
         },
         {
@@ -1298,7 +1298,7 @@
             "min_number": 350,
             "max_number": 499,
             "exclude": [
-              "85-480", "85-482", "85-484", "85-505", "85-506", "85-507", "85-508", "85-509",
+              "85-590", "85-503", "85-530", "85-505", "85-506", "85-507", "85-508", "85-509",
               "85-510"
             ],
             "exclude_ranges": [],
@@ -1306,7 +1306,8 @@
           },
           "children": [],
           "notes": [
-            "Any 2 psychology courses numbered 85-350 to 85-499, except a few listed exclusions."
+            "Any 2 psychology courses numbered 85-350 to 85-499, except a few listed exclusions.",
+            "Old numbers in the official file are shown as their current numbers: 85-480 is now 85-590, 85-482 is now 85-503 and 85-484 is now 85-530."
           ]
         },
         {
@@ -1386,14 +1387,13 @@
               "courses": [
                 "70-342", "70-385", "76-241", "79-244", "79-261", "79-292", "79-308", "79-320",
                 "79-323", "79-331", "79-343", "79-377", "80-224", "80-245", "80-246", "80-256",
-                "80-305", "80-335", "80-348", "84-369", "85-150", "85-350", "85-352", "85-358",
-                "85-452", "85-454", "85-446", "88-230", "88-231", "88-285", "88-290"
+                "80-305", "80-335", "80-348", "84-369", "85-150", "85-450", "85-352", "85-451",
+                "85-452", "85-454", "85-457", "88-230", "88-231", "88-285", "88-290"
               ],
               "select": null,
               "children": [],
               "notes": [
-                "The official file lists 85-350 here as Psychology of Prejudice. In the Schedule of Classes 85-350 is now Research Methods in Social Psychology, and Psychology of Prejudice is 85-450. The code is kept as the file lists it. Confirm with your advisor.",
-                "Old numbers in the official file are shown as their current numbers: 85-241 is now 85-150, 85-377 is now 85-452 and 85-442 is now 85-454."
+                "Old numbers in the official file are shown as their current numbers: 85-241 is now 85-150, 85-350 is now 85-450, 85-358 is now 85-451, 85-377 is now 85-452, 85-442 is now 85-454 and 85-446 is now 85-457."
               ]
             },
             {
