@@ -82,6 +82,12 @@ test('annotateMultiProgram: counts non-empty program keys', () => {
   assertEqual(courses[2]._programCount, 4);
 });
 
+test('annotateMultiProgram: counts AI like the other majors', () => {
+  const courses = [makeCourse('15-122', { CS: ['x'], AI: ['x'] })];
+  annotateMultiProgram(courses);
+  assertEqual(courses[0]._programCount, 2);
+});
+
 test('annotateMultiProgram: empty arrays do not count', () => {
   const courses = [
     { course_code: '15-122', requirements: { CS: ['x'], IS: [], BA: [] } },
@@ -215,32 +221,86 @@ test('getCourseMappings: shows leaf category only', () => {
 
 test('getCourseMappings: IGI path shows leaf only, not parent breadcrumb', () => {
   const m = getCourseMappings(makeCourse('82-101', {
-    IS: ['GenEd---GenEd---Foundations---Intercultural and Global Inquiry'],
+    IS: ['GenEd---Foundations---Intercultural and Global Inquiry'],
   }));
-  assertEqual(m.IS[0].shortLabel, 'Intercultural & Global Inquiry');
+  assertEqual(m.IS[0].shortLabel, 'Intercultural and Global Inquiry');
+  assertEqual(m.IS[0].earlier, false);
+});
+
+test('getCourseMappings: carries the earlier requirement flag and reason', () => {
+  const course = makeCourse('70-213', { BA: ['BS in Business Administration---Business Electives'] });
+  course.requirements.BA[0].earlier = true;
+  course.requirements.BA[0].earlier_reason = 'older degree version';
+  const m = getCourseMappings(course);
+  assertEqual(m.BA[0].earlier, true);
+  assertEqual(m.BA[0].earlierReason, 'older degree version');
 });
 
 test('requirementLeafLabel: strips GenEd path to leaf', () => {
   assertEqual(
-    requirementLeafLabel('GenEd---GenEd---Foundations---Intercultural and Global Inquiry'),
-    'Intercultural & Global Inquiry'
+    requirementLeafLabel('GenEd---Foundations---Intercultural and Global Inquiry'),
+    'Intercultural and Global Inquiry'
   );
 });
 
-test('requirementLeafLabel: labels with a spaced hyphen get a display override', () => {
-  const ba = 'BS in Business Administration---Concentration - select 1 concentration from the list below'
-    + '---Entrepreneurship---Entrepreneurship Concentration---Two Area Electives'
-    + '---Independent Study - Special Permission Required';
-  assertEqual(requirementLeafLabel(ba), 'Independent Study (Special Permission Required)');
+test('requirementLeafLabel: catalog bucket names show as they are; degree roots get a label', () => {
+  const ba = 'BS in Business Administration---Concentration---Entrepreneurship---Choose 2 remaining courses from';
+  assertEqual(requirementLeafLabel(ba), 'Choose 2 remaining courses from');
   assertEqual(
     formatRequirementPath(ba),
-    'BA Degree Requirements > Concentrations > Entrepreneurship > Entrepreneurship Concentration'
-      + ' > Two Area Electives > Independent Study (Special Permission Required)'
+    'BA Degree Requirements > Concentration > Entrepreneurship > Choose 2 remaining courses from'
   );
   assertEqual(
-    requirementLeafLabel('EY2022 Qatar Business Administration - University Core Requirements'),
-    'University Core'
+    requirementLeafLabel('BS in Biological Sciences---Core Areas of Study---Neuroscience Track'
+      + '---And TWO (2) or THREE (3) of the following for a total of FIVE (5) courses'),
+    'Two or three more courses'
   );
+  assertEqual(formatRequirementPath('BS in Artificial Intelligence---Ethics Course'), 'AI Degree Requirements > Ethics Course');
+});
+
+// ── Requirement trees: catalog order, earlier rows, gen ed root ──
+
+function treeCatalog() {
+  const row = (path, extra) => Object.assign({ requirement: path, type: path.startsWith('GenEd'), major: 'CS' }, extra || {});
+  const core = 'BS in Computer Science---Computer Science---Computer Science Core';
+  return [
+    { course_code: '02-201', course_name: 'Programming for Scientists', units: 10,
+      requirements: { CS: [row('BS in Computer Science---Computer Science---Two School of Computer Science electives',
+        { earlier: true, earlier_reason: 'not covered by the 2026-27 rule' })] } },
+    { course_code: '07-128', course_name: 'First Year Seminar', units: 3, requirements: { CS: [row(core)] } },
+    { course_code: '07-129', course_name: 'Freshmen Immigration Course', units: 3,
+      requirements: { CS: [row(core, { earlier: true, earlier_reason: 'older degree version' })] } },
+    { course_code: '15-122', course_name: 'Principles of Imperative Computation', units: 12, requirements: { CS: [row(core)] } },
+    { course_code: '15-151', course_name: 'Mathematical Foundations for Computer Science', units: 12,
+      requirements: { CS: [row('BS in Computer Science---Mathematics---All of the following Mathematics courses')] } },
+    { course_code: '76-101', course_name: 'Interpretation and Argument', units: 9,
+      requirements: { CS: [row('GenEd---Humanities and Arts---A. First Year Writing Requirement')] } },
+  ];
+}
+
+test('normalizeTree: sibling buckets follow the catalog order of the rules', () => {
+  const tree = normalizeTree(buildRequirementTree(treeCatalog(), 'CS'), 'CS', 0);
+  const degree = tree.children.find(n => n.rawLabel === 'BS in Computer Science');
+  assertEqual(degree.children.map(n => n.rawLabel), ['Computer Science', 'Mathematics']);
+  const cs = degree.children[0];
+  // 02-201 is seen first, but Computer Science Core comes first in the catalog.
+  assertEqual(cs.children.map(n => n.rawLabel), ['Computer Science Core', 'Two School of Computer Science electives']);
+  assertEqual(cs.children[0].rule.label, 'Take all');
+});
+
+test('buildRequirementTree: earlier rows keep their flag and list after current courses', () => {
+  const tree = normalizeTree(buildRequirementTree(treeCatalog(), 'CS'), 'CS', 0);
+  const core = findTreeNode(tree, 'BS in Computer Science---Computer Science---Computer Science Core');
+  assertEqual(core.courses.map(c => c.code), ['07-128', '15-122', '07-129']);
+  assertEqual(core.courses.map(c => c.earlier), [false, false, true]);
+  assertEqual(core.courses[2].earlierReason, 'older degree version');
+});
+
+test('splitTreeSections: the GenEd root is gen ed, the degree root is not', () => {
+  const tree = normalizeTree(buildRequirementTree(treeCatalog(), 'CS'), 'CS', 0);
+  const { degree, gened } = splitTreeSections(tree, 'CS');
+  assertEqual(degree.map(n => n.rawLabel), ['BS in Computer Science']);
+  assertEqual(gened.map(n => n.rawLabel), ['GenEd']);
 });
 
 test('availableSemesterOptions: includes summer when catalog has M26 offerings', () => {
@@ -487,12 +547,12 @@ function qatarOnlyCatalog() {
   return [
     {
       course_code: '85-110', course_name: 'Cognitive Psychology',
-      requirements: { CS: [req('CS', 'GenEd---Humanities/Arts Electives')], IS: [], BA: [], BS: [] },
+      requirements: { CS: [req('CS', 'GenEd---Humanities and Arts---C. Humanities and Arts Electives')], IS: [], BA: [], BS: [] },
       offerings: [{ semester_code: 'F26', campus: 'Qatar', modality: 'In Person' }],
     },
     {
       course_code: '85-100', course_name: 'Introduction to Psychology', qatar_only: true,
-      requirements: { CS: [req('CS', 'GenEd---Humanities/Arts Electives')], IS: [], BA: [], BS: [] },
+      requirements: { CS: [req('CS', 'GenEd---Humanities and Arts---C. Humanities and Arts Electives')], IS: [], BA: [], BS: [] },
       offerings: [{ semester_code: 'F26', campus: 'Pittsburgh', modality: 'In Person' }],
     },
   ];
@@ -511,7 +571,7 @@ test('isCourseHidden: qatar_only rows without a Qatar offering', () => {
 
 test('buildRequirementTree: leaves out hidden qatar_only rows', () => {
   const tree = buildRequirementTree(qatarOnlyCatalog(), 'CS');
-  const leaf = tree.children.GenEd.children['Humanities/Arts Electives'];
+  const leaf = tree.children.GenEd.children['Humanities and Arts'].children['C. Humanities and Arts Electives'];
   assertEqual(leaf.courses.map(c => c.code), ['85-110']);
 });
 

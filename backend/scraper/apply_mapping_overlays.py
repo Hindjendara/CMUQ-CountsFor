@@ -32,23 +32,21 @@ OVERLAYS_PATH = Path(
     os.environ.get("MAPPING_OVERLAYS_PATH")
     or MAPPING_OVERLAYS_JSON
 )
-PROGRAMS = ("CS", "IS", "BA", "BS")
+PROGRAMS = ("CS", "IS", "BA", "BS", "AI")
 # qatar_visibility rule -> course flag the frontend reads
 VISIBILITY_RULES = {"show_only_if_offered_qatar": "qatar_only"}
 DEFAULT_CATALOGS = [
     COURSES_JSON,
 ]
 
-IS_IGI_PATH = "GenEd---GenEd---Foundations---Intercultural and Global Inquiry"
-IS_CONTEXTUAL_PATH = "GenEd---GenEd---Foundations---Contextual Thinking"
-BA_GLOBAL_PATH = (
-    "EY2022 Qatar Business Administration - University Core Requirements"
-    "---Global, Cultural, and Diverse Perspectives"
-)
-BS_ML_PATH = "GenEd---Cultural/Global Understanding---Modern Languages Course"
-BS_NTB_PATH = "GenEd---Non-Technical Breadth Electives"
-CS_HUMANITIES_PATH = "GenEd---Humanities/Arts Electives"
-CS_CAT3_PATH = "GenEd---Category 3: Cultural Analysis"
+# Requirement paths use the 2026-27 catalog bucket names.
+IS_IGI_PATH = "GenEd---Foundations---Intercultural and Global Inquiry"
+IS_CONTEXTUAL_PATH = "GenEd---Foundations---Contextual Thinking"
+BA_GLOBAL_PATH = "GenEd---University Core---Global, Cultural, and Diverse Perspectives"
+BS_ML_PATH = "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course"
+BS_NTB_PATH = "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses"
+CS_HUMANITIES_PATH = "GenEd---Humanities and Arts---C. Humanities and Arts Electives"
+CS_CAT3_PATH = "GenEd---Humanities and Arts---B. Breadth Requirement---Category 3: Cultural Analysis"
 
 MODERN_LANGUAGE_CODES = [
     "82-101",

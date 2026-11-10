@@ -20,16 +20,9 @@ const DASH_RE = /[‒–—―]|&[mn]dash;|&#821[12];|&#x201[345];|\\u201[345]/i
 const SPACED_HYPHEN_RE = /[A-Za-z0-9)\u0001]\s+-{1,2}\s+[A-Za-z0-9(\u0001]/;
 
 // Strings that must keep a spaced hyphen. Each entry: file, exact literal text, reason.
-const ALLOWLIST = [
-  { file: 'js/data.js', text: 'EY2022 Qatar Business Administration - University Core Requirements',
-    reason: 'LABEL_OVERRIDES key; must match the requirement path in data/courses.json (shown as "University Core")' },
-  { file: 'js/data.js', text: 'EY2024+ Qatar Business Administration - University Core Requirements',
-    reason: 'LABEL_OVERRIDES key; must match the requirement path in data/courses.json (shown as "University Core")' },
-  { file: 'js/data.js', text: 'Concentration - select 1 concentration from the list below',
-    reason: 'LABEL_OVERRIDES key; must match the requirement path in data/courses.json (shown as "Concentrations")' },
-  { file: 'js/data.js', text: 'Independent Study - Special Permission Required',
-    reason: 'LABEL_OVERRIDES key; must match the 70-509 requirement path (shown as "Independent Study (Special Permission Required)")' },
-];
+// Empty since the 2026-27 catalog bucket names (November 2026): no requirement path
+// has a spaced hyphen any more, so LABEL_OVERRIDES needs no such key.
+const ALLOWLIST = [];
 
 function allowed(file, text) {
   return ALLOWLIST.some(a => a.file === file && a.text === text);
@@ -228,7 +221,12 @@ test('dash guard: the scanner catches dashes and skips comments', () => {
   scanHtml('x.html', '<!-- note — fine -->\n<p>Hello — world</p>\n<a title="One - two">x</a>', html);
   assertEqual(html.map(p => p.split(':')[1]), ['2', '3']);
   const ok = [];
-  scanJsSource('js/data.js', "const k = { 'Independent Study - Special Permission Required': 'x' };", 0, ok);
+  ALLOWLIST.push({ file: 'js/data.js', text: 'Old Bucket - Kept Name', reason: 'scanner self test' });
+  try {
+    scanJsSource('js/data.js', "const k = { 'Old Bucket - Kept Name': 'x' };", 0, ok);
+  } finally {
+    ALLOWLIST.pop();
+  }
   assertEqual(ok, []);
 });
 

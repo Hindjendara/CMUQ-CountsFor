@@ -5,8 +5,8 @@
 const HOME_POPULAR_COURSES = ['15-122', '21-120', '36-200', '67-250', '82-112'];
 const HOME_SEARCH_CHIPS = ['15-122', 'Contextual Thinking', 'Intercultural and Global Inquiry', 'Probability'];
 const HOME_RECENT_MAPPINGS = [
-  { courses: '82-101 to 82-142', label: 'Modern Languages → IS/BA/BS/CS GenEd', major: 'IS', path: 'GenEd---GenEd---Foundations---Intercultural and Global Inquiry' },
-  { courses: '79-286', label: 'Movers & Shakers → IS Contextual Thinking', major: 'IS', path: 'GenEd---GenEd---Foundations---Contextual Thinking' },
+  { courses: '82-101 to 82-142', label: 'Modern Languages → IS/BA/BS/CS GenEd', major: 'IS', path: 'GenEd---Foundations---Intercultural and Global Inquiry' },
+  { courses: '79-286', label: 'Movers & Shakers → IS Contextual Thinking', major: 'IS', path: 'GenEd---Foundations---Contextual Thinking' },
 ];
 
 const App = {
@@ -1997,7 +1997,7 @@ const App = {
       const key = e.path;
       if (seen.has(key)) continue;
       seen.add(key);
-      if (e.parts.length >= 4) out.push(e);
+      if (e.parts.length >= 3) out.push(e);
     }
     out.sort((a, b) => a.label.localeCompare(b.label));
     return out;
@@ -2238,8 +2238,9 @@ const App = {
         const typeCls = m.isGenEd ? 'gened' : 'req';
         const safePath = m.fullPath.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         return `
-          <div class="cc-cf-item" data-nav-major="${majorCode}" data-nav-path="${safePath}" title="${esc(formatRequirementPath(m.fullPath))}">
+          <div class="cc-cf-item${m.earlier ? ' is-earlier' : ''}" data-nav-major="${majorCode}" data-nav-path="${safePath}" title="${esc(formatRequirementPath(m.fullPath))}">
             <span class="cc-cf-item-label">${esc(m.shortLabel)}</span>
+            ${m.earlier ? this._earlierTagHtml(m.earlierReason, 'cc-cf-item-earlier') : ''}
             <span class="cc-cf-item-type cc-cf-item-type-${typeCls}">${typeLabel}</span>
           </div>`;
       }).join('');
@@ -2485,7 +2486,9 @@ const App = {
       return this.coursePassesTreeFilter(full);
     });
 
-    const ruleHtml = node.rule ? `<span class="tr-rule">${esc(node.rule.label)}</span>` : '';
+    const ruleHtml = node.rule
+      ? `<span class="tr-rule"${node.rule.note ? ` title="${esc(node.rule.note)}"` : ''}>${esc(node.rule.label)}</span>`
+      : '';
     const countHtml = (!expanded && filteredTotalCourses > 0 && isExpandable)
       ? `<span class="tr-count">${filteredTotalCourses} course${filteredTotalCourses === 1 ? '' : 's'}</span>`
       : '';
@@ -2622,13 +2625,22 @@ const App = {
       : '';
 
     return `
-      <div class="tr-leaf ${isActive ? 'active' : ''}" data-course-code="${esc(c.code)}">
+      <div class="tr-leaf ${isActive ? 'active' : ''}${c.earlier ? ' is-earlier' : ''}" data-course-code="${esc(c.code)}">
         <span class="tr-leaf-code">${esc(c.code)}</span>
         <span class="tr-leaf-name">${esc(c.name)}</span>
+        ${c.earlier ? this._earlierTagHtml(c.earlierReason, 'tr-earlier-tag') : ''}
         ${c.units ? `<span class="tr-leaf-units">${c.units}u</span>` : ''}
         ${alsoHtml}${dcTag}${mpChip}
         ${this._renderRowActions(fullCourse)}
       </div>`;
+  },
+
+  // A course kept on a bucket from an earlier version of the requirement (not
+  // in the 2026-27 catalog). Plain text, with the reason in the tooltip.
+  _earlierTagHtml(reason, cls) {
+    const why = reason ? ` (${reason})` : '';
+    const title = `Earlier requirement${why}: listed in an earlier version of this requirement, not in the 2026-27 catalog. Check with your advisor.`;
+    return `<span class="${cls}" title="${esc(title)}">Earlier requirement</span>`;
   },
 
   // ── Per-row inline actions (wishlist + flag) ───────────────
@@ -4443,6 +4455,17 @@ const App = {
     }).join('')}</ul>`;
   },
 
+  // One "counts for" row as the course editor stores it. A row kept from an
+  // earlier requirement keeps its flag, so saving other fields does not drop it.
+  _courseReqRow(r) {
+    const row = { requirement: r.requirement, type: !!r.type };
+    if (r.earlier) {
+      row.earlier = true;
+      row.earlier_reason = r.earlier_reason || '';
+    }
+    return row;
+  },
+
   _findCourseByKey(key, archived) {
     const pool = archived ? (this._archivedCourses || []) : (this.courses || []);
     return pool.find(c => this._courseEditKey(c) === key) || null;
@@ -4452,7 +4475,7 @@ const App = {
     const reqs = {};
     for (const m of MAJOR_ORDER) {
       reqs[m] = ((course && course.requirements && course.requirements[m]) || [])
-        .map(r => ({ requirement: r.requirement, type: !!r.type }));
+        .map(r => this._courseReqRow(r));
     }
     return {
       course_code: course ? course.course_code : '',
@@ -4578,6 +4601,7 @@ const App = {
         <li class="adm-req">
           <span class="adm-req-tag ${r.type ? 'is-gened' : ''}">${r.type ? 'Gen Ed' : 'Core'}</span>
           <span class="adm-req-path">${esc(this._courseReqDisplayLabel(r.requirement))}</span>
+          ${r.earlier ? this._earlierTagHtml(r.earlier_reason, 'adm-req-earlier') : ''}
           <button type="button" class="adm-req-x" onclick="App._removeCourseReq('${prog}', ${i})" aria-label="Remove this requirement">×</button>
         </li>`).join('');
       return `
@@ -4585,7 +4609,7 @@ const App = {
           <div class="adm-req-head">${esc(getProgramLabel(prog) || prog)} <span class="adm-cell-sub">${list.length ? list.length + ' requirement' + (list.length === 1 ? '' : 's') : 'Does not count for anything'}</span></div>
           ${chips ? `<ul class="adm-req-list">${chips}</ul>` : ''}
           <div class="adm-req-add">
-            <input class="adm-search" id="ce-req-${prog}" list="ce-dl-${prog}" placeholder="Pick or type a category, for example GenEd › Humanities/Arts Electives" oninput="App._onCourseReqInput('${prog}')" />
+            <input class="adm-search" id="ce-req-${prog}" list="ce-dl-${prog}" placeholder="Pick or type a category, for example GenEd › Foundations › Data Analysis" oninput="App._onCourseReqInput('${prog}')" />
             <datalist id="ce-dl-${prog}">${options}</datalist>
             <select class="adm-select" id="ce-req-type-${prog}" title="Only used for a category that does not exist yet" hidden>
               <option value="core">Core</option><option value="gened">Gen Ed</option>
@@ -4756,7 +4780,7 @@ const App = {
       return;
     }
     const reqs = {};
-    for (const m of MAJOR_ORDER) reqs[m] = d.requirements[m].map(r => ({ requirement: r.requirement, type: !!r.type }));
+    for (const m of MAJOR_ORDER) reqs[m] = d.requirements[m].map(r => this._courseReqRow(r));
 
     let r;
     let changes = [];

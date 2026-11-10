@@ -13,7 +13,7 @@ const PROGRAM_GROUPS = [
   { id: 'IS', label: 'Information Systems',     kind: 'major',    dataPending: false },
   { id: 'BA', label: 'Business Administration', kind: 'major',    dataPending: false },
   { id: 'BS', label: 'Biological Sciences',     kind: 'major',    dataPending: false },
-  { id: 'AI', label: 'Artificial Intelligence', kind: 'major',    dataPending: true  },
+  { id: 'AI', label: 'Artificial Intelligence', kind: 'major',    dataPending: false },
   { id: 'GS', label: 'General Studies',         kind: 'major',    dataPending: true  },
   // 'AS' is a grouping (not a major identity). Tentative rename to follow
   // Prof. Silvia's suggested split (H&SS / Math Sciences) once finalized.

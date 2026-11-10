@@ -21,6 +21,7 @@ bp = Blueprint("course_overrides", __name__, url_prefix="/api/courses/overrides"
 COURSE_CODE_RE = re.compile(r"^\d{2}-\d{3}$")
 REQUIREMENT_PROGRAMS = frozenset({"CS", "IS", "BA", "BS", "AI", "GS"})
 TEXT_FIELDS = {"course_name": 200, "description": 5000, "prerequisites": 1000}
+EARLIER_REASON_MAX = 200
 SEMESTER_RE = re.compile(r"^[FSMN]\d{2}$")
 
 
@@ -72,7 +73,11 @@ def _clean_fields(data: dict) -> tuple[dict, str | None]:
 
 
 def _clean_requirements(raw) -> tuple[dict | None, str | None]:
-    """{"CS": [{"requirement": "A---B", "type": bool}], ...} -> stored map with `major` filled in."""
+    """{"CS": [{"requirement": "A---B", "type": bool}], ...} -> stored map with `major` filled in.
+
+    A row may carry "earlier": true and an "earlier_reason" (a course kept from an
+    earlier version of the requirement); both are kept so an edit does not drop them.
+    """
     if not isinstance(raw, dict):
         return None, "requirements must be an object keyed by program."
     out: dict[str, list[dict]] = {}
@@ -91,7 +96,14 @@ def _clean_requirements(raw) -> tuple[dict | None, str | None]:
             if req in seen:
                 continue
             seen.add(req)
-            rows.append({"requirement": req, "type": bool(entry.get("type")), "major": program})
+            row = {"requirement": req, "type": bool(entry.get("type")), "major": program}
+            if entry.get("earlier"):
+                reason = str(entry.get("earlier_reason") or "").strip()
+                if len(reason) > EARLIER_REASON_MAX:
+                    return None, f"An earlier requirement reason must be under {EARLIER_REASON_MAX} characters."
+                row["earlier"] = True
+                row["earlier_reason"] = reason
+            rows.append(row)
         out[program] = rows
     return out, None
 
