@@ -1219,7 +1219,6 @@ body.is-resizing-panels * {
   background: var(--bg-secondary); color: var(--text-secondary);
   border: 1px solid var(--border-light);
 }
-.mn-pill-campus { background: var(--status-ip-bg); color: var(--status-ip); border-color: transparent; }
 .mn-pill-mine { background: var(--minor-accent-bg); color: var(--minor-accent-text); border-color: var(--minor-accent-border); }
 .mn-add-btn {
   padding: 6px 12px; border-radius: 8px;

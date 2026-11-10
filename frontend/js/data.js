@@ -1723,6 +1723,17 @@ function minorDoubleCountWarnings(check, def, majorCode) {
   return out;
 }
 
+/**
+ * Where a minor's requirements come from: 'catalog' when its source_file is an
+ * archived CMU catalog page (.html, Product Management), 'audit' for an
+ * official audit file, null when it has none (Student-defined).
+ */
+function minorSourceKind(def) {
+  const file = def && def.source_file ? String(def.source_file) : '';
+  if (!file) return null;
+  return /\.html?$/i.test(file) ? 'catalog' : 'audit';
+}
+
 /** Version strings come from the official files; show their " - " separators as commas. */
 function plainDataText(text) {
   return String(text == null ? '' : text).replace(/\s+[-‒-―]\s+/g, ', ');

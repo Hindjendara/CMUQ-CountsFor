@@ -182,16 +182,23 @@ def test_patch_me_accepts_the_new_minor_codes(client, student):
     assert r.get_json()["minor_codes"] == ["business_analytics", "comp_bio"]
 
 
-def test_patch_me_rejects_the_dropped_product_minor(client, student):
+def test_patch_me_accepts_the_product_minor(client, student):
     login(client, student)
-    r = client.patch("/api/me", json={"minor_codes": ["product"]})
+    r = client.patch("/api/me", json={"primary_program": "CS", "minor_codes": ["product"]})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["minor_codes"] == ["product"]
+
+
+def test_patch_me_still_rejects_an_unknown_minor(client, student):
+    login(client, student)
+    r = client.patch("/api/me", json={"minor_codes": ["no_such_minor"]})
     assert r.status_code == 400
-    assert r.get_json()["error"] == "inconsistent_profile"
-    assert "product" in r.get_json()["message"]
+    assert r.get_json() == {"error": "inconsistent_profile", "message": "Unknown minor_code: no_such_minor."}
 
 
 @pytest.mark.parametrize("major,minor", [
-    ("BA", "business"), ("BA", "business_analytics"), ("BA", "finance"), ("CS", "cs"), ("BS", "biology"),
+    ("BA", "business"), ("BA", "business_analytics"), ("BA", "finance"), ("BA", "product"),
+    ("CS", "cs"), ("BS", "biology"),
 ])
 def test_patch_me_rejects_a_minor_blocked_for_the_major(client, student, major, minor):
     login(client, student)
@@ -204,9 +211,9 @@ def test_patch_me_rejects_a_minor_blocked_for_the_major(client, student, major, 
 def test_patch_me_keeps_tepper_minors_open_to_other_majors(client, student):
     login(client, student)
     r = client.patch("/api/me", json={"primary_program": "IS",
-                                      "minor_codes": ["business", "business_analytics", "finance"]})
+                                      "minor_codes": ["business", "business_analytics", "finance", "product"]})
     assert r.status_code == 200, r.get_json()
-    assert r.get_json()["minor_codes"] == ["business", "business_analytics", "finance"]
+    assert r.get_json()["minor_codes"] == ["business", "business_analytics", "finance", "product"]
 
 
 def test_patch_me_keeps_a_minor_while_adding_another(client, student):
@@ -226,6 +233,16 @@ def test_admin_edits_a_students_minors_keeping_one(client, admin, student):
     r = client.patch(f"/api/users/{student.id}", json={"minor_codes": ["history", "comp_bio"]})
     assert r.status_code == 200, r.get_json()
     assert r.get_json()["minor_codes"] == ["history", "comp_bio"]
+
+
+def test_admin_sets_the_product_minor_but_not_for_a_ba_major(client, admin, student):
+    login(client, admin)
+    r = client.patch(f"/api/users/{student.id}", json={"primary_program": "IS", "minor_codes": ["product"]})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["minor_codes"] == ["product"]
+    r = client.patch(f"/api/users/{student.id}", json={"primary_program": "BA"})
+    assert r.status_code == 400
+    assert r.get_json()["message"] == "That minor is not open to students in your major."
 
 
 def test_patch_me_major_change_is_checked_against_saved_minors(client, student):

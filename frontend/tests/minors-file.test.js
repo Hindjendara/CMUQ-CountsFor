@@ -48,7 +48,7 @@ test('minors.json load: fetchMinors reads data/minors.json with the cf-build cac
   const ctx = loadPage(async url => { urls.push(url); return jsonResponse(200, readMinors()); }, 'minors-test');
   const data = await vm.runInContext('fetchMinors()', ctx);
   assertEqual(urls, ['data/minors.json?v=minors-test']);
-  assertEqual(Object.keys(data.minors).length, 16);
+  assertEqual(Object.keys(data.minors).length, 17);
   assertEqual(data.minors.psychology.name, 'Psychology');
 });
 
@@ -65,9 +65,10 @@ test('minors.json load: applyMinorsCatalog rebuilds the minor list from the file
   ctx.__data = readMinors();
   assertTrue(vm.runInContext('applyMinorsCatalog(__data)', ctx));
   const list = JSON.parse(vm.runInContext('JSON.stringify(MINOR_LIST)', ctx));
-  assertEqual(list.length, 16);
+  assertEqual(list.length, 17);
   assertEqual(list[0], { code: 'arabic', label: 'Arabic Studies' });
   assertTrue(vm.runInContext("isMinorBlockedForMajor('finance', 'BA') && !isMinorBlockedForMajor('finance', 'CS')", ctx));
+  assertTrue(vm.runInContext("isMinorBlockedForMajor('product', 'BA') && !isMinorBlockedForMajor('product', 'IS')", ctx));
   assertEqual(vm.runInContext("getMinorLabel('comp_bio')", ctx), 'Computational Biology');
 });
 
@@ -75,7 +76,8 @@ test('minors.json: the fallback MINOR_LIST and MINOR_BLOCKED_MAJORS in js/profil
   const { list, blocked } = minorListFromData(readMinors());
   assertEqual(list, MINOR_LIST);
   assertEqual(blocked, MINOR_BLOCKED_MAJORS);
-  assertFalse(list.some(m => m.code === 'product'), 'product has no official file');
+  assertTrue(list.some(m => m.code === 'product' && m.label === 'Product Management'), 'product is a minor again');
+  assertEqual(blocked.product, ['BA'], 'BA majors may not take Product Management');
 });
 
 test('minors.json: every category has a known rule and builds against a catalog of its listed codes', () => {
@@ -106,7 +108,7 @@ test('minors.json: every category has a known rule and builds against a catalog 
     catalog.push({ course_code: `${p}-399`, course_name: `${p}-399`, units: 9, requirements: {} });
   }
   const index = buildMinorIndex(data, catalog, buildCourseIndex(catalog));
-  assertEqual(index.order.length, 16);
+  assertEqual(index.order.length, 17);
   for (const code of index.order) {
     const m = index.byCode[code];
     const progress = computeMinorProgress(m.tree, {});
@@ -125,6 +127,48 @@ test('minors.json: every category has a known rule and builds against a catalog 
   assertEqual(minorDoubleCountLimitText(index.byCode.biology.def, 'CS'), 'Confirm double counting with your advisor.');
   assertEqual(minorDoubleCountLimitText(index.byCode.neuroscience.def, 'CS'),
     'At most 2 courses may also count toward your major or another minor.');
+  assertEqual(minorDoubleCountLimitText(index.byCode.product.def, 'CS'),
+    'At most 1 course may also count toward your major or another minor.');
+});
+
+test('minors.json: Product Management comes from its archived catalog page; the others from their audit files', () => {
+  const data = readMinors();
+  const product = data.minors.product;
+  assertEqual(product.source_file, 'backend/data/sources/catalog-2026-27/minors/product-management-minor.html');
+  assertTrue(fs.existsSync(path.join(ROOT, '..', product.source_file)), 'the archived page is in the repository');
+  for (const [code, def] of Object.entries(data.minors)) {
+    const want = code === 'product' ? 'catalog' : code === 'self_defined' ? null : 'audit';
+    assertEqual(minorSourceKind(def), want, code);
+  }
+
+  const catalog = ['70-381', '70-387', '70-452', '73-102', '73-104', '70-389', '05-391', '05-410',
+    '70-385', '70-481', '70-482', '70-483'].map(c => ({ course_code: c, course_name: c, units: 9, requirements: {} }));
+  const m = buildMinorIndex(data, catalog, buildCourseIndex(catalog)).byCode.product;
+  // Rule types, not the chip wording (minorRuleLabel() words the chips).
+  const shape = node => [node.label, node.rule.type, node.rule.n, node.courses.map(c => c.code),
+    (node.children || []).map(shape)];
+  assertEqual(m.tree.children.map(shape), [
+    ['Required', 'take_all', null, [], [
+      ['Marketing I', 'required', null, ['70-381'], []],
+      ['Strategy for High-Tech Products and Services', 'required', null, ['70-387'], []],
+      ['Introduction to Product Management', 'required', null, ['70-452'], []],
+      ['Principles of Microeconomics', 'pick', 1, ['73-102', '73-104'], []],
+    ]],
+    ['Course in Design Thinking', 'pick', 1, ['05-391', '05-410', '70-389'], []],
+    ['Marketing Course', 'pick', 1, ['70-385', '70-481', '70-482', '70-483'], []],
+  ]);
+  const progress = computeMinorProgress(m.tree, { '70-381': 'completed', '73-104': 'completed', '05-410': 'in_progress' });
+  assertEqual(progress.summary.total, 3);
+  assertEqual(progress.assigned.get('73-104'), 'required---microeconomics');
+  assertEqual(progress.assigned.get('05-410'), 'design_thinking');
+});
+
+test('minors.json: no minor carries a campus note', () => {
+  for (const [code, def] of Object.entries(readMinors().minors)) {
+    assertFalse('campus_note' in def, code);
+    const text = JSON.stringify([def.name, def.title, def.notes, def.grade_rules, def.double_count.notes, def.categories]);
+    assertFalse(/Pittsburgh version|campus not stated/i.test(text), code);
+  }
 });
 
 test('minors.json: the authored text the app shows has no dash punctuation', () => {
@@ -132,7 +176,7 @@ test('minors.json: the authored text the app shows has no dash punctuation', () 
   const DASH = /[‒-―]|\s-{1,2}\s/;
   const problems = [];
   for (const [code, def] of Object.entries(data.minors)) {
-    const texts = [def.name, def.title, def.campus_note, ...(def.notes || []), ...(def.grade_rules || []),
+    const texts = [def.name, def.title, ...(def.notes || []), ...(def.grade_rules || []),
       ...((def.double_count && def.double_count.notes) || [])];
     const walk = cat => {
       texts.push(cat.name, ...(cat.notes || []));

@@ -253,6 +253,11 @@ function minorsCatalog() {
     course('85-352', 'Evolutionary Psychology', 9, []),
     course('03-121', 'Modern Biology', 9, []),
     course('03-362', 'Cellular Neuroscience', 9, []),
+    course('70-381', 'Marketing I', 9, []),
+    course('70-452', 'Introduction to Product Management', 9, []),
+    course('73-102', 'Principles of Microeconomics', 9, []),
+    course('70-389', 'Design Thinking with AI', 9, []),
+    course('70-385', 'Consumer Behavior', 9, []),
   ];
 }
 
@@ -321,10 +326,10 @@ test('minors: shared courses over the double counting limit show a warning', () 
 test('minors: the Minors tab lists every minor and shows the chosen one in full (faculty view)', () => {
   const { App, document } = loadMinorsApp({ role: 'professor', primary: 'AS', secondary: null, scope: null });
   const tabs = App._renderMajorTabs();
-  assertTrue(tabs.includes('data-major="MINORS"') && tabs.includes('All 16 minors'));
+  assertTrue(tabs.includes('data-major="MINORS"') && tabs.includes('All 17 minors'));
   App.switchMajor('MINORS');
   let html = treeHtml(document);
-  assertEqual((html.match(/data-action="minor-browse"/g) || []).length, 16);
+  assertEqual((html.match(/data-action="minor-browse"/g) || []).length, 17);
   assertTrue(html.includes('Choose a minor to see its full requirements.'));
   App.browseMinor('neuroscience');
   html = treeHtml(document);
@@ -336,6 +341,42 @@ test('minors: the Minors tab lists every minor and shows the chosen one in full 
   assertTrue(html.includes('At most 2 courses may also count toward a student&#039;s major or another minor.'));
   assertFalse(html.includes('cs-btn'), 'no status controls for faculty');
   assertFalse(html.includes('mn-programs'), 'no programs bar for faculty');
+});
+
+test('minors: Product Management shows its catalog requirements and the catalog double counting rule', () => {
+  const { App, document } = loadMinorsApp(STUDENT('CS', ['product']));
+  App.renderTree();
+  const html = treeHtml(document);
+  assertTrue(html.includes('id="mn-section-product"') && html.includes('Product Management minor'));
+  assertTrue(html.includes('Minor in Product Management'));
+  assertTrue(html.includes('Version: 2026-2027 Catalog'));
+  for (const name of ['Required', 'Marketing I', 'Introduction to Product Management', 'Principles of Microeconomics',
+    'Course in Design Thinking', 'Marketing Course']) {
+    assertTrue(html.includes(name), name);
+  }
+  assertTrue(html.includes('data-course-code="70-452"') && html.includes('data-course-code="70-389"'));
+  assertTrue(html.includes('At most 1 course may also count toward your major or another minor.'));
+  assertTrue(html.includes('Catalog rule: While there are no double counting restrictions between the minor and'));
+  assertFalse(html.includes('Audit rule:'), 'the rule comes from the catalog page, not an audit file');
+  assertTrue(html.includes('3 requirements. Mark the courses you took to see your progress.'));
+});
+
+test('minors: no minor shows a campus note; Product Management is not open to BA majors', () => {
+  const { App, document } = loadMinorsApp({ role: 'professor', primary: 'AS', secondary: null, scope: null });
+  App.switchMajor('MINORS');
+  for (const code of ['business_analytics', 'finance', 'sociology', 'history', 'tech_entre', 'product']) {
+    App.browseMinor(code);
+    const html = treeHtml(document);
+    assertTrue(html.includes(`id="mn-section-${code}"`), code);
+    assertFalse(/Pittsburgh version|Campus not stated|mn-pill-campus/i.test(html), code);
+  }
+  const ba = loadMinorsApp(STUDENT('BA', []), { isGuest: true });
+  ba.App._refreshSemesterOptions = () => {};
+  ba.App.addStudentMinor('product');
+  assertEqual(ba.App.profile.secondaries, [], 'product is not open to BA majors');
+  ba.App.switchMajor('MINORS');
+  ba.App.browseMinor('product');
+  assertTrue(treeHtml(ba.document).includes('Not open to BA majors'));
 });
 
 test('minors: a guest student adds and removes minors in the tree and keeps them across a view switch', () => {
