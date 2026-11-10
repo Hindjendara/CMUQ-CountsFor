@@ -806,8 +806,10 @@ function getAlsoCountsFor(course, currentMajor) {
 }
 
 // ── Offering likelihood (rule-based, no ML) ──────────────────
-// Uses the `offered` history on each course (codes like "S22", "F23", "M24",
-// "N25") to estimate whether a course is likely to run in a target season.
+// Uses the semesters a course ran in (codes like "S22", "F23", "M24", "N25"):
+// its `offered` history and the semesters of its Schedule of Classes sections,
+// as the course card's Offered line lists them, to estimate whether a course
+// is likely to run in a target season.
 // Spec § 12: prefer simple, honest signal over fabricated prediction.
 
 const SEASON_NAME = { S: 'Spring', M: 'Summer', N: 'Fall mini', F: 'Fall' };
@@ -820,8 +822,9 @@ function predictOffering(course, targetSeason /* 'S' | 'M' | 'N' | 'F' */) {
   if (!course || !targetSeason || !SEASON_NAME[targetSeason]) {
     return { state: 'unknown', reason: 'No prediction available.' };
   }
-  const hist = Array.isArray(course.offered) ? course.offered : [];
-  // De-duplicate identical entries — some scraping passes wrote dupes.
+  const hist = (Array.isArray(course.offered) ? course.offered : [])
+    .concat(getCourseOfferings(course).filter(o => o && !o.cancelled).map(o => o.semester_code));
+  // Each semester once: some scraping passes wrote dupes, and a semester has many sections.
   const seen = new Set();
   const codes = hist.filter(c => {
     if (!c || seen.has(c)) return false;

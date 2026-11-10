@@ -2400,7 +2400,7 @@ const App = {
           </div>
           <div class="cc-section">
             <div class="cc-h4">${esc(semLabel.toUpperCase())}</div>
-            ${this._renderOfferingPredictionHtml(course, isSemesterCode(this.activeSemester) ? this.activeSemester[0] : null)}
+            ${this._renderOfferingPredictionHtml(course, this.activeSemester)}
             ${schedHtml}
           </div>
         </div>
@@ -2861,13 +2861,17 @@ const App = {
     return `<span class="tr-leaf-actions">${acts.join('')}</span>`;
   },
 
-  // Course-card (detail view) actions — wishlist save toggle + flag link.
-  // Labeled buttons here (vs icon-only on row) since the card has space.
-  // Subtle offering-likelihood pill — appears under a semester header.
-  // Silent for 'mixed' and 'unknown' to avoid noise.
-  _renderOfferingPredictionHtml(course, season) {
-    if (typeof predictOffering !== 'function') return '';
-    const pred = predictOffering(course, season);
+  /**
+   * The forecast pill under the semester heading of the course card, from the
+   * semesters the course ran in (predictOffering); silent for 'mixed' and
+   * 'unknown' to avoid noise. It forecasts a semester the Schedule of Classes
+   * lists no section of the course in; when it lists one (any campus), the
+   * sections are the answer and no pill shows.
+   */
+  _renderOfferingPredictionHtml(course, semesterCode) {
+    if (typeof predictOffering !== 'function' || !isSemesterCode(semesterCode)) return '';
+    if (getCourseOfferings(course).some(o => o && !o.cancelled && o.semester_code === semesterCode)) return '';
+    const pred = predictOffering(course, semesterCode[0]);
     if (!pred || pred.state === 'mixed' || pred.state === 'unknown') return '';
     return `
       <div class="cc-offer-pred cc-offer-pred-${pred.state}" title="${esc(pred.reason)}">
@@ -2876,6 +2880,8 @@ const App = {
       </div>`;
   },
 
+  // Course-card (detail view) actions: wishlist save toggle and flag link.
+  // Labeled buttons here (vs icon-only on row) since the card has space.
   _renderCardActions(course) {
     const parts = [];
     if (isStudent(this.profile)) {

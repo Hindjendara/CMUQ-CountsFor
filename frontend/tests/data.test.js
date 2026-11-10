@@ -203,6 +203,18 @@ test('predictOffering: deduplicates identical entries before counting', () => {
   assertEqual(predictOffering(c, 'S').state, 'likely');
 });
 
+test('predictOffering: the semesters of the SOC sections count as history, once each', () => {
+  // A catalog row keeps its old history in offered; its SOC sections (S26, S27) are offerings.
+  const c = {
+    offered: ['F20', 'F21', 'F22', 'F23', 'F24'],
+    offerings: [{ semester_code: 'S26', section: 'A' }, { semester_code: 'S26', section: 'B' },
+      { semester_code: 'S27', section: 'A' }, { semester_code: 'F26', section: 'A', cancelled: true }],
+  };
+  assertEqual(predictOffering(c, 'S').state, 'mixed', '2 springs of 7 semesters, not "not offered in Spring"');
+  assertEqual(predictOffering(c, 'F').state, 'likely');
+  assertEqual(predictOffering({ offerings: [{ semester_code: 'S26' }, { semester_code: 'S27' }, { semester_code: 'F26' }] }, 'S').state, 'likely');
+});
+
 // ── orderCfColumns (role-based course-card column order) ─────
 
 test('orderCfColumns: faculty get canonical cross-program order', () => {

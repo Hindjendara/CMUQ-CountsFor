@@ -749,6 +749,18 @@ test('course card: each section of a lecture has its own + Plan, and planning B 
   assertEqual(plannedRows(App), [['15-112', 'Lec 1', 'TR 09:30AM-10:50AM'], ['15-112', 'B', 'W 10:00AM-10:50AM']]);
 });
 
+test('course card: the forecast pill is only for a semester with no sections of the course', () => {
+  const { App } = loadApp();
+  const c = { course_code: '85-370', offered: ['F20', 'F21', 'F22', 'F23', 'F24'],
+    offerings: [{ semester_code: 'S27', section: 'A', campus: 'Pittsburgh' }] };
+  assertEqual(App._renderOfferingPredictionHtml(c, 'S27'), '', 'the card lists the Spring 2027 sections: no forecast');
+  // Spring 2026 lists none: the forecast reads the history, the S27 sections included (1 spring of 6).
+  const pill = App._renderOfferingPredictionHtml(c, 'S26');
+  assertTrue(pill.includes('Rarely offered in Spring.'), pill);
+  assertFalse(pill.includes('Not offered in Spring'));
+  assertEqual(App._renderOfferingPredictionHtml(c, 'all'), '');
+});
+
 test('course card: a lecture with no sections keeps its own + Plan', () => {
   const { App, document, course } = loadPlanApp();
   App._selectCourse(course('21-120'));
