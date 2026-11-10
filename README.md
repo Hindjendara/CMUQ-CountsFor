@@ -100,7 +100,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **Flag** | A data-problem report a faculty member files against a course (reason codes in `backend/flags.py`). Statuses: `pending`, `reviewed`, `resolved`, `dismissed`. |
 | **Wishlist / Saved** | A student's saved courses with optional notes (`wishlist_items`). The UI calls it "Saved". |
 | **Plan / schedule plan** | A weekly schedule built from course sections. Stored in browser localStorage; the server only stores shared copies. |
-| **Override** | An admin edit to the course catalog stored in the database (`course_overrides`) and applied in the browser on top of the scraped `frontend/data/courses.json`. |
+| **Override** | An admin edit stored in the database and applied in the browser on top of the served files: a course edit (`course_overrides`: the changed fields, and what the course counts for as a change per program or minor, 12.2) or a minor setting (`minor_overrides`: unit total, double counting limits, a note for students, 12.6). |
 | **Mapping overlay** | A manual complement to the SOC scrape in `backend/data/mapping_overlays.json` (additive mappings, mapping removals, Qatar visibility), applied to the catalog file by the scrape pipeline. |
 | **Demo mode / guest mode** | Running the frontend without a signed-in user. Everything is local to the browser. |
 | **The server** | The CMU-Q Ubuntu 24.04 machine for `countsfor.qatar.cmu.edu`: Apache serves `frontend/`, Gunicorn runs the API, PostgreSQL holds the database, cron runs the scraper (section 15). |
@@ -263,7 +263,7 @@ Removed in November 2026 and still in git history: `render.yaml`, `backend/Procf
 | `app.py` | App factory `create_app()`, `init_database()`, `ProxyFix` when `TRUST_PROXY` is on, CORS setup, blueprint registration, `/health`, JSON 404, dev entry point (`python -m backend.app`). |
 | `config.py` | Every setting, read from environment variables (6.1). Loads `backend/.env` if present. Also `TestConfig`. |
 | `db.py` | The shared `SQLAlchemy()` instance. |
-| `models.py` | All ORM models (14 tables) and role constants (`VALID_ROLES`, `FACULTY_ROLES`, `VALID_DEPARTMENTS`, `FLAG_STATUSES`). |
+| `models.py` | All ORM models (15 tables) and role constants (`VALID_ROLES`, `FACULTY_ROLES`, `VALID_DEPARTMENTS`, `FLAG_STATUSES`). |
 | `db_schema.py` | `REQUIRED_TABLES` (checked by `/health` and bootstrap) and URL redaction helpers. |
 | `migrate.py` | Hand-written, idempotent `ALTER TABLE` and `CREATE TABLE` steps for databases that predate a model change. |
 | `bootstrap_db.py` | `python -m backend.bootstrap_db`: create missing tables, run migrations, verify required tables. On the server systemd runs it before every start of the API (`ExecStartPre`). |
@@ -276,7 +276,10 @@ Removed in November 2026 and still in git history: `render.yaml`, `backend/Procf
 | `users.py` | `/api/users` list and role edit (admin only). |
 | `admin.py` | `/api/admin/overview`, `/insights`, `/sign-ins`, `/activity`, and `record_event()` used by everyone to write audit rows. |
 | `activity.py` | Sign-in and visit tracking for the analytics page (`mark_signed_in`, `record_visit`, Qatar day helper). See section 13. |
-| `course_overrides.py` | `/api/courses/overrides` routes for catalog edits. |
+| `course_overrides.py` | `/api/courses/overrides` routes for course edits, including the batch route of the category view, and their checks (12.2, 12.3). |
+| `minor_overrides.py` | `/api/minors/overrides` routes for minor settings (12.6). |
+| `minors_file.py` | Reads `frontend/data/minors.json` (the plain setting `MINORS_JSON_PATH`) for both editors: which minors exist and which of their categories hold courses. Callers fall back to `VALID_MINORS_FOR_PATCH` when the file cannot be read. |
+| `migrate_override_paths.py` | `python -m backend.migrate_override_paths`: moves course edits saved in the old whole list shape to the 2026-27 names (12.7, 15.8 step 8). A dry run unless `--apply`. |
 | `flags.py` | `/api/flags` routes. |
 | `wishlist.py` | `/api/wishlist` routes. |
 | `plans.py` | `/api/plans` routes (list, share by email, share link, accept link). |
@@ -601,7 +604,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 ### 8.1 Load order and globals
 
-`app.html` loads, in order: `js/utils.js`, `js/data.js`, `js/profile.js`, `js/api.js`, `js/app.js`. There are no modules; every top-level `function` and `const` is a global. Later files depend on earlier ones. `tests/test.html` loads `utils.js`, `data.js`, `profile.js` in the same order, then the profile, data, minors and utils tests.
+`app.html` loads, in order: `js/utils.js`, `js/data.js`, `js/profile.js`, `js/api.js`, `js/app.js`. There are no modules; every top-level `function` and `const` is a global. Later files depend on earlier ones. `tests/test.html` loads `utils.js`, `data.js`, `profile.js` in the same order, then the profile, data, minors, course edits and utils tests.
 
 `index.html` loads `js/utils.js`, `js/api.js` and `js/landing.js`, in that order. `landing.js` is wrapped in an IIFE and uses the globals from the other two: the backend URL, token storage, `apiFetch` and the auth calls from `api.js`; `esc`, `showToast` and the CMU email check from `utils.js`. Both pages therefore share one copy of each.
 
@@ -631,8 +634,9 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | 292 to 303 | `courseOfferedInQatar()`, `isCourseHidden()` | A row is hidden everywhere (tree, search, typeahead, home lists, also counts for, double counters) when it has `qatar_only` without a running Qatar offering. |
 | 305 to 428 | `buildRequirementTree()`, `normalizeTree()`, `ruleOrder()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; sibling buckets follow the order of the major's rules (catalog order), and courses kept from an earlier requirement list after the current ones; split into degree and GenEd sections. |
 | 431 | `normalizeCourseCode()` | Canonical `NN-NNN`. |
-| 440 to 522 | `COURSE_EDIT_FIELDS`, `applyCourseOverrides(courses, overrides)` | Apply admin edits. Returns `{ courses, archived }`. Edited courses get `_edit` (the override) and `_catalog` (the scraped values replaced). Added courses get `_added`. Archived courses are removed from `courses` and returned in `archived`. Copies objects so a reload starts from scraped data. |
-| 525 | `knownRequirementPaths()` | All requirement paths per program, used by the course editor's autocomplete. |
+| 443 to 535 | `COURSE_EDIT_FIELDS`, `MINOR_EDIT_PREFIX`, `DEGREE_ROOTS`, `requirementPathRootOk()`, `applyProgramEdit()`, `programEditDelta()`, `sameRequirementEdit()` | What a course counts for, edited as a change per program (12.2). `applyProgramEdit(baseRows, edit, prog)` applies `{ add, remove }` to one program's catalog rows (a list saved before November 10, 2026 replaces them, with any old earlier flags dropped). `programEditDelta(base, draft)` is the smallest change from the catalog, or null when both list the same paths. A row's Gen Ed flag always comes from its root (`GenEd`). |
+| 537 to 620 | `applyCourseOverrides(courses, overrides)` | Apply admin edits. Returns `{ courses, archived }`. Edited courses get `_edit` (the override) and `_catalog` (the scraped values replaced, `requirements` included). A program key changes only that program; a `MINOR:<code>` key goes to `course._minorEdits`, which `buildMinorIndex()` applies (8.10). Added courses get `_added`. Archived courses are removed from `courses` and returned in `archived`. Copies objects so a reload starts from scraped data. |
+| 627 to 684 | `knownRequirementPaths(courses, buckets)`, `parseRequirementBuckets()` | The course editor's pick list per program: the buckets of `data/requirement_buckets.json` when the pipeline wrote it (empty buckets included; a heading with buckets under it only when catalog rows use it), then every path of the scraped rows. Pass the scraped courses, so a path that only an edit uses is not offered. |
 | 539 to 598 | `buildCourseIndex()`, `lookupCourse()`, `findTreeNode()`, `collectCoursesForRequirement()`, `formatRequirementPath()`, `requirementLeafLabel()` | Index by `15-122` and `15122`. Tree lookups. |
 | 600 to 666 | `getCourseMappings()`, `orderCfColumns()`, `summarizeFlagsByStatus()`, `getAlsoCountsFor()` | Display data for the course card. |
 | 668 to 721 | `predictOffering()`, `sortSemesters()` | Rule-based "likely offered next term" hint (no ML). |
@@ -662,12 +666,13 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 
 | Group | Functions | Endpoint |
 |---|---|---|
-| Course data | `fetchAllCourses()`, `fetchMinors()` | static files (see 3.3) |
+| Course data | `fetchAllCourses()`, `fetchMinors()`, `fetchRequirementBuckets()` (null when `data/requirement_buckets.json` is missing or unreadable; only the admin Courses tab asks for it) | static files (see 3.3) |
 | Backend URL and token | `getBackendUrl()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
 | Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword` (these six are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
 | Admin console | `apiAdminOverview`, `apiAdminInsights(semester)`, `apiAdminActivity(query)` | `/api/admin/*` |
-| Course edits | `apiGetCourseOverrides` (10 s timeout), `apiAddCourse`, `apiEditCourse`, `apiArchiveCourse`, `apiRestoreCourse`, `apiRevertCourse` | `/api/courses/overrides` |
+| Course edits | `apiGetCourseOverrides` (10 s timeout), `apiAddCourse`, `apiEditCourse`, `apiBatchEditCourses`, `apiArchiveCourse`, `apiRestoreCourse`, `apiRevertCourse` | `/api/courses/overrides` |
+| Minor settings | `apiGetMinorOverrides` (10 s timeout, fetched with the course edits), `apiEditMinor`, `apiRevertMinor` | `/api/minors/overrides` |
 | Directory | `apiListStaffDirectory`, `apiAddStaffMember`, `apiUpsertDirectoryByEmail`, `apiRevokeDirectoryAccess`, `apiDeleteDirectoryEntry` | `/api/directory/entries` |
 | Flags | `apiCreateFlag`, `apiListFlags`, `apiUpdateFlag` | `/api/flags` |
 | Wishlist | `apiGetWishlist`, `apiGetWishlistRoster`, `apiAddWishlist`, `apiUpdateWishlistNote`, `apiRemoveWishlist` | `/api/wishlist` |
@@ -712,11 +717,11 @@ Everything lives on one object literal `const App = { ... }`, started by `App.in
 | 3947 to 4120 | Flags | `FLAG_REASONS` (must match `VALID_REASON_CODES` in `backend/flags.py`), `_getFlags()` (local `cf_flags`), `openFlagModal()`, `submitFlag()` |
 | 4121 to 4354 | Directory panel | `toggleDirectoryPanel()`, `_loadDirectoryPanel()`, `_renderDirectoryPanel()`, `_editDirectoryRow()`, `_revokeDirectoryRow()`, `_submitDirectoryForm()` |
 | 4355 to 4484 | Admin console shell | `_adminConsole` state, `ADMIN_TABS`, `showAdminConsole()`, `_setAdminTab()`, `_loadAdminTab()` (dispatch), helpers `_admEl()`, `_admError()`, `_admWhen()`, `_admStat()` |
-| 4485 to 5057 | Admin: Courses tab (course editor) | `_courseAdmin` state, `_renderAdminCourses()`, `_renderCourseResults()`, `_openCourseEditor()`, `_openCourseAdd()`, `_renderCourseEditor()`, `_addCourseReq()`, `_courseReqRow()` (keeps a row's earlier flag), `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()` |
+| 4485 to 5057 | Admin: Courses tab (12.5 to 12.7) | `_courseAdmin` state and its three views (`COURSE_VIEWS`). Courses: `_renderAdminCourses()`, `_renderCourseResults()` (filters Edited, Added here, Check these, Archived), `_courseEditSummary()`, `_courseEditProblems()`, `_openCourseEditor()`, `_editCourseInAdmin()` (from the Edit course data button `_renderCardActions()` shows admins on a course card, or from the Activity log), `_openCourseAdd()`, `_renderCourseEditor()`, `_courseReqGroupHtml()` (Added here, Removed here, Put back, Reset to the catalog, Not in the 2026-27 catalog), `_courseMinorSectionHtml()`, `_addCourseReq()`, `_addCourseMinor()`, `_courseRequirementsPatch()` (the change per program and minor), `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()`. Courses in a category: `_renderCategoryView()`, `_categoryChange()` (one batch save). Minor settings: `_renderMinorSettings()`, `_saveMinorSettings()`, `_revertMinorSettings()` |
 | 5058 to 5391 | Admin: Overview tab and sign-in activity | `_loadAdminOverview()`, `_openIncompleteUsers()`, `_openSignIns()`, `_renderSignIns()`, `_exportSignInsCsv()` |
 | 5392 to 5431 | Admin: Faculty access tab | `_loadAdminAccess()`, `_openDirectoryFromAdmin()` |
 | 5432 to 5527 | Admin: Insights tab | `_loadAdminInsights()` |
-| 5528 to 5607 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()`, `_describeAdminEvent()` (human text per audit action) |
+| 5528 to 5607 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()` (filters Everything, Courses, Minors, User changes, Flag reviews, Faculty access), `_describeAdminEvent()` (human text per audit action: fields from and to, the categories added and removed per program and minor, what an undo dropped), `_adminEventOpenHtml()` (an Open button on each course and minor event) |
 | 5608 to 5818 | Admin: Users tab | `_loadUserAdmin()`, `_exportUsersCsv()`, `_renderUserAdmin()`, `_renderUserAdminRow()`, `_saveUserAdmin()` (opened with `showAdminConsole('users')`) |
 | 5819 to 5948 | Admin and faculty: Flags review | `showFlagReview()`, `_loadFlagReview()`, `_renderFlagReview()`, `_setFlagStatus()`, `_promptFlagNote()` |
 | 5949 to 6477 | Minors (8.10) | course statuses (`setCourseStatus()`, `cycleCourseStatus()`, `_courseStatusButtonHtml()`, `_courseCardStatusHtml()`), `_courseCardMinorsHtml()`, `_nodeStatusHtml()`, `_minorNodeInfoHtml()`, `_studentProgramsBarHtml()`, `setStudentMajor()`, `addStudentMinor()`, `removeStudentMinor()`, `_applyStudentPrograms()`, `_saveStudentProgramsToAccount()` (one `PATCH /api/me` at a time), `browseMinor()`, `openMinorRequirements()`, `_navigateToMinorNode()`, `_renderMinorsBrowse()`, `_renderMinorSection()`, `_minorProgressHtml()` |
@@ -771,6 +776,8 @@ Note: course statuses live only in the browser too; saving them on the account c
 
 Tests: `tests/minors.test.js` (selection rules, trees, progress, double counting), `tests/minors-file.test.js` (the real file through `fetchMinors()`, the fallback list, every category's rule) and the minors part of `tests/app-views.test.js` (the student tree, statuses, a warning, the Minors tab, guest changes, the save queue, a missing file).
 
+**Admin edits** (12.2, 12.6). Two kinds of admin edits change the minors without touching the file. Which courses fill a category is a course edit: the course editor's Minors section and the category view save a `MINOR:<code>` key with the category paths to add or remove. `applyCourseOverrides()` puts them on `course._minorEdits`, `collectMinorEdits()` gathers them, and `buildMinorTree()` applies them after the file's list and select rule: a removed code leaves the category, an added code joins it when it has a catalog row and is not hidden. The codes an edit changed are on the node (`adminAdded`, `adminRemoved`) and named under the category for admins only; a listed code the admin archived is named "Archived on the admin page" instead of missing. `minorLeafCategories()` lists a minor's categories that hold courses (the editor's picker) and `minorFileCategories()` the ones that take a course by the file alone. The minor settings are applied by `applyMinorOverrides()` to a copy of the file before the index is built: the unit total, a note from CMU-Q in the header, and the double counting limits. When an admin sets `max_with_major` and `max_with_other_minors` to different values, each applies on its own (`minorDoubleCountRules().separate`: courses shared with the major, and courses shared with another minor); equal values stay one shared limit, as in the files. The header then says that CMU-Q set the limit and that it replaces the quoted audit rule. Admins also get an Edit minor settings button in the Minors tab. Tests: `tests/course-edits.test.js` and `tests/admin-editor.test.js`.
+
 ---
 
 ## 9. Backend walkthrough
@@ -783,8 +790,8 @@ Tests: `tests/minors.test.js` (selection rules, trees, progress, double counting
 2. If `TRUST_PROXY` is on, wraps the WSGI app in `ProxyFix(x_for=1, x_proto=1)`; then `db.init_app(app)`.
 3. Unless `SKIP_DB_BOOTSTRAP` is truthy, runs `init_database(app)`: imports models, `db.create_all()`, then `run_migrations()`.
 4. Enables CORS for `/api/*` only, for `FRONTEND_ORIGINS`, with credentials and the `Content-Type` and `Authorization` headers.
-5. Registers blueprints: `auth`, `flags`, `wishlist`, `users`, `directory`, `search_analytics`, `plans`, `admin`, `course_overrides`.
-6. Adds `GET /health` (no `/api` prefix, so no CORS). For SQLite it always returns ok. For Postgres it runs `SELECT 1` and checks `REQUIRED_TABLES`; returns 503 if tables are missing or the DB errors.
+5. Registers blueprints: `auth`, `flags`, `wishlist`, `users`, `directory`, `search_analytics`, `plans`, `admin`, `course_overrides`, `minor_overrides`.
+6. Adds `GET /health` (no `/api` prefix, so no CORS). It runs `SELECT 1` and checks `REQUIRED_TABLES`, and returns 503 if tables are missing or the DB errors. With SQLite it also lists the table names (`table_names`), so a local bootstrap can be checked by eye; with Postgres it reports only their count (`tables`).
 7. JSON 404 handler: `{"error":"not_found","message":"Route not found."}`.
 
 On the server systemd runs `gunicorn --workers 3 --bind 127.0.0.1:8000 --timeout 120 --forwarded-allow-ips 127.0.0.1 ... 'backend.app:create_app()'` from `/var/www/html/countsfor`, with `SKIP_DB_BOOTSTRAP=1` and `TRUST_PROXY=1` from `/etc/countsfor/countsfor.env` (15.9).
@@ -847,7 +854,8 @@ When a signed-in **student** opens a course, the frontend posts `/api/search-ana
 ### 9.10 Admin console API and audit log (`backend/admin.py`)
 
 - `record_event(actor, action, target, **details)` adds an `admin_audit_events` row to the current session; the caller's commit saves it together with the change.
-- Actions written today: `user.update`, `directory.add`, `directory.update`, `directory.remove`, `directory.revoke`, `flag.status`, `flag.note`, `course.add`, `course.update`, `course.revert`, `course.archive`, `course.restore`.
+- Actions written today: `user.update`, `directory.add`, `directory.update`, `directory.remove`, `directory.revoke`, `flag.status`, `flag.note`, `course.add`, `course.update`, `course.revert`, `course.archive`, `course.restore`, `course.migrate` (written by `migrate_override_paths.py`, actor `system: migrate_override_paths`), `minor.update`, `minor.revert`.
+- Course and minor events say what changed. `course.update`: `fields` (the changed field names, plus `counts for` when a program changed and `minors` when a minor changed; older rows hold only this), `changes` (`{field: {"from", "to"}}`, where null is the Schedule of Classes value; text is cut to 300 characters) and `requirements` (the new value of every changed program or `MINOR:<code>` key, null meaning back to the catalog). `course.add` carries the `requirements` it was added with. `course.revert` keeps what it dropped in `before` (`fields`, `requirements`, `archived`), with `reason: "matches the catalog"` when a save left nothing to store. `minor.update` has `fields` and `changes`; `minor.revert` has `before` (with `reason: "matches the minor file"` when a save set every value back). A save that changes nothing writes no event and no new editor stamp.
 - `GET /api/admin/overview`: user counts by role and group, new users in 7 and 30 days, active in 7 days (by `last_login`), incomplete profiles, flag counts by status, wishlist totals, plan count, total course lookups, directory row count, `course_data.last_scrape` (read from the top of the server's `soc.json`: `SOC_JSON_PATH`, default `backend/data/soc.json`), six most recent signups.
 - `GET /api/admin/insights?semester=F26`: top lookups, top lookups per program, most saved, most flagged, students per program, signups per week for 12 weeks, list of semesters with data.
 - `GET /api/admin/sign-ins?days=7|30|90`: sign-in activity (active people, sign-ins, app opens, daily series, breakdowns, per-person table). See section 13.
@@ -903,10 +911,14 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | GET | `/api/admin/activity` | admin | `admin.py` | Audit log |
 | GET | `/api/courses/overrides` | public | `course_overrides.py` | All catalog edits (`Cache-Control: no-cache`) |
 | POST | `/api/courses/overrides` | admin | `course_overrides.py` | Add a new course |
-| PATCH | `/api/courses/overrides/<code>` | admin | `course_overrides.py` | Edit a course (creates the override) |
+| PATCH | `/api/courses/overrides/<code>` | admin | `course_overrides.py` | Edit a course (creates the override); `requirements` changes only the keys it names (12.2) |
 | POST | `/api/courses/overrides/<code>/archive` | admin | `course_overrides.py` | Hide a course |
 | POST | `/api/courses/overrides/<code>/restore` | admin | `course_overrides.py` | Unhide |
 | DELETE | `/api/courses/overrides/<code>` | admin | `course_overrides.py` | Revert a scraped course to the scrape (added courses cannot be reverted, only archived) |
+| POST | `/api/courses/overrides/batch` | admin | `course_overrides.py` | Change what several courses count for at once (`{"items": [{"course_code", "requirements"}]}`, at most 200): one transaction, one `course.update` event per course |
+| GET | `/api/minors/overrides` | public | `minor_overrides.py` | All minor settings (`Cache-Control: no-cache`) |
+| PATCH | `/api/minors/overrides/<code>` | admin | `minor_overrides.py` | Set a minor's `total_units`, `max_with_major`, `max_with_other_minors` or `admin_note` (12.6) |
+| DELETE | `/api/minors/overrides/<code>` | admin | `minor_overrides.py` | Back to what `minors.json` says |
 
 
 ---
@@ -930,9 +942,10 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | `admin_audit_events` | `AdminAuditEvent` | `actor_id`, `actor_email`, `actor_name`, `action`, `target`, `details` (JSON text), `created_at` | |
 | `sign_in_events` | `SignInEvent` | `user_id`, `method`, `created_at` | One row per sign-in (section 13) |
 | `user_activity_days` | `UserActivityDay` | `user_id`, `day`, `visits`, `sign_ins`, `first_seen`, `last_seen` | One row per user per Qatar day (section 13) |
-| `course_overrides` | `CourseOverride` | `course_code` (unique), `is_new`, `archived`, `fields` (JSON text), `requirements` (JSON text), `updated_by_*` | |
+| `course_overrides` | `CourseOverride` | `course_code` (unique), `is_new`, `archived`, `fields` (JSON text), `requirements` (JSON text), `updated_by_*` | `requirements` is one change per program or minor (12.2). |
+| `minor_overrides` | `MinorOverride` | `minor_code` (unique), `fields` (JSON text: only the values that differ from `minors.json`), `updated_by_*` | Minor settings (12.6). |
 
-`backend/db_schema.py` `REQUIRED_TABLES` lists all 14. `backend/models.py` is the source of truth for the schema.
+`backend/db_schema.py` `REQUIRED_TABLES` lists all 15. `backend/models.py` is the source of truth for the schema.
 
 ### 11.2 How schema changes reach production (exactly)
 
@@ -951,7 +964,7 @@ So:
 - New columns added to an existing table should be nullable or have a default, otherwise the `ALTER TABLE` fails on existing rows.
 - Booleans: the existing migrations use `DEFAULT 0` for SQLite and `DEFAULT FALSE` for Postgres. Follow that pattern.
 
-Since November 3, 2026 production `/health` on Render reports `"tables": 14` (the admin page and sign-in analytics are deployed). The deploy created `admin_audit_events`, `course_overrides`, `sign_in_events` and `user_activity_days` through `create_all()` and backfilled sign-in history once (section 13.2).
+Since November 3, 2026 production `/health` on Render reports `"tables": 14` (the admin page and sign-in analytics are deployed). The deploy created `admin_audit_events`, `course_overrides`, `sign_in_events` and `user_activity_days` through `create_all()` and backfilled sign-in history once (section 13.2). `minor_overrides` (November 2026) is a new table, so the next bootstrap creates it with no migration step, and the count becomes 15.
 
 ---
 
@@ -965,22 +978,59 @@ Since November 3, 2026 production `/health` on Render reports `"tables": 14` (th
 
 One row per course code:
 
-- Scraped course edited: `is_new = false`, `course_code` = the catalog code (even if the admin renumbers it; the new number is stored inside `fields.course_code`), `fields` = only the changed fields (`course_name`, `department`, `units`, `description`, `prerequisites`, `offered_qatar`, `offered_pitts`, `offered`, optionally `course_code`), `requirements` = the complete "counts for" map when edited (`{"CS": [{"requirement": "A---B", "type": false, "major": "CS"}], ...}`; a row kept from an earlier requirement also has `"earlier": true` and `earlier_reason`, which the editor keeps), else null.
-- Course added by an admin: `is_new = true`, keyed by its own code; renumbering moves the key.
+- Scraped course edited: `is_new = false`, `course_code` = the catalog code (even if the admin renumbers it; the new number is stored inside `fields.course_code`), `fields` = only the changed fields (`course_name`, `department`, `units`, `description`, `prerequisites`, `offered_qatar`, `offered_pitts`, `offered`, optionally `course_code`).
+- `requirements` = what the course counts for, as a change to the catalog per program and per minor, or null:
+
+  ```json
+  {"CS": {"add": [{"requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives", "type": true, "major": "CS"}],
+          "remove": ["BS in Computer Science---Computer Science---Computer Science Core"]},
+   "MINOR:psychology": {"add": ["statistics---intro_stats"], "remove": ["survey"]}}
+  ```
+
+  A key that is present means that program (or minor) is edited for this course; a missing key follows the catalog (or `minors.json`) as it is, including what the daily pipeline adds later. So a fix keeps exactly the admin's decision (a removed row stays removed, an added row stays added) while everything else keeps flowing in. Minor values are category paths: category ids joined by `---`, as the minor trees build them, and only categories that hold courses.
+- A list value (`"CS": [rows]`) is the whole list shape the editor saved before November 10, 2026. The browser still applies it, as the rows of its own program only (old `earlier` flags on it are ignored), and the editor flags it; the API never writes one again (12.7 converts them).
+- Course added by an admin: `is_new = true`, keyed by its own code; renumbering moves the key. Its `requirements` are changes against an empty catalog, so additions only.
 - `archived = true` hides the course from everyone; nothing is deleted.
 - If an edit leaves a scraped course identical to the scrape (no fields, no requirements, not archived) the row is deleted.
 
 ### 12.3 Validation rules (`course_overrides.py`)
 
-Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`. Requirement programs must be in `CS IS BA BS AI GS`; each path up to 400 chars; duplicates are dropped; `earlier_reason` up to 200 chars, stored only on a row with `earlier` true.
+Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`.
+
+What a course counts for:
+
+- A key is a program in `CS IS BA BS AI GS`, or `MINOR:<code>` for a minor of `minors.json`. A value is `{"add": [...], "remove": [...]}` (at most 200 each), or null, which puts that key back to the catalog. `PATCH` changes only the keys it names and keeps the others; when nothing is left, `requirements` becomes null.
+- A program path has at least two parts joined by `---`, each trimmed and not empty, at most 400 characters and no dash punctuation, and starts with `GenEd` or the program's degree root (`BS in Computer Science`, `BS in Information Systems`, `BS in Business Administration`, `BS in Biological Sciences`, `BS in Artificial Intelligence`, `BS in General Studies`). The Gen Ed flag (`type`) comes from the root, whatever the client sends, and any other field of a row (for example an old `earlier` flag) is dropped.
+- A minor path must be one of that minor's categories that hold courses. `backend/minors_file.py` reads `frontend/data/minors.json` (cached by its modification time), so a minor added to the file is accepted with no code change; when the file cannot be read, the minor must be in `VALID_MINORS_FOR_PATCH` and a path must look like category ids joined by `---`.
+- Duplicates are dropped, and a path both added and removed is refused. A list value is refused with `stale_page` ("This page is out of date. Reload it and try again."), so a tab opened before the change cannot freeze every program again.
+- The server does not check that a path is a 2026-27 category; the editor does (12.5).
 
 ### 12.4 How the browser applies them
 
-`App._prepareCatalog()` calls `fetchAllCourses()`, then `apiGetCourseOverrides()` (10 s timeout; on failure it logs a warning and shows the plain scrape), then `applyCourseOverrides()`, then rebuilds the index and trees. Overrides match exact codes. After every save the course editor calls `_reloadCatalog()` to rebuild from scratch.
+`App._prepareCatalog()` calls `fetchAllCourses()` and `fetchMinors()`, then `apiGetCourseOverrides()` and `apiGetMinorOverrides()` together (10 s timeout each; on failure it logs a warning and shows the plain files), then `_buildCatalog()`: `applyMinorOverrides()` on a copy of the minor file, `applyCourseOverrides()` (each program key through `applyProgramEdit()` on that program's catalog rows; minor keys to `course._minorEdits`), the index, `buildMinorIndex()` (which applies the minor edits, 8.10) and the trees. Overrides match exact codes. After every save the editor calls `_reloadCatalog()` to rebuild from scratch.
+
+The overrides are applied after the pipeline output, so the daily update needs nothing from the editor and the changes survive it (an admin's removal of a course that a rule bucket adds stays removed). What the pipeline must respect: bucket paths stay stable. A rename needs an entry in `backend/data/requirement_path_renames.json` and a run of `migrate_override_paths.py` (12.7); otherwise a change on the old path does nothing (a removal) or makes a ghost bucket (an addition), which the editor's Check these filter lists.
 
 ### 12.5 Using the course editor
 
-Admin page, **Courses** tab: search by number or title, filter (all, edited, added, archived), open a course, edit fields and the "counts for" list per program (with autocomplete from existing requirement paths), then Save. A category typed into a "Pick or type" box is saved even if you never pressed its Add button. A successful Add course or Save changes opens a confirmation screen (`_renderCourseSaved` in `js/app.js`, state `_courseAdmin.view === 'saved'`) listing what changed; validation errors appear in the `#ce-notice` box next to the buttons, not as toasts. Buttons: Archive, Restore, Revert (drops all edits for a scraped course). Saving under a number another row or an archived row already has is refused. "Add course" creates a new course. Every action is in the Activity log.
+Admin page, **Courses** tab, **Courses** view: search by number or title, filter (all, Edited, Added here, Check these, Archived), open a course (or press **Edit course data** on its course card), edit the fields and what it counts for, then Save. Under each edited course the list says what changed, for example "Units · Computer Science: 1 added, 1 removed · Psychology minor: 1 added".
+
+- **What it counts for**, one group per major. The pick list is the 2026-27 catalog: the categories of the scraped catalog before any edit, plus the empty buckets of `data/requirement_buckets.json` when the pipeline wrote it (without it, the scraped categories only). A category under another program's root is refused. A category that is not in the list is added only after a confirmation and is tagged **Not in the 2026-27 catalog**; the **Check these** filter lists every course whose edits use one (or a minor category the minor file does not have, or a list saved before the change). A category typed into a "Pick or type" box but never added with its Add button is added on save when it is in the list; otherwise the save stops with a notice.
+- A row the admin added says **Added here**. A catalog row the admin removed stays listed, struck through, as **Removed here**, with **Put back**. An edited group says **Edited here** and has **Reset to the catalog**. When CS and AI list the same Gen Ed category (AI's general education rows are copies of the SCS rows CS uses), the editor reminds you to change it in both.
+- **Minors**: the minor categories the course fills (From the minor file, or Added here), the removed ones with Put back, and a picker of every minor category that holds courses.
+- Save sends, per program and per minor, only the change from the catalog, and only for the keys that differ from what is stored; a group set back to the catalog sends null. A list saved before the change shows a notice ("These categories were saved before the 2026-27 catalog names.") and saving turns it into a change against today's catalog.
+
+A successful Add course or Save changes opens a confirmation screen (`_renderCourseSaved` in `js/app.js`, state `_courseAdmin.view === 'saved'`) listing what changed; validation errors appear in the `#ce-notice` box next to the buttons, not as toasts. Buttons: Archive, Restore, Undo all edits (drops all edits of a scraped course). Saving under a number another row or an archived row already has is refused. "Add course" creates a new course. Every action is in the Activity log, which says what changed and has an Open button per course.
+
+**Courses in a category** (the second view) is for group decisions, such as a rule bucket: pick a major or a minor and one of its categories to see all its courses, the ones added and removed here included; remove or put back one course or the selected ones, or type course numbers to add. Each course keeps its own change, and all of them are saved in one `POST /api/courses/overrides/batch` (one transaction, one event per course).
+
+### 12.6 Minor settings
+
+`frontend/data/minors.json` is built by hand (4.4) and some of its numbers are open questions (double counting limits, unit totals). The **Minor settings** view of the Courses tab (also opened with **Edit minor settings** in the Minors tab) corrects them for everyone without editing the file: `total_units` (a whole number, or empty when the minor states none), `max_with_major` and `max_with_other_minors` (0 to 10, or No limit) and `admin_note` (up to 1000 characters, shown to students in the minor's header as a note from CMU-Q). They are stored in the `minor_overrides` table (`backend/minor_overrides.py`, `/api/minors/overrides`: read by everyone, written by admins), one row per minor with only the values that differ from the file; a value set back to the file's is removed, and **Undo all edits** deletes the row. The browser applies them with `applyMinorOverrides()` (8.10). Which courses fill a category is a course edit instead (12.2).
+
+### 12.7 Edits saved before the 2026-27 names
+
+Before November 10, 2026 the editor saved the whole "counts for" list of every program of a course, in the bucket names of the time. `python -m backend.migrate_override_paths` updates them (15.8 step 8). With `--baseline FILE` (the `courses.json` from before the renames) it renames both the saved list and that course's baseline rows with `backend/data/requirement_path_renames.json` (its `per_course` exceptions first) and keeps only their difference, as a change; a program the old editor saved without a change goes back to the catalog. Without `--baseline` it renames the paths in place and keeps the list for a look in the editor. It prints every course, each program before and after, and every path that is still not in today's catalog. It is a dry run unless `--apply`, which writes the rows, deletes a row left with no edit, and adds one `course.migrate` event per course.
 
 ---
 
@@ -1511,13 +1561,20 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    WHERE course_code IN ('85-104','85-253','85-261','85-211','85-219','85-221','85-241','85-377','85-442','85-359','85-340');
    ```
 
-   Admin edits saved before November 10, 2026 that changed what a course counts for still use the old requirement paths (14.10). The browser applies an edit's whole "counts for" list, so such a course would show under an old bucket with no rule chip. List them:
+   Admin edits saved before November 10, 2026 that changed what a course counts for are whole lists in the old requirement paths (14.10, 12.7). The browser applies such a list to its own program only, but the course shows under an old bucket with no rule chip and that program no longer follows the catalog. List them:
 
    ```sql
    SELECT course_code, updated_by_email, updated_at FROM course_overrides WHERE requirements IS NOT NULL;
    ```
 
-   No rows: nothing to do. Otherwise an admin opens each course in the course editor, removes every category that is not in the pick list and adds its new name from `backend/data/requirement_path_renames.json`, then saves.
+   No rows: nothing to do. Otherwise convert them with `backend/migrate_override_paths.py` (12.7), against the catalog from before the renames, as a dry run first:
+
+   ```bash
+   git -C ~/countsfor-src show 174e856:frontend/data/courses.json > /tmp/courses-2026-11-09.json
+   sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.migrate_override_paths --baseline /tmp/courses-2026-11-09.json'
+   ```
+
+   Read the report and run the same command again with `--apply`. Then an admin checks the courses it lists under "not in today's catalog" in the course editor's **Check these** filter. The script runs `create_app(bootstrap_db=False)`, so it works before step 9.
 
    Then the minors the API no longer accepts: `product` (dropped in November 2026) and the minors a BA major may not declare (`business`, `business_analytics`, `finance`). The app already ignores them, but a saved one makes every later profile save of that student fail ("Unknown minor_code" or "That minor is not open to students in your major."). List them, then remove them:
 
@@ -1545,11 +1602,11 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    ```
    Database target: postgresql:/countsfor
    Database dialect: postgresql
-   Required tables present (14): admin_audit_events, course_overrides, course_search_counts, directory_entries, flags, password_reset_tokens, schedule_plan_items, schedule_plan_share_tokens, schedule_plans, sign_in_events, user_activity_days, user_minors, users, wishlist_items
+   Required tables present (15): admin_audit_events, course_overrides, course_search_counts, directory_entries, flags, minor_overrides, password_reset_tokens, schedule_plan_items, schedule_plan_share_tokens, schedule_plans, sign_in_events, user_activity_days, user_minors, users, wishlist_items
    Database bootstrap OK
    ```
 
-   (`postgresql:/countsfor` is how the redaction helper prints a socket URL.) Lines such as `Added users.department` before them mean a migration ran because the Render database lacked a column; a second run prints none. A line starting with `FATAL` means it failed: read it, fix the cause, run it again.
+   (`postgresql:/countsfor` is how the redaction helper prints a socket URL.) Lines such as `Added users.department` before them mean a migration ran because the Render database lacked a column; a second run prints none. A line starting with `FATAL` means it failed: read it, fix the cause, run it again. The Render database has no `minor_overrides` table; `create_all()` adds it here without printing a line.
 
 10. **Clean up:** `sudo rm /var/tmp/countsfor-render.dump` and `rm ~/.pg_service.conf` (it holds the Render password). Keep the final dump file off the server as the last backup of the Render database.
 
@@ -1828,11 +1885,11 @@ python -m pytest backend/tests -q
 # Data pipeline, daily update, dev server and bump script (no network)
 python -m pytest backend/scraper/tests -q
 
-# Frontend (Node): tests/profile.test.js, data.test.js, minors.test.js and utils.test.js like
-# tests/test.html, then the Node-only dash-guard.test.js, minors-file.test.js, app-views.test.js and catalog-data.test.js
+# Frontend (Node): tests/profile.test.js, data.test.js, minors.test.js, course-edits.test.js and utils.test.js like
+# tests/test.html, then the Node-only dash-guard.test.js, minors-file.test.js, app-views.test.js, admin-editor.test.js and catalog-data.test.js
 node scripts/run-data-tests.js
 
-# Frontend in the browser (profile, data, minors and utils tests)
+# Frontend in the browser (profile, data, minors, course edits and utils tests)
 python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
@@ -1862,7 +1919,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
-- `backend/tests/test_admin.py` and `test_course_overrides.py` cover the admin page.
+- `backend/tests/test_admin.py`, `test_course_overrides.py` (the change per program and minor, the path and minor checks, the merge per key, `stale_page`, the batch route, the audit details), `test_minor_overrides.py` (minor settings and the `/health` table list) and `test_migrate_override_paths.py` (12.7) cover the admin page.
 - `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, the SMTP relay check end to end, and that production never returns a reset token or reads `backend/.env`.
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
@@ -1873,6 +1930,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `frontend/tests/catalog-data.test.js` (Node only) reads `data/courses.json` and checks it against `js/data.js` (14.10).
 - `frontend/tests/app-views.test.js` (Node only) runs the real `js/app.js` in a `vm` context with a small fake DOM in which every `renderShell()` replaces `#leftBody`, as a browser does. It checks that going home (`renderLeftEmpty()`, `reset()`, the guest Student and Faculty switch) with a course or schedule open writes the home view into the `#leftBody` on screen, and that the course editor saves a row under its own code and refuses a number another row already has. Its minors tests run the real `renderTree()` with a small catalog and the real `minors.json`: a student's minor sections after the major, statuses saved in `cf_course_status`, a double counting warning, the Minors tab for faculty, a guest adding and removing minors across a view switch, one account save at a time, and a missing minors file.
 - `frontend/tests/utils.test.js` covers `hasTypedText()` (the landing page check for typed text).
+- `frontend/tests/course-edits.test.js` covers the edit logic of `js/data.js`: `applyProgramEdit()`, `programEditDelta()` (a round trip), `applyCourseOverrides()` per key (an edit of CS keeps the AI rows, a legacy list stays in its own program, minor keys stay out of `requirements`), the pick list with `requirement_buckets.json`, minor edits in `buildMinorTree()` and `buildMinorIndex()`, and `applyMinorOverrides()` with the double counting limits set apart. `frontend/tests/admin-editor.test.js` (Node only) runs the real `js/app.js` like `app-views.test.js`, with a fake API that records every write: the course editor (only the changed keys are sent, Added here and Removed here, Put back, Reset, a category not in the catalog, the minor picker, a legacy list, adding a course), the Check these filter, the category view's batch, the minor settings form and header, the minor tree notes, and the course card button and Activity log text with their Open buttons.
 
 There is no CI that runs the tests. On the server, the daily update runs the two SOC parser test files before every scrape (14.2), which is why pytest is in `backend/requirements.txt`.
 
@@ -1989,7 +2047,7 @@ if _add_column_if_missing("users", "my_column", "my_column VARCHAR(64)"):
 
 ### 19.5 Edit a course via the admin page
 
-Sign in as admin, open **Admin**, tab **Courses**, search the course, click it, change fields or "counts for" entries, **Save**. The change is visible to everyone on their next page load (overrides are fetched on every load with `no-cache`). To undo: open it again and **Revert** (scraped course) or **Archive** (added course).
+Sign in as admin, open **Admin**, tab **Courses**, search the course and click it (or press **Edit course data** on its course card), change fields, categories or minor categories, **Save**. The change is visible to everyone on their next page load (overrides are fetched on every load with `no-cache`). To undo one category press **Put back** (or **Reset to the catalog** for a whole program) and save; to undo everything, **Undo all edits** (scraped course) or **Archive** (added course). Several courses at once: **Courses in a category**. A minor's unit total, double counting limits or note: **Minor settings** (12.6).
 
 ### 19.6 Rotate secrets
 
