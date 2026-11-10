@@ -230,25 +230,12 @@
     assertEqual([rules.limit, rules.minorLimit, rules.separate, rules.known], [1, null, true, true]);
     assertEqual(minorDoubleCountLimitText(def, 'CS'),
       'At most 1 course may also count toward your major. Courses may also count toward another minor without a limit.');
-    const progress = { assigned: new Map([['85-110', 'survey'], ['85-130', 'survey'], ['85-211', 'elective']]) };
-    const kinds = { '85-110': 'degree', '85-130': 'degree' };
-    const check = checkMinorDoubleCounting(def, progress, {
-      majorCode: 'CS', majorKindOf: c => kinds[c] || null,
-      otherMinors: [{ name: 'Neuroscience', assigned: new Map([['85-211', 'x'], ['85-110', 'y']]) }],
-    });
-    assertTrue(check.over && check.overMajor && !check.overMinors);
-    assertEqual(check.countedMajor.map(s => s.code), ['85-110', '85-130']);
-    assertEqual(minorDoubleCountWarnings(check, def, 'CS'), ['2 courses you marked count toward this minor and toward your CS major '
-      + '(85-110 and 85-130). At most 1 may. Ask your advisor which ones to use.']);
 
     const both = applyMinorOverrides({ minors: { psychology: PSYCH } },
       [{ minor_code: 'psychology', fields: { max_with_major: 2, max_with_other_minors: 0 } }]).minors.psychology;
+    assertEqual([minorDoubleCountRules(both, 'CS').limit, minorDoubleCountRules(both, 'CS').minorLimit], [2, 0]);
     assertEqual(minorDoubleCountLimitText(both, null, "a student's"),
       "At most 2 courses may also count toward a student's major. No course may also count toward another minor.");
-    const c2 = checkMinorDoubleCounting(both, progress, { majorCode: 'CS', majorKindOf: c => kinds[c] || null,
-      otherMinors: [{ name: 'Neuroscience', assigned: new Map([['85-211', 'x']]) }] });
-    assertEqual(minorDoubleCountWarnings(c2, both, 'CS'), ['1 course you marked counts toward this minor and toward another of your minors '
-      + '(85-211). None may. Ask your advisor which ones to use.']);
 
     const same = applyMinorOverrides({ minors: { psychology: PSYCH } },
       [{ minor_code: 'psychology', fields: { max_with_major: 0, max_with_other_minors: 0 } }]).minors.psychology;

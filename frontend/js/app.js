@@ -1154,8 +1154,6 @@ const App = {
           this.downloadRequirementExcel(actionBtn.dataset.treeMajor, actionBtn.dataset.treePath);
           return;
         }
-        if (action === 'course-status') this.cycleCourseStatus(code, actionBtn.dataset.statusKey);
-        if (action === 'course-status-set') this.setCourseStatus(code, actionBtn.dataset.status || '');
         // Adding or removing a minor draws the tree again: the focus moves to the
         // Minors tab dropdown or to "Add a minor" instead of being lost.
         if (action === 'minor-add') { this.addStudentMinor(actionBtn.dataset.minor); this._focusById('mnBrowsePick'); }
@@ -1968,7 +1966,7 @@ const App = {
     if (vm === 'focused-single') {
       browseSub = studentMinors.length ? `${p} and minor requirements` : `${p} requirement tree`;
     } else {
-      browseSub = `CS · IS · BA · BS and minor requirements`;
+      browseSub = `${MAJOR_ORDER.join(' · ')} and minor requirements`;
     }
 
     const browseMajor = (vm === 'cross-program') ? this.activeMajor : (p || this.activeMajor);
@@ -2369,7 +2367,6 @@ const App = {
       ? `<div class="cc-cf-grid">${cfCols.join('')}</div>`
       : '<div class="cc-empty">This course does not count toward any tracked major requirements.</div>';
     const minorsHtml = this._courseCardMinorsHtml(course);
-    const statusHtml = this._statusTrackingOn() ? this._courseCardStatusHtml(course) : '';
 
     // Top-right card actions (role-gated)
     const cardActions = this._renderCardActions(course);
@@ -2394,7 +2391,6 @@ const App = {
           </div>
           ${cardActions}
         </div>
-        ${statusHtml}
         ${wishlistNoteHtml}
 
         <div class="cc-cols">
@@ -2616,13 +2612,12 @@ const App = {
   renderTree() {
     const rightBody = document.getElementById('rightBody');
     if (!rightBody) return;
-    this._renderProgress = null;
     if (this.activeMajor === MINORS_TAB) {
       rightBody.innerHTML = this._renderMinorsBrowse();
       return;
     }
     const p = this.profile;
-    const studentTree = this._statusTrackingOn() && p.primary === this.activeMajor;
+    const studentTree = this._isStudentView() && p.primary === this.activeMajor;
     const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
     let html = studentTree ? this._studentProgramsBarHtml() : '';
     const sections = this.treeSections[this.activeMajor];
@@ -2649,10 +2644,9 @@ const App = {
       if (studentTree && getProfileMinors(p).length) html += filterHint;
     } else {
       html += filterHint;
-      const ctx = this._statusTrackingOn() ? { statuses: this._getCourseStatuses() } : null;
       // degree + gened both render as a flat list of cards — no separate section headers
       for (const node of [...sections.degree, ...sections.gened]) {
-        html += this.renderTreeNode(node, this.activeMajor, 0, ctx);
+        html += this.renderTreeNode(node, this.activeMajor, 0, null);
       }
     }
     if (studentTree) {
@@ -2662,15 +2656,14 @@ const App = {
   },
 
   /**
-   * One node of a major or minor tree. ctx is null for a plain tree; for a
-   * student it carries their statuses, and for a minor tree also the minor and
-   * its progress ({ minor, progress }), which add status chips and controls.
+   * One node of a major or minor tree. ctx is null for a major tree and
+   * { minor } for a minor tree (its course rows then name the student's major).
    */
   renderTreeNode(node, major, depth, ctx) {
     const hasChildren = node.children && node.children.length > 0;
     const hasCourses = node.courses && node.courses.length > 0;
     const isMinorNode = !!node.isMinor;
-    const minorInfo = isMinorNode ? this._minorNodeInfoHtml(node, ctx) : '';
+    const minorInfo = isMinorNode ? this._minorNodeInfoHtml(node) : '';
     const isExpandable = hasChildren || hasCourses || !!minorInfo;
     const expanded = this.isExpanded(major, node.path);
     const isHighlighted = this.highlightedPath === node.path
@@ -2688,7 +2681,6 @@ const App = {
     const ruleHtml = (node.rule && node.rule.label)
       ? `<span class="tr-rule"${node.rule.note ? ` title="${esc(node.rule.note)}"` : ''}>${esc(node.rule.label)}</span>`
       : '';
-    const statusHtml = this._nodeStatusHtml(node, ctx);
     const countHtml = (!expanded && filteredTotalCourses > 0 && (hasChildren || hasCourses))
       ? `<span class="tr-count">${filteredTotalCourses} course${filteredTotalCourses === 1 ? '' : 's'}</span>`
       : '';
@@ -2696,14 +2688,13 @@ const App = {
     const downloadBtn = filteredTotalCourses > 0
       ? this._renderReqDownloadBtn(major, safePath)
       : '';
-    const leafCtx = ctx ? Object.assign({}, ctx, { nodePath: node.path }) : null;
     const renderInner = () => {
       let inner = minorInfo;
       if (hasChildren) {
         for (const child of node.children) inner += this.renderTreeNode(child, major, depth + 1, ctx);
       }
       if (hasCourses) {
-        for (const c of filteredCourses) inner += this._renderLeafCourse(c, major, leafCtx);
+        for (const c of filteredCourses) inner += this._renderLeafCourse(c, major, ctx);
       }
       return inner;
     };
@@ -2717,7 +2708,7 @@ const App = {
           <span class="tr-arrow ${expanded ? 'expanded' : ''}">▶</span>
           <span class="tr-accent" style="background:${accent}"></span>
           <span class="tr-card-title">${esc(node.label)}</span>
-          <span class="tr-card-meta">${ruleHtml}${statusHtml}${countHtml}${downloadBtn}</span>
+          <span class="tr-card-meta">${ruleHtml}${countHtml}${downloadBtn}</span>
         </div>`;
       const body = (isExpandable && expanded) ? `<div class="tr-card-body">${renderInner()}</div>` : '';
       return `<div class="tr-card ${openCls}${isMinorNode ? ' tr-card-minor' : ''}" style="--tr-accent:${accent}">${cardHead}${body}</div>`;
@@ -2730,7 +2721,6 @@ const App = {
     html += `<span class="tr-arrow ${expanded ? 'expanded' : ''} ${!isExpandable ? 'leaf' : ''}">▶</span>`;
     html += `<span class="tr-sub-label">${esc(node.label)}</span>`;
     html += ruleHtml;
-    html += statusHtml;
     html += countHtml;
     html += downloadBtn;
     html += `</div>`;
@@ -2806,18 +2796,16 @@ const App = {
   },
 
   /**
-   * One course row. In a student's tree it starts with the status control; in
-   * a minor tree it says where a marked course is counted and whether it also
-   * counts for the student's major; in the major tree it names the student's
-   * minors the course also counts for.
+   * One course row. For a student, a minor tree row says when the course also
+   * counts for their major, and a major tree row names their minors the course
+   * also counts for.
    */
   _renderLeafCourse(c, major, ctx) {
     const fullCourse = lookupCourse(this.courseIndex, c.code) || c;
     const isActive = this.selectedCourse && this.selectedCourse.course_code === c.code;
     const vm = computeViewMode(this.profile);
     const p = this.profile;
-    const statusOn = this._statusTrackingOn();
-    const status = statusOn ? this._courseStatusOf(c.code) : '';
+    const student = this._isStudentView();
     const inMinor = !!(ctx && ctx.minor);
 
     let mpChip = '';
@@ -2831,34 +2819,22 @@ const App = {
 
     const notes = [];
     if (inMinor) {
-      if (status && ctx.progress) {
-        const usedAt = ctx.progress.assigned.get(c.code);
-        if (usedAt && usedAt !== ctx.nodePath) {
-          notes.push(`<span class="tr-leaf-used">Counted in ${esc(this._minorNodeLabel(ctx.minor, usedAt))}</span>`);
-        } else if (!usedAt) {
-          notes.push('<span class="tr-leaf-used">Not counted, requirement already met</span>');
-        }
-      }
-      if (statusOn && p.primary) {
+      if (student && p.primary) {
         const kind = majorCountKind(fullCourse, p.primary);
         if (kind) {
           notes.push(`<span class="tr-dc-tag tr-dc-tag-major tr-dc-tag-${esc(p.primary.toLowerCase())}">Also counts for ${esc(p.primary)}${kind === 'gened' ? ' Gen Ed' : ''}</span>`);
         }
       }
-    } else if (statusOn) {
+    } else if (student) {
       for (const mc of getProfileMinors(p)) {
         if (courseCountsForMinor(fullCourse, mc, this.minorIndex)) {
           notes.push(`<span class="tr-dc-tag tr-dc-tag-minor">Also counts for ${esc(getMinorLabel(mc))} minor</span>`);
         }
       }
     }
-    const statusBtn = statusOn
-      ? this._courseStatusButtonHtml(c.code, status, `${major}|${(ctx && ctx.nodePath) || ''}|${c.code}`)
-      : '';
 
     return `
-      <div class="tr-leaf ${isActive ? 'active' : ''}${status ? ' tr-leaf-' + status : ''}" data-course-code="${esc(c.code)}">
-        ${statusBtn}
+      <div class="tr-leaf ${isActive ? 'active' : ''}" data-course-code="${esc(c.code)}">
         <span class="tr-leaf-code">${esc(c.code)}</span>
         <span class="tr-leaf-name">${esc(c.name)}${notes.length ? `<span class="tr-leaf-notes">${notes.join('')}</span>` : ''}</span>
         ${c.units ? `<span class="tr-leaf-units">${c.units}u</span>` : ''}
@@ -2967,14 +2943,9 @@ const App = {
     return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="3.5" width="11" height="10.5" rx="1.5"/><path d="M5 2v2M11 2v2M2.5 6.5h11"/></svg>';
   },
 
-  /**
-   * A tree row passes the semester, campus and modality filters, or is a
-   * course the student marked in progress or completed (those always show).
-   */
+  /** A tree row passes the semester, campus and modality filters. */
   _leafPassesTreeFilter(c) {
-    const code = c.code || c.course_code;
-    if (this._statusTrackingOn() && this._courseStatusOf(code)) return true;
-    const full = lookupCourse(this.courseIndex, code) || c;
+    const full = lookupCourse(this.courseIndex, c.code || c.course_code) || c;
     return this.coursePassesTreeFilter(full);
   },
 
@@ -6965,84 +6936,15 @@ const App = {
   },
 
   // ══════════════════════════════════════════════════════════
-  // MINORS: course statuses, the student's minor sections, the Minors tab
+  // MINORS: the student's minor sections, the Minors tab
   // ══════════════════════════════════════════════════════════
   // Requirements come from data/minors.json (App.minorIndex, built in
   // _prepareCatalog). A student's minors render after their major's sections
-  // in the same tree; the Minors tab browses every minor. Course statuses are
-  // a student's own and live in localStorage cf_course_status (this browser
-  // only, for guests and signed-in students alike, until the server keeps them).
+  // in the same tree; the Minors tab browses every minor.
 
-  /** Statuses, progress and the programs bar are for the student view only. */
-  _statusTrackingOn() {
+  /** The programs bar, a student's minor sections and the "Also counts for" tags are for the student view only. */
+  _isStudentView() {
     return !!(this.profile && this.profile.role === 'student');
-  },
-
-  _getCourseStatuses() {
-    if (!this._courseStatuses) this._courseStatuses = normalizeCourseStatuses(loadStore(COURSE_STATUS_KEY, {}));
-    return this._courseStatuses;
-  },
-
-  _courseStatusOf(code) {
-    return this._getCourseStatuses()[normalizeCourseCode(code)] || '';
-  },
-
-  /** status: '', 'in_progress' or 'completed'. focusKey puts the focus back on the control that was used. */
-  setCourseStatus(code, status, focusKey) {
-    const key = normalizeCourseCode(code);
-    if (!key || !this._statusTrackingOn()) return;
-    const statuses = this._getCourseStatuses();
-    if (COURSE_STATUSES.includes(status)) statuses[key] = status;
-    else delete statuses[key];
-    saveStore(COURSE_STATUS_KEY, statuses);
-    this.renderTree();
-    if (this.selectedCourse && normalizeCourseCode(this.selectedCourse.course_code) === key) {
-      this.renderCourseCard(this.selectedCourse);
-    }
-    this._focusStatusControl(focusKey);
-    showToast(`Marked ${key} as ${courseStatusLabel(status).toLowerCase()}`);
-  },
-
-  cycleCourseStatus(code, focusKey) {
-    this.setCourseStatus(code, nextCourseStatus(this._courseStatusOf(code)), focusKey);
-  },
-
-  _focusStatusControl(focusKey) {
-    if (!focusKey || typeof document === 'undefined' || !document.querySelector) return;
-    const el = document.querySelector('[data-status-key="' + String(focusKey).replace(/["\\]/g, '\\$&') + '"]');
-    if (el && el.focus) {
-      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
-    }
-  },
-
-  _statusIcon(status) {
-    if (status === 'completed') {
-      return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.7 8.3l2.2 2.2 4.4-4.7" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    }
-    if (status === 'in_progress') {
-      return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 0 0 12.5z" fill="currentColor"/></svg>';
-    }
-    return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
-  },
-
-  /** The round control at the start of a tree row: not taken, in progress, completed. */
-  _courseStatusButtonHtml(code, status, focusKey) {
-    const label = courseStatusLabel(status);
-    const next = courseStatusLabel(nextCourseStatus(status)).toLowerCase();
-    const cls = status === 'completed' ? 'done' : status === 'in_progress' ? 'ip' : 'none';
-    return `<button type="button" class="cs-btn cs-${cls}" data-action="course-status" data-course-code="${esc(code)}" data-status-key="${esc(focusKey)}" title="${label}. Click to mark it ${next}." aria-label="${esc(code)} is ${label.toLowerCase()}. Mark it ${next}">${this._statusIcon(status)}</button>`;
-  },
-
-  /** The three status buttons on a student's course card. */
-  _courseCardStatusHtml(course) {
-    const code = normalizeCourseCode(course.course_code);
-    const current = this._courseStatusOf(code);
-    const opts = [['', 'Not taken'], ['in_progress', 'In progress'], ['completed', 'Completed']];
-    return `
-      <div class="cc-status" role="group" aria-label="Your status for ${esc(code)}">
-        <span class="cc-status-label">Your status</span>
-        ${opts.map(([value, label]) => `<button type="button" class="cc-status-btn${current === value ? ' is-active' : ''}" data-action="course-status-set" data-course-code="${esc(code)}" data-status="${value}" aria-pressed="${current === value}">${label}</button>`).join('')}
-      </div>`;
   },
 
   /** The minors a course can count for, on its card (the student's own first). */
@@ -7050,7 +6952,7 @@ const App = {
     const idx = this.minorIndex;
     if (!idx || !course || isCourseHidden(course)) return '';
     const code = normalizeCourseCode(course.course_code);
-    const mine = this._statusTrackingOn() ? getProfileMinors(this.profile) : [];
+    const mine = this._isStudentView() ? getProfileMinors(this.profile) : [];
     const rows = [];
     for (const mc of idx.order) {
       const m = idx.byCode[mc];
@@ -7097,18 +6999,6 @@ const App = {
     return labels.join(' > ');
   },
 
-  /** Progress of the student through a minor, computed once per tree render. */
-  _minorProgress(code) {
-    if (!this._renderProgress) this._renderProgress = {};
-    if (!this._renderProgress[code]) {
-      const m = this.minorIndex && this.minorIndex.byCode[code];
-      this._renderProgress[code] = m
-        ? computeMinorProgress(m.tree, this._getCourseStatuses())
-        : { byPath: new Map(), assigned: new Map(), summary: { total: 0, complete: 0, inProgress: 0, remaining: 0, marked: 0, state: 'none' } };
-    }
-    return this._renderProgress[code];
-  },
-
   /** Open the first level of a minor the first time it is shown (big "any course" lists stay closed). */
   _autoExpandMinor(code) {
     if (!this._minorsExpanded) this._minorsExpanded = new Set();
@@ -7121,34 +7011,6 @@ const App = {
       for (const child of node.children || []) walk(child, depth + 1);
     };
     for (const node of m.tree.children || []) walk(node, 0);
-  },
-
-  /** Status chip of a tree node: rule based for a minor category, counts for a major category. */
-  _nodeStatusHtml(node, ctx) {
-    if (!ctx) return '';
-    if (node.isMinor) {
-      if (!ctx.progress) return '';
-      const st = ctx.progress.byPath.get(node.path);
-      const t = minorStatusText(st);
-      if (!t) return '';
-      return `<span class="mn-st mn-st-${t.cls}" title="${esc(this._minorStatusDetail(st))}">${esc(t.text)}</span>`;
-    }
-    if (!ctx.statuses) return '';
-    const n = countMarkedCourses(node, ctx.statuses);
-    const bits = [];
-    if (n.done) bits.push(`${n.done} done`);
-    if (n.inProgress) bits.push(`${n.inProgress} in progress`);
-    return bits.length ? `<span class="mn-st mn-st-count">${esc(bits.join(', '))}</span>` : '';
-  },
-
-  _minorStatusDetail(st) {
-    if (!st) return '';
-    let text = `${st.done} completed`;
-    if (st.inProgress) text += `, ${st.inProgress} in progress`;
-    const units = st.doneUnits + st.inProgressUnits;
-    if (units) text += ` (${units} units)`;
-    if (st.kind === 'group' && st.partsTotal) text += `. ${st.partsDone} of ${st.partsTotal} parts done`;
-    return text;
   },
 
   /** A minor's text as HTML: escaped, with course codes ("85-170") kept whole at a line end. */
@@ -7198,7 +7060,6 @@ const App = {
     const addSelect = addOpts
       ? `<select class="mn-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" onchange="App._onStudentMinorAddPick(this.value)"><option value="">Add a minor</option>${addOpts}</select>`
       : '';
-    const where = this.authMode === 'authed' ? 'in this browser' : 'on this device';
     return `
       <div class="mn-programs" role="group" aria-label="Your major and minors">
         <label class="mn-label" for="mnMajorPick">Major</label>
@@ -7209,7 +7070,6 @@ const App = {
         <div class="mn-prog-value" role="group" aria-labelledby="mnMinorsLabel">
           ${chips}${addSelect || (chips ? '' : '<span class="mn-prog-none">None</span>')}
         </div>
-        <p class="mn-prog-hint">Click the circle next to a course once for in progress and twice for completed. Your marks are saved ${where}.</p>
       </div>`;
   },
 
@@ -7250,13 +7110,13 @@ const App = {
 
   setStudentMajor(major) {
     const p = this.profile;
-    if (!this._statusTrackingOn() || !STUDENT_PROGRAMS.includes(major) || major === p.primary) return;
+    if (!this._isStudentView() || !STUDENT_PROGRAMS.includes(major) || major === p.primary) return;
     return this._applyStudentPrograms(major, getProfileMinors(p), `Your major is now ${this._programFullName(major)}.`);
   },
 
   addStudentMinor(code) {
     const p = this.profile;
-    if (!this._statusTrackingOn() || !code || !isKnownMinor(code)) return;
+    if (!this._isStudentView() || !code || !isKnownMinor(code)) return;
     if (isMinorBlockedForMajor(code, p.primary)) {
       showToast(`The ${getMinorLabel(code)} minor is not open to ${p.primary} majors.`);
       return;
@@ -7269,7 +7129,7 @@ const App = {
 
   removeStudentMinor(code) {
     const p = this.profile;
-    if (!this._statusTrackingOn() || !code) return;
+    if (!this._isStudentView() || !code) return;
     const minors = getProfileMinors(p);
     if (!minors.includes(code)) return;
     return this._applyStudentPrograms(p.primary, minors.filter(mc => mc !== code), `Removed the ${getMinorLabel(code)} minor.`);
@@ -7358,7 +7218,7 @@ const App = {
     const m = this.minorIndex && this.minorIndex.byCode[code];
     if (!m) return;
     const p = this.profile;
-    const inStudentTree = this._statusTrackingOn() && getProfileMinors(p).includes(code);
+    const inStudentTree = this._isStudentView() && getProfileMinors(p).includes(code);
     const tab = inStudentTree ? p.primary : MINORS_TAB;
     if (!inStudentTree) this.browseMinorCode = code;
     this._autoExpandMinor(code);
@@ -7399,7 +7259,7 @@ const App = {
         : 'Loading the minor requirements.';
       return `<div class="empty-state"><div class="empty-text">${why}</div></div>`;
     }
-    const mine = this._statusTrackingOn() ? getProfileMinors(this.profile) : [];
+    const mine = this._isStudentView() ? getProfileMinors(this.profile) : [];
     const sel = (this.browseMinorCode && idx.byCode[this.browseMinorCode]) ? this.browseMinorCode : null;
     const option = code => `<option value="${esc(code)}"${code === sel ? ' selected' : ''}>${esc(idx.byCode[code].def.name)}</option>`;
     const yours = idx.order.filter(code => mine.includes(code));
@@ -7432,8 +7292,9 @@ const App = {
   },
 
   /**
-   * One minor: a header (name, version, progress, the double counting limit,
-   * warnings and notes) and its categories as tree cards.
+   * One minor: a header (name, official title and units, the double counting
+   * limit, the admin's limit and note, About this minor) and its categories as
+   * tree cards. The file's version is kept in minors.json but never shown.
    * mode: 'student' in the student's own tree, 'browse' in the Minors tab.
    */
   _renderMinorSection(code, mode) {
@@ -7452,10 +7313,9 @@ const App = {
     this._autoExpandMinor(code);
     const def = m.def;
     const p = this.profile;
-    const student = this._statusTrackingOn();
+    const student = this._isStudentView();
     const mine = student && getProfileMinors(p).includes(code);
     const majorCode = student ? p.primary : null;
-    const progress = student ? this._minorProgress(code) : null;
 
     let actionHtml = '';
     if (mode === 'browse' && student) {
@@ -7475,7 +7335,6 @@ const App = {
     if (official && ![`minor in ${name}`, `${name} minor`].includes(official.toLowerCase())) meta.push(`<span>${esc(official)}</span>`);
     if (def.total_units != null) meta.push(`<span>${esc(String(def.total_units))} units</span>`);
     const metaHtml = meta.length ? `<div class="mn-meta">${meta.join('<span class="mn-dot" aria-hidden="true">·</span>')}</div>` : '';
-    const version = def.version ? `<div class="mn-version">Version: ${esc(plainDataText(def.version))}</div>` : '';
 
     const dc = def.double_count || {};
     const limitText = minorDoubleCountLimitText(def, majorCode, student ? 'your' : "a student's");
@@ -7491,20 +7350,6 @@ const App = {
         <div><span class="mn-dc-label">Double counting</span> ${esc(limitText)}</div>
         ${ruleText ? `<div class="mn-dc-rule">${ruleLabel}: ${esc(ruleText)}</div>` : ''}
       </div>`;
-
-    let warnHtml = '';
-    if (mine) {
-      const others = getProfileMinors(p)
-        .filter(mc => mc !== code && idx.byCode[mc])
-        .map(mc => ({ name: idx.byCode[mc].def.name, assigned: this._minorProgress(mc).assigned }));
-      const check = checkMinorDoubleCounting(def, progress, {
-        majorCode,
-        majorKindOf: c => majorCountKind(lookupCourse(this.courseIndex, c), majorCode),
-        otherMinors: others,
-      });
-      warnHtml = minorDoubleCountWarnings(check, def, majorCode)
-        .map(w => `<div class="mn-warn" role="note">${this._iconWarn()}<span>${this._minorTextHtml(w)}</span></div>`).join('');
-    }
 
     // Set on the admin page (applyMinorOverrides): a note from CMU-Q, and a limit that replaces the quoted rule.
     let adminHtml = '';
@@ -7524,14 +7369,12 @@ const App = {
       ? `<details class="mn-about"><summary>About this minor</summary>${aboutInner}</details>`
       : '';
 
-    const progressHtml = (progress && progress.summary.total) ? this._minorProgressHtml(m, progress) : '';
-
     let body = '';
     if (noCategories) {
       body = (def.notes || []).map(t => `<p class="mn-note">${this._minorTextHtml(t)}</p>`).join('')
         || '<p class="mn-note">This minor has no fixed requirements.</p>';
     } else {
-      const ctx = { minor: m, progress, statuses: student ? this._getCourseStatuses() : null };
+      const ctx = { minor: m };
       for (const node of m.tree.children) body += this.renderTreeNode(node, m.key, 0, ctx);
       if (!body) body = '<p class="mn-note">Nothing in this minor matches the filter.</p>';
     }
@@ -7543,38 +7386,15 @@ const App = {
             <div class="mn-head-main">
               <h3 class="mn-title">${esc(def.name)} minor</h3>
               ${metaHtml}
-              ${version}
             </div>
             ${actionHtml}
           </div>
-          ${progressHtml}
           ${dcHtml}
           ${adminHtml}
-          ${warnHtml}
           ${aboutHtml}
         </header>
         <div class="mn-body">${body}</div>
       </section>`;
-  },
-
-  /** One segment per requirement (done, in progress, left) and the summary line. */
-  _minorProgressHtml(m, progress) {
-    const s = progress.summary;
-    const segs = (m.tree.children || []).map(node => {
-      const st = progress.byPath.get(node.path);
-      if (!st || st.state === 'optional') return '';
-      const cls = st.state === 'complete' ? ' is-done' : st.state === 'in_progress' ? ' is-ip' : '';
-      const t = minorStatusText(st);
-      return `<span class="mn-bar-seg${cls}" title="${esc(node.label)}: ${esc(t ? t.text : '')}"></span>`;
-    }).join('');
-    const text = s.marked
-      ? minorSummaryText(s)
-      : `${s.total} requirement${s.total === 1 ? '' : 's'}. Mark the courses you took to see your progress.`;
-    return `
-      <div class="mn-progress">
-        <div class="mn-bar" role="img" aria-label="${esc(minorSummaryText(s))}">${segs}</div>
-        <div class="mn-progress-text">${esc(text)}</div>
-      </div>`;
   },
 
   navigateToReqNode(major, fullPath) {

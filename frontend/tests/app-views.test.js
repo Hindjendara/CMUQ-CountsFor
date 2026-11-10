@@ -289,7 +289,7 @@ const minorsPickerHtml = html => {
 };
 const pickerValues = picker => [...picker.matchAll(/<option value="([^"]+)"/g)].map(m => m[1]);
 
-test('minors: a student sees each chosen minor after the major, with its limit and status controls', () => {
+test('minors: a student sees each chosen minor after the major, with its limit and the double counting tags', () => {
   const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology', 'math']));
   App.renderTree();
   const html = treeHtml(document);
@@ -303,36 +303,63 @@ test('minors: a student sees each chosen minor after the major, with its limit a
   assertTrue(html.includes('without a limit, except courses used for Mathematical Sciences Electives.'), 'Math limit');
   assertTrue(html.includes('Audit rule: Courses may double count without any limit with other programs unless specified otherwise.'));
   assertTrue(html.includes('data-tree-major="minor:psychology"'), 'minor categories render as tree cards');
-  assertTrue(html.includes('class="cs-btn cs-none"'), 'status controls');
   assertTrue(html.includes('Also counts for Psychology minor'), 'the major tree names the minor');
   assertTrue(html.includes('Also counts for CS Gen Ed'), 'the minor tree names the major');
-  assertTrue(html.includes('5 requirements. Mark the courses you took to see your progress.'));
 });
 
-test('minors: marking two courses completed updates the minor and is saved in cf_course_status', () => {
-  const { App, document, ctx } = loadMinorsApp(STUDENT('CS', ['psychology', 'math']));
+// The course status feature (round controls on tree rows, status buttons on the
+// course card, progress bars, "N of M requirements done" and warnings built
+// from marked courses) is gone; a value an older version saved in
+// cf_course_status is left in the browser and changes nothing.
+test('minors: no status controls, progress, version line or marks based warnings; an old cf_course_status is ignored and kept', () => {
+  const saved = JSON.stringify({ '15-112': 'completed', '15-122': 'completed', '15-150': 'completed', '15-210': 'completed', '85-110': 'in_progress' });
+  const env = loadApp({ realTree: true, realCard: true });
+  const { App, document, ctx } = env;
+  ctx.localStorage.setItem('cf_course_status', saved);
+  App.profile = STUDENT('IS', ['cs', 'psychology']);
+  App._buildCatalog(minorsCatalog(), [], MINORS_JSON);
+  App.activeSemester = 'F26';
+  App.layoutMode = 'split';
+  App.activeMajor = 'IS';
+  App.autoExpandFirstLevel('IS');
+  App.renderShell();
   App.renderTree();
-  App.cycleCourseStatus('85-110');
-  App.cycleCourseStatus('85-110');
-  App.setCourseStatus('85-130', 'completed');
-  assertEqual(JSON.parse(ctx.localStorage.getItem('cf_course_status')), { '85-110': 'completed', '85-130': 'completed' });
-  const html = treeHtml(document);
-  assertTrue(html.includes('1 of 5 requirements done, 4 left'), 'Psychology summary');
-  assertTrue(html.includes('<span class="mn-st mn-st-done"'), 'Survey Courses is done');
-  assertTrue(html.includes('class="cs-btn cs-done"'));
-  assertTrue(html.includes('1 done'), 'the CS category with 85-110 counts it');
-  App.setCourseStatus('85-130', '');
-  assertEqual(JSON.parse(ctx.localStorage.getItem('cf_course_status')), { '85-110': 'completed' });
+  let html = treeHtml(document);
+  const gone = ['cs-btn', 'data-action="course-status', 'data-status-key', 'tr-leaf-completed', 'tr-leaf-in_progress', 'mn-st',
+    'mn-progress', 'mn-bar', 'mn-warn', 'mn-prog-hint', 'mn-version', 'Click the circle', 'requirements done', 'Mark the courses',
+    'you marked', 'Counted in', 'Version:', 'Pittsburgh version'];
+  assertEqual(gone.filter(t => html.includes(t)), [], 'nothing of the status feature in the tree');
+  assertTrue(html.includes('id="mn-section-cs"') && html.includes('id="mn-section-psychology"'));
+  assertTrue(html.includes('At most 2 courses may also count toward your major or another minor. Courses used for Prerequisites do not count toward this limit.'),
+    'the limit line stays');
+  assertTrue(html.includes('Also counts for IS'), 'the minor tree still names the major');
+  App.switchMajor('MINORS');
+  App.browseMinor('sociology');
+  html = treeHtml(document);
+  assertEqual(gone.filter(t => html.includes(t)), [], 'nothing of it in the Minors tab');
+  assertFalse(/EY2023|Version|Pittsburgh/.test(html), 'no version line, no campus');
+  App._selectCourse(App.courses.find(c => c.course_code === '15-122'));
+  const card = leftBodyHtml(document);
+  assertTrue(card.includes('15-122'));
+  assertFalse(/cc-status|Your status|Not taken|course-status/.test(card), 'no status buttons on the course card');
+  assertEqual(ctx.localStorage.getItem('cf_course_status'), saved, 'the old value is left alone');
 });
 
-test('minors: shared courses over the double counting limit show a warning', () => {
-  const { App, document } = loadMinorsApp(STUDENT('IS', ['cs']));
-  for (const code of ['15-112', '15-122', '15-150', '15-210']) App.setCourseStatus(code, 'completed');
+test('minors: the tree filters hide a course even when an old cf_course_status marked it', () => {
+  const { App, document, ctx } = loadMinorsApp(STUDENT('CS', ['psychology']));
+  ctx.localStorage.setItem('cf_course_status', JSON.stringify({ '85-110': 'completed' }));
+  App.renderTree();
+  assertTrue(treeHtml(document).includes('data-course-code="85-110"'), 'offered in Fall 2026');
+  App.activeSemester = 'S27';  // no course of this catalog runs in Spring 2027
+  App.renderTree();
   const html = treeHtml(document);
-  assertTrue(html.includes('At most 2 courses may also count toward your major or another minor. Courses used for Prerequisites do not count toward this limit.'));
-  assertTrue(html.replace(/<[^>]+>/g, '').includes('3 courses you marked count toward this minor and toward your IS major or another minor (15-122, 15-150 and 15-210). At most 2 may.'));
-  assertTrue(html.includes('<span class="mn-code">15-122</span>'), 'a course code is never split at its hyphen');
-  assertTrue(html.includes('class="mn-warn"'));
+  assertFalse(html.includes('data-course-code="85-110"'), 'a marked course no longer always shows');
+  assertTrue(html.includes('id="mn-section-psychology"'), "the minor's requirements still show");
+});
+
+test('minors: a course code in a minor note is never split at its hyphen', () => {
+  const { App } = loadMinorsApp(STUDENT('CS', []));
+  assertEqual(App._minorTextHtml('Take 15-122 first.'), 'Take <span class="mn-code">15-122</span> first.');
 });
 
 test('minors: the Minors tab lists every minor and shows the chosen one in full (faculty view)', () => {
@@ -356,7 +383,6 @@ test('minors: the Minors tab lists every minor and shows the chosen one in full 
   }
   assertTrue(html.includes('data-course-code="03-121"') && html.includes('data-course-code="03-362"'));
   assertTrue(html.includes('At most 2 courses may also count toward a student&#039;s major or another minor.'));
-  assertFalse(html.includes('cs-btn'), 'no status controls for faculty');
   assertFalse(html.includes('mn-programs'), 'no programs bar for faculty');
 });
 
@@ -366,7 +392,7 @@ test('minors: Product Management shows its catalog requirements and the catalog 
   const html = treeHtml(document);
   assertTrue(html.includes('id="mn-section-product"') && html.includes('Product Management minor'));
   assertFalse(html.includes('Minor in Product Management'), 'the official name only repeats the title');
-  assertTrue(html.includes('Version: 2026-2027 Catalog'));
+  assertFalse(html.includes('Version:') || html.includes('2026-2027 Catalog'), 'the version stays in minors.json, unseen');
   for (const name of ['Required', 'Marketing I', 'Introduction to Product Management', 'Principles of Microeconomics',
     'Course in Design Thinking', 'Marketing Course']) {
     assertTrue(html.includes(name), name);
@@ -375,7 +401,6 @@ test('minors: Product Management shows its catalog requirements and the catalog 
   assertTrue(html.includes('At most 1 course may also count toward your major or another minor.'));
   assertTrue(html.includes('Catalog rule: While there are no double counting restrictions between the minor and'));
   assertFalse(html.includes('Audit rule:'), 'the rule comes from the catalog page, not an audit file');
-  assertTrue(html.includes('3 requirements. Mark the courses you took to see your progress.'));
 });
 
 test('minors: no minor shows a campus note; Product Management is not open to BA majors', () => {

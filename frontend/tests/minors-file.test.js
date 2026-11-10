@@ -111,9 +111,7 @@ test('minors.json: every category has a known rule and builds against a catalog 
   assertEqual(index.order.length, 17);
   for (const code of index.order) {
     const m = index.byCode[code];
-    const progress = computeMinorProgress(m.tree, {});
-    const topLevel = (m.def.categories || []).filter(c => !(c.rule && c.rule.type === 'max_units')).length;
-    assertEqual(progress.summary.total, topLevel, code);
+    assertEqual(m.tree.children.map(n => n.id), (m.def.categories || []).map(c => c.id), code);
     (function check(node) {
       for (const ch of node.children || []) {
         if (!ch.rule.label) problems.push(`${code}/${ch.path}: no rule chip`);
@@ -157,10 +155,9 @@ test('minors.json: Product Management comes from its archived catalog page; the 
     ['Course in Design Thinking', 'pick', 1, ['05-391', '05-410', '70-389'], []],
     ['Marketing Course', 'pick', 1, ['70-385', '70-481', '70-482', '70-483'], []],
   ]);
-  const progress = computeMinorProgress(m.tree, { '70-381': 'completed', '73-104': 'completed', '05-410': 'in_progress' });
-  assertEqual(progress.summary.total, 3);
-  assertEqual(progress.assigned.get('73-104'), 'required---microeconomics');
-  assertEqual(progress.assigned.get('05-410'), 'design_thinking');
+  assertEqual(m.eligible.get('73-104'), ['required---microeconomics']);
+  assertEqual(m.eligible.get('05-410'), ['design_thinking']);
+  assertEqual(m.eligible.get('70-381'), ['required---marketing_i']);
 });
 
 test('minors.json: no minor carries a campus note', () => {
@@ -183,8 +180,7 @@ test('minors.json: the authored text the app shows has no dash punctuation', () 
       for (const k of cat.children || []) walk(k);
     };
     for (const cat of def.categories || []) walk(cat);
-    // The verbatim version and rule strings are shown through plainDataText().
-    texts.push(plainDataText(def.version));
+    // The verbatim rule strings are shown through plainDataText(); the version is never shown.
     for (const t of String((def.double_count && def.double_count.text) || '').split(' | ')) texts.push(plainDataText(t));
     for (const t of texts) if (t && DASH.test(t)) problems.push(`${code}: ${t}`);
   }
