@@ -104,15 +104,17 @@ test('expandMinorCategory: listed codes and select matches, sorted, missing code
     { courses: [], missing: [] });
 });
 
-test('minorRuleLabel: every rule type of minors.json', () => {
-  assertEqual(minorRuleLabel({ type: 'take_all' }, 0), 'take all');
-  assertEqual(minorRuleLabel({ type: 'required' }, 0), 'required');
-  assertEqual(minorRuleLabel({ type: 'pick', n: 2, units: null }, 0), 'pick 2');
-  assertEqual(minorRuleLabel({ type: 'pick', n: 2, units: 18 }, 0), 'pick 2, ≥18 units');
-  assertEqual(minorRuleLabel({ type: 'pick', n: 1, units: null, count: 'children' }, 2), 'pick 1 of 2');
+test('minorRuleLabel: every rule type of minors.json, worded like the major chips', () => {
+  assertEqual(minorRuleLabel({ type: 'take_all' }, 0), 'Take all');
+  assertEqual(minorRuleLabel({ type: 'required' }, 0), 'Required');
+  assertEqual(minorRuleLabel({ type: 'pick', n: 2, units: null }, 0), 'Choose 2');
+  assertEqual(minorRuleLabel({ type: 'pick', n: 1, units: 9 }, 0), 'Choose 1 (at least 9 units)');
+  assertEqual(minorRuleLabel({ type: 'pick', n: 2, units: 18 }, 0), 'Choose 2 (at least 18 units)');
+  assertEqual(minorRuleLabel({ type: 'pick', n: 1, units: null, count: 'children' }, 2), 'Choose 1 of 2');
   assertEqual(minorRuleLabel({ type: 'pick', n: 4, units: null, count: 'courses' }, 2), '4 courses');
-  assertEqual(minorRuleLabel({ type: 'min_units', units: 36 }, 0), '≥36 units');
-  assertEqual(minorRuleLabel({ type: 'max_units', units: 9 }, 0), '≤9 units');
+  assertEqual(minorRuleLabel({ type: 'pick', n: 4, units: 36, count: 'courses' }, 2), '4 courses (at least 36 units)');
+  assertEqual(minorRuleLabel({ type: 'min_units', units: 36 }, 0), 'At least 36 units');
+  assertEqual(minorRuleLabel({ type: 'max_units', units: 9 }, 0), 'Up to 9 units');
   assertEqual(minorRuleLabel(null, 0), '');
 });
 
@@ -123,10 +125,10 @@ test('buildMinorTree: same node shape as the major trees, paths from category id
   assertEqual(tree.children.map(n => n.path), ['survey', 'statistics', 'research_methods', 'advanced', 'elective']);
   const stats = tree.children[1];
   assertEqual(stats.children.map(n => n.path), ['statistics---intro_stats', 'statistics---behavioral_stats']);
-  assertEqual(stats.rule.label, 'take all');
+  assertEqual(stats.rule.label, 'Take all');
   assertEqual(stats.children[0].courses.map(c => c.code), ['36-200']);
   const survey = tree.children[0];
-  assertEqual(survey.rule.label, 'pick 2');
+  assertEqual(survey.rule.label, 'Choose 2');
   assertEqual(survey.notes, ['Any 2 survey courses.']);
   assertEqual(survey.courses.map(c => c.code), ['85-110', '85-130', '85-150', '85-170']);
   assertEqual(Object.keys(survey.courses[0]).sort(),
@@ -247,7 +249,7 @@ test('computeMinorProgress: pick one of two parts (Economics Quantitative Analys
     ] },
   ] };
   const tree = buildMinorTree('economics', def, catalog, buildCourseIndex(catalog));
-  assertEqual(tree.children[0].rule.label, 'pick 1 of 2');
+  assertEqual(tree.children[0].rule.label, 'Choose 1 of 2');
   assertEqual(minorStatusText(mnStatus(computeMinorProgress(tree, {}), 'quant')), { cls: 'left', text: '1 part left' });
   assertEqual(mnStatus(computeMinorProgress(tree, { '73-265': 'completed' }), 'quant').state, 'complete');
   assertEqual(mnStatus(computeMinorProgress(tree, { '36-200': 'in_progress' }), 'quant').state, 'in_progress');

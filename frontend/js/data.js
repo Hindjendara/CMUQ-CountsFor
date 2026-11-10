@@ -1217,20 +1217,23 @@ function expandMinorCategory(cat, courses, courseIndex) {
   return { courses: list, missing };
 }
 
-/** The rule chip of a category, in the style of the major chips ("pick 1"). */
+/**
+ * The rule chip of a category, worded like the major chips of the 2026-27
+ * catalog ("Choose 1 (at least 9 units)", "At least 36 units"). A pick's
+ * units are a floor for all its courses together.
+ */
 function minorRuleLabel(rule, childCount) {
   if (!rule) return '';
-  const units = rule.units != null ? `≥${rule.units} units` : '';
-  const withUnits = text => (units ? `${text}, ${units}` : text);
+  const withUnits = text => (rule.units != null ? `${text} (at least ${rule.units} units)` : text);
   switch (rule.type) {
-    case 'take_all': return 'take all';
-    case 'required': return 'required';
+    case 'take_all': return 'Take all';
+    case 'required': return 'Required';
     case 'pick':
-      if (rule.count === 'children') return `pick ${rule.n} of ${childCount}`;
+      if (rule.count === 'children') return `Choose ${rule.n} of ${childCount}`;
       if (rule.count === 'courses') return withUnits(`${rule.n} courses`);
-      return withUnits(`pick ${rule.n}`);
-    case 'min_units': return units || 'units';
-    case 'max_units': return rule.units != null ? `≤${rule.units} units` : 'optional';
+      return withUnits(`Choose ${rule.n}`);
+    case 'min_units': return rule.units != null ? `At least ${rule.units} units` : 'Units';
+    case 'max_units': return rule.units != null ? `Up to ${rule.units} units` : 'Optional';
     default: return '';
   }
 }

@@ -232,7 +232,7 @@ CountsFor/
 | `frontend/reset.html` | yes | Redirect stub to `index.html` keeping the query string (old reset links). | Keep |
 | `frontend/landing/index.html` | yes | Redirect stub to `../index.html`. | Keep (old links) |
 | `frontend/js/` | yes | All frontend logic. See [section 8](#8-frontend-walkthrough). | Live |
-| `frontend/css/styles.css` | yes | App styles, about 4,200 lines, light and dark tokens at the top. | Live |
+| `frontend/css/styles.css` | yes | App styles, about 4,500 lines, light and dark tokens at the top. | Live |
 | `frontend/css/landing.css` | yes | Landing page styles. | Live |
 | `frontend/assets/img/` | yes | Scotty and CMU artwork used by the landing and navbar, plus the two favicons (`scotty-portrait.png` for the landing, `scotty-standing.png` for the app). | Live |
 | `frontend/data/` | yes | Served catalog: `courses.json` (6,784 courses, about 30 MB) and `minors.json` (minor requirements). On the server the daily update rewrites `courses.json` and adds `courses.json.gz` and `courses.json.prev` (both gitignored or never committed). See [4.4](#44-backenddata-and-backendscraper). | Live |
@@ -310,7 +310,7 @@ Each file starts with comments that give its install commands. Section 15 walks 
 
 ### 4.4 `backend/data/` and `backend/scraper/`
 
-The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The private data files are in `backend/data/`. The scripts and their `tests/` are in `backend/scraper/`; `pipeline_paths.py` there holds the default file locations, derived from the script folder, so the scripts work from any working directory, in a checkout and on the server.
+The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The private data files are in `backend/data/`. The scripts and their `tests/` are in `backend/scraper/`; `pipeline_paths.py` there holds the default file locations, derived from the script folder, so the scripts work from any working directory, in a checkout and on the server. A student's course statuses (8.10) are in no data file: they stay in the browser (`localStorage['cf_course_status']`, 8.8) until the server stores them (21.4).
 
 | File | Purpose |
 |---|---|
@@ -515,7 +515,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to `frontend/data/courses.json`. Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=minors-2026-11-10`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=deploy-2026-11-10`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
@@ -620,27 +620,27 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | `downloadExcelSheet(filename, sheetName, headers, rows, metaRows)` | Despite the name, writes a UTF-8 CSV (with BOM). |
 | `slugifyFilename(text)` | Safe file names for exports. |
 
-### 8.3 `js/data.js` (about 1,680 lines): catalog logic, pure functions
+### 8.3 `js/data.js` (about 1,760 lines): catalog logic, pure functions
 
 | Lines (approx.) | Item | Purpose |
 |---|---|---|
 | 6 to 25 | `MAJOR_META`, `MAJOR_ORDER`, `MAJOR_BRAND` | Majors, their labels, degree names and colors. `MAJOR_ORDER = ['CS','IS','BA','BS','AI']` controls which programs get trees and columns. |
 | 28 to 45 | `ACCENT_RULES`, `pickAccentColor()` | Accent color by requirement label. |
-| 48 to 65 | `LABEL_OVERRIDES` | Display names for the few segments that should not show as stored: the degree roots ("CS Degree Requirements") and four Biological Sciences track comment rows. Every other bucket shows its 2026-27 catalog name. The stored path never changes. Show a segment with `requirementLeafLabel()` or `formatRequirementPath()`, never raw. |
-| 65 to 275 | `FULFILLMENT_RULES`, `setRule()` | Rule chips ("Choose 1", "Take all", "At least 36 units") per major and bucket name, from the 2026-27 catalog, listed in catalog order. A rule's optional `note` shows as the chip's tooltip. |
-| 220 to 235 | `courseOfferedInQatar()`, `isCourseHidden()` | A row is hidden everywhere (tree, search, typeahead, home lists, also counts for, double counters) when it has `qatar_only` without a running Qatar offering. |
-| 290 to 400 | `buildRequirementTree()`, `normalizeTree()`, `ruleOrder()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; sibling buckets follow the order of the major's rules (catalog order), and courses kept from an earlier requirement list after the current ones; split into degree and GenEd sections. |
-| 334 | `normalizeCourseCode()` | Canonical `NN-NNN`. |
-| 343 to 425 | `COURSE_EDIT_FIELDS`, `applyCourseOverrides(courses, overrides)` | Apply admin edits. Returns `{ courses, archived }`. Edited courses get `_edit` (the override) and `_catalog` (the scraped values replaced). Added courses get `_added`. Archived courses are removed from `courses` and returned in `archived`. Copies objects so a reload starts from scraped data. |
-| 428 | `knownRequirementPaths()` | All requirement paths per program, used by the course editor's autocomplete. |
-| 457 to 515 | `buildCourseIndex()`, `lookupCourse()`, `findTreeNode()`, `collectCoursesForRequirement()`, `formatRequirementPath()`, `requirementLeafLabel()` | Index by `15-122` and `15122`. Tree lookups. |
-| 505 to 570 | `getCourseMappings()`, `orderCfColumns()`, `summarizeFlagsByStatus()`, `getAlsoCountsFor()` | Display data for the course card. |
-| 577 to 625 | `predictOffering()`, `sortSemesters()` | Rule-based "likely offered next term" hint (no ML). |
-| 628 to 646 | `DEPT_NAMES`, `getDeptName()` | Department number to name. |
-| 650 to 784 | `SEMESTER_OPTIONS`, `MODALITY_OPTIONS`, `availableSemesterOptions()`, `semesterLabel()`, `getCourseOfferings()`, `filterOfferings()`, `courseHasMatchingOffering()` | Semester, campus and modality filters over SOC offerings. |
-| 787 to 1020 | `PLAN_DAY_COLUMNS`, `parseDaysTimes()`, `formatDaysTimesForDisplay()`, `planOfferingKey()`, `groupOfferingsBySection()`, `findPlanConflicts()`, `layoutPlanDayBlocks()` and friends | Schedule planner math: parsing times, conflicts, calendar layout (7:00 to 22:00). Stored `days_times` keep the SOC form `MW 03:30PM-04:50PM` (plan keys and `parseDaysTimes` read it); `formatDaysTimesForDisplay()` shows it as `MW 3:30 PM to 4:50 PM` on course cards and the plan list, and returns any other string unchanged. |
-| 1034 to 1643 | `COURSE_STATUSES`, `COURSE_STATUS_KEY`, `normalizeCourseStatuses()`, `nextCourseStatus()`, `courseMatchesSelect()`, `expandMinorCategory()`, `minorRuleLabel()`, `buildMinorTree()`, `buildMinorIndex()`, `courseCountsForMinor()`, `majorCountKind()`, `computeMinorProgress()`, `minorStatusText()`, `minorSummaryText()`, `countMarkedCourses()`, `minorDoubleCountRules()`, `minorDoubleCountLimitText()`, `checkMinorDoubleCounting()`, `minorDoubleCountWarnings()`, `plainDataText()` | Minors: each minor of `data/minors.json` as a tree against the catalog, a student's progress from their course statuses, and double counting (8.10). |
-| 1644 to end | `annotateDoubleCounters()`, `annotateMultiProgram()` | Profile-aware flags on courses: for a student `_majorKind` (`degree`, `gened` or none for their major), `_minorMatches` (their minors the course can count for) and `_doubleCounter` (both); `_programCount`. |
+| 47 to 62 | `LABEL_OVERRIDES` | Display names for the few segments that should not show as stored: the degree roots ("CS Degree Requirements") and four Biological Sciences track comment rows. Every other bucket shows its 2026-27 catalog name. The stored path never changes. Show a segment with `requirementLeafLabel()` or `formatRequirementPath()`, never raw. |
+| 64 to 290 | `FULFILLMENT_RULES`, `setRule()` | Rule chips ("Choose 1", "Take all", "At least 36 units") per major and bucket name, from the 2026-27 catalog, listed in catalog order. A rule's optional `note` shows as the chip's tooltip. |
+| 292 to 303 | `courseOfferedInQatar()`, `isCourseHidden()` | A row is hidden everywhere (tree, search, typeahead, home lists, also counts for, double counters) when it has `qatar_only` without a running Qatar offering. |
+| 305 to 428 | `buildRequirementTree()`, `normalizeTree()`, `ruleOrder()`, `countTreeCourses()`, `findRule()`, `splitTreeSections()` | Build each major's requirement tree from `course.requirements[major]` paths; sibling buckets follow the order of the major's rules (catalog order), and courses kept from an earlier requirement list after the current ones; split into degree and GenEd sections. |
+| 431 | `normalizeCourseCode()` | Canonical `NN-NNN`. |
+| 440 to 522 | `COURSE_EDIT_FIELDS`, `applyCourseOverrides(courses, overrides)` | Apply admin edits. Returns `{ courses, archived }`. Edited courses get `_edit` (the override) and `_catalog` (the scraped values replaced). Added courses get `_added`. Archived courses are removed from `courses` and returned in `archived`. Copies objects so a reload starts from scraped data. |
+| 525 | `knownRequirementPaths()` | All requirement paths per program, used by the course editor's autocomplete. |
+| 539 to 598 | `buildCourseIndex()`, `lookupCourse()`, `findTreeNode()`, `collectCoursesForRequirement()`, `formatRequirementPath()`, `requirementLeafLabel()` | Index by `15-122` and `15122`. Tree lookups. |
+| 600 to 666 | `getCourseMappings()`, `orderCfColumns()`, `summarizeFlagsByStatus()`, `getAlsoCountsFor()` | Display data for the course card. |
+| 668 to 721 | `predictOffering()`, `sortSemesters()` | Rule-based "likely offered next term" hint (no ML). |
+| 723 to 743 | `DEPT_NAMES`, `getDeptName()` | Department number to name. |
+| 745 to 880 | `SEMESTER_OPTIONS`, `MODALITY_OPTIONS`, `availableSemesterOptions()`, `semesterLabel()`, `getCourseOfferings()`, `filterOfferings()`, `courseHasMatchingOffering()` | Semester, campus and modality filters over SOC offerings. |
+| 882 to 1116 | `PLAN_DAY_COLUMNS`, `parseDaysTimes()`, `formatDaysTimesForDisplay()`, `planOfferingKey()`, `groupOfferingsBySection()`, `findPlanConflicts()`, `layoutPlanDayBlocks()` and friends | Schedule planner math: parsing times, conflicts, calendar layout (7:00 to 22:00). Stored `days_times` keep the SOC form `MW 03:30PM-04:50PM` (plan keys and `parseDaysTimes` read it); `formatDaysTimesForDisplay()` shows it as `MW 3:30 PM to 4:50 PM` on course cards and the plan list, and returns any other string unchanged. |
+| 1118 to 1729 | `COURSE_STATUSES`, `COURSE_STATUS_KEY`, `normalizeCourseStatuses()`, `nextCourseStatus()`, `courseMatchesSelect()`, `expandMinorCategory()`, `minorRuleLabel()` (chips worded like the major chips), `buildMinorTree()`, `buildMinorIndex()`, `courseCountsForMinor()`, `majorCountKind()`, `computeMinorProgress()`, `minorStatusText()`, `minorSummaryText()`, `countMarkedCourses()`, `minorDoubleCountRules()`, `minorDoubleCountLimitText()`, `checkMinorDoubleCounting()`, `minorDoubleCountWarnings()`, `plainDataText()` | Minors: each minor of `data/minors.json` as a tree against the catalog, a student's progress from their course statuses, and double counting (8.10). |
+| 1731 to end | `annotateDoubleCounters()`, `annotateMultiProgram()` | Profile-aware flags on courses: for a student `_majorKind` (`degree`, `gened` or none for their major), `_minorMatches` (their minors the course can count for) and `_doubleCounter` (both); `_programCount`. |
 
 ### 8.4 `js/profile.js` (about 380 lines): roles and programs
 
@@ -686,7 +686,7 @@ One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "C
 
 ### 8.7 `js/app.js` (about 6,500 lines): the `App` object
 
-Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for the `minors-tree` branch (November 10, 2026); they will drift as the file is edited. Search for the function name.
+Everything lives on one object literal `const App = { ... }`, started by `App.init()` on `DOMContentLoaded` (last lines of the file). Line numbers below are for the `cleanup` branch after the catalog and minors merges (November 10, 2026); they will drift as the file is edited. Search for the function name.
 
 | Lines (approx.) | Section | Key functions |
 |---|---|---|
@@ -703,25 +703,25 @@ Everything lives on one object literal `const App = { ... }`, started by `App.in
 | 1572 to 1808 | Category index and unified home search | `_buildCategoryIndex()` (requirement categories and one entry per minor), `selectCategoryResult()`, `handleUnifiedSearchKeydown()`, `selectUnifiedResult()`, `runHomeSearchChip()` |
 | 1809 to 2201 | Home screen | `renderLeftEmpty()`, `_renderHome()`, `_renderHomeDock()`, popular courses (`_recordCourseSearch()`, `_loadPopularCourses()`, local fallback counts), `_renderQuickStart()`, navbar counters |
 | 2202 to 2231 | Flag counts for the home screen | `_loadStudentFlagsSummary()`, `_loadMyFlagsSummary()` |
-| 2232 to 2431 | Course card | `renderCourseCard()` (for a student also their status for the course; the minors the course counts for), `_renderSchedRowGroup()` |
-| 2432 to 2911 | Requirement tree | `_renderMajorTabs()` (the majors and the Minors tab), `switchMajor()`, `toggleNode()`, `renderTree()`, `renderTreeNode()`, `downloadRequirementExcel()` (CSV), `_renderLeafCourse()`, `_renderRowActions()`, `_renderCardActions()`, `_leafPassesTreeFilter()` |
-| 2912 to 2928 | Cross-linking | `selectCourseFromTree()` |
-| 2929 to 3089 | Wishlist (Saved) | `_getWishlistItems()`, `toggleWishlist()`, `showWishlistView()`, `_saveWishlistNote()` |
-| 3090 to 3873 | Schedule plans | `_loadPlansStore()` (localStorage `cf_plans_v2`, migrates legacy `cf_plan`), `createNewPlan()`, `deletePlan()`, `renamePlan()`, `_loadServerPlans()`, `_mergeServerPlan()`, `_handlePendingSharePlanLink()`, `openSharePlanModal()`, `submitSharePlanEmail()`, `copySharePlanLink()`, `togglePlanSection()`, `_renderPlanCalendar()`, `showPlanView()`, `openPlanDetail()` |
-| 3874 to 3934 | Student flag view and favourites | `showStudentFlagsView()`, `showStudentFavorites()` |
-| 3935 to 4108 | Flags | `FLAG_REASONS` (must match `VALID_REASON_CODES` in `backend/flags.py`), `_getFlags()` (local `cf_flags`), `openFlagModal()`, `submitFlag()` |
-| 4109 to 4342 | Directory panel | `toggleDirectoryPanel()`, `_loadDirectoryPanel()`, `_renderDirectoryPanel()`, `_editDirectoryRow()`, `_revokeDirectoryRow()`, `_submitDirectoryForm()` |
-| 4343 to 4472 | Admin console shell | `_adminConsole` state, `ADMIN_TABS`, `showAdminConsole()`, `_setAdminTab()`, `_loadAdminTab()` (dispatch), helpers `_admEl()`, `_admError()`, `_admWhen()`, `_admStat()` |
-| 4473 to 5033 | Admin: Courses tab (course editor) | `_courseAdmin` state, `_renderAdminCourses()`, `_renderCourseResults()`, `_openCourseEditor()`, `_openCourseAdd()`, `_renderCourseEditor()`, `_addCourseReq()`, `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()` |
-| 5034 to 5367 | Admin: Overview tab and sign-in activity | `_loadAdminOverview()`, `_openIncompleteUsers()`, `_openSignIns()`, `_renderSignIns()`, `_exportSignInsCsv()` |
-| 5368 to 5407 | Admin: Faculty access tab | `_loadAdminAccess()`, `_openDirectoryFromAdmin()` |
-| 5408 to 5503 | Admin: Insights tab | `_loadAdminInsights()` |
-| 5504 to 5583 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()`, `_describeAdminEvent()` (human text per audit action) |
-| 5584 to 5794 | Admin: Users tab | `_loadUserAdmin()`, `_exportUsersCsv()`, `_renderUserAdmin()`, `_renderUserAdminRow()`, `_saveUserAdmin()` (opened with `showAdminConsole('users')`) |
-| 5795 to 5924 | Admin and faculty: Flags review | `showFlagReview()`, `_loadFlagReview()`, `_renderFlagReview()`, `_setFlagStatus()`, `_promptFlagNote()` |
-| 5925 to 6453 | Minors (8.10) | course statuses (`setCourseStatus()`, `cycleCourseStatus()`, `_courseStatusButtonHtml()`, `_courseCardStatusHtml()`), `_courseCardMinorsHtml()`, `_nodeStatusHtml()`, `_minorNodeInfoHtml()`, `_studentProgramsBarHtml()`, `setStudentMajor()`, `addStudentMinor()`, `removeStudentMinor()`, `_applyStudentPrograms()`, `_saveStudentProgramsToAccount()` (one `PATCH /api/me` at a time), `browseMinor()`, `openMinorRequirements()`, `_navigateToMinorNode()`, `_renderMinorsBrowse()`, `_renderMinorSection()`, `_minorProgressHtml()` |
-| 6454 to 6497 | Deep links into the tree | `navigateToReqNode()` (a `minor:<code>` target goes to `_navigateToMinorNode()`) |
-| 6498 to 6505 | Bootstrap | `DOMContentLoaded` handler, picks dark theme from OS if no saved theme, calls `App.init()` |
+| 2232 to 2432 | Course card | `renderCourseCard()` (for a student also their status for the course; the minors the course counts for), `_renderSchedRowGroup()` |
+| 2433 to 2923 | Requirement tree | `_renderMajorTabs()` (the majors and the Minors tab), `switchMajor()`, `toggleNode()`, `renderTree()`, `renderTreeNode()`, `downloadRequirementExcel()` (CSV), `_renderLeafCourse()`, `_earlierTagHtml()` (the "Earlier requirement" tag), `_renderRowActions()`, `_renderCardActions()`, `_leafPassesTreeFilter()` |
+| 2924 to 2940 | Cross-linking | `selectCourseFromTree()` |
+| 2941 to 3101 | Wishlist (Saved) | `_getWishlistItems()`, `toggleWishlist()`, `showWishlistView()`, `_saveWishlistNote()` |
+| 3102 to 3885 | Schedule plans | `_loadPlansStore()` (localStorage `cf_plans_v2`, migrates legacy `cf_plan`), `createNewPlan()`, `deletePlan()`, `renamePlan()`, `_loadServerPlans()`, `_mergeServerPlan()`, `_handlePendingSharePlanLink()`, `openSharePlanModal()`, `submitSharePlanEmail()`, `copySharePlanLink()`, `togglePlanSection()`, `_renderPlanCalendar()`, `showPlanView()`, `openPlanDetail()` |
+| 3886 to 3946 | Student flag view and favourites | `showStudentFlagsView()`, `showStudentFavorites()` |
+| 3947 to 4120 | Flags | `FLAG_REASONS` (must match `VALID_REASON_CODES` in `backend/flags.py`), `_getFlags()` (local `cf_flags`), `openFlagModal()`, `submitFlag()` |
+| 4121 to 4354 | Directory panel | `toggleDirectoryPanel()`, `_loadDirectoryPanel()`, `_renderDirectoryPanel()`, `_editDirectoryRow()`, `_revokeDirectoryRow()`, `_submitDirectoryForm()` |
+| 4355 to 4484 | Admin console shell | `_adminConsole` state, `ADMIN_TABS`, `showAdminConsole()`, `_setAdminTab()`, `_loadAdminTab()` (dispatch), helpers `_admEl()`, `_admError()`, `_admWhen()`, `_admStat()` |
+| 4485 to 5057 | Admin: Courses tab (course editor) | `_courseAdmin` state, `_renderAdminCourses()`, `_renderCourseResults()`, `_openCourseEditor()`, `_openCourseAdd()`, `_renderCourseEditor()`, `_addCourseReq()`, `_courseReqRow()` (keeps a row's earlier flag), `_saveCourse()`, `_archiveCourse()`, `_restoreCourse()`, `_revertCourse()`, `_reloadCatalog()` |
+| 5058 to 5391 | Admin: Overview tab and sign-in activity | `_loadAdminOverview()`, `_openIncompleteUsers()`, `_openSignIns()`, `_renderSignIns()`, `_exportSignInsCsv()` |
+| 5392 to 5431 | Admin: Faculty access tab | `_loadAdminAccess()`, `_openDirectoryFromAdmin()` |
+| 5432 to 5527 | Admin: Insights tab | `_loadAdminInsights()` |
+| 5528 to 5607 | Admin: Activity log tab | `_loadAdminActivity()`, `_renderAdminActivity()`, `_describeAdminEvent()` (human text per audit action) |
+| 5608 to 5818 | Admin: Users tab | `_loadUserAdmin()`, `_exportUsersCsv()`, `_renderUserAdmin()`, `_renderUserAdminRow()`, `_saveUserAdmin()` (opened with `showAdminConsole('users')`) |
+| 5819 to 5948 | Admin and faculty: Flags review | `showFlagReview()`, `_loadFlagReview()`, `_renderFlagReview()`, `_setFlagStatus()`, `_promptFlagNote()` |
+| 5949 to 6477 | Minors (8.10) | course statuses (`setCourseStatus()`, `cycleCourseStatus()`, `_courseStatusButtonHtml()`, `_courseCardStatusHtml()`), `_courseCardMinorsHtml()`, `_nodeStatusHtml()`, `_minorNodeInfoHtml()`, `_studentProgramsBarHtml()`, `setStudentMajor()`, `addStudentMinor()`, `removeStudentMinor()`, `_applyStudentPrograms()`, `_saveStudentProgramsToAccount()` (one `PATCH /api/me` at a time), `browseMinor()`, `openMinorRequirements()`, `_navigateToMinorNode()`, `_renderMinorsBrowse()`, `_renderMinorSection()`, `_minorProgressHtml()` |
+| 6478 to 6521 | Deep links into the tree | `navigateToReqNode()` (a `minor:<code>` target goes to `_navigateToMinorNode()`) |
+| 6522 to 6528 | Bootstrap | `DOMContentLoaded` handler, picks dark theme from OS if no saved theme, calls `App.init()` |
 
 Admin tabs, in order (`ADMIN_TABS`): `courses` (Courses), `overview` (Overview), `users` (Users), `access` (Faculty access), `flags` (Flags), `insights` (Insights), `activity` (Activity log). The Admin button appears only when `canManageUsers(this.authedUser)`.
 
@@ -757,7 +757,7 @@ Note: course statuses live only in the browser too; saving them on the account c
 
 ### 8.10 Minors in the requirement map
 
-**Data.** `frontend/data/minors.json` (4.4) lists each minor as a tree of categories. `fetchMinors()` loads it with the catalog; `applyMinorsCatalog()` rebuilds `MINOR_LIST` and `MINOR_BLOCKED_MAJORS` from it, and `buildMinorIndex()` builds every minor's tree against the loaded catalog (`App.minorIndex`, and `App.trees['minor:<code>']`). A category's courses are its listed codes that have a catalog row plus every course its `select` rule matches (prefix, number range, excluded codes and ranges, unit floor), sorted by code; listed codes with no catalog row are named under the category ("Also listed, but not in the course catalog"). Minor trees have the same node shape as the major trees, so the same cards, rows, rule chips and course rows render them; their paths are category ids joined by `---`.
+**Data.** `frontend/data/minors.json` (4.4) lists each minor as a tree of categories. `fetchMinors()` loads it with the catalog; `applyMinorsCatalog()` rebuilds `MINOR_LIST` and `MINOR_BLOCKED_MAJORS` from it, and `buildMinorIndex()` builds every minor's tree against the loaded catalog (`App.minorIndex`, and `App.trees['minor:<code>']`). A category's courses are its listed codes that have a catalog row plus every course its `select` rule matches (prefix, number range, excluded codes and ranges, unit floor), sorted by code; listed codes with no catalog row are named under the category ("Also listed, but not in the course catalog"). Minor trees have the same node shape as the major trees, so the same cards, rows, rule chips and course rows render them; their paths are category ids joined by `---`. Their rule chips are worded like the 2026-27 catalog chips of the majors (`minorRuleLabel()`: "Take all", "Choose 2", "Choose 1 (at least 9 units)", "At least 27 units", "Up to 9 units").
 
 **Student view.** On their own major tab, a student (guest or signed in) sees a programs bar (major picker, minor chips, "Add a minor"), the major's cards, then one section per chosen minor: "Psychology minor" with the title, unit total, campus note (for the Pittsburgh versions), the official version, a progress bar, the double counting limit in plain English with the audit rule, warnings, and "About this minor" (notes, grade rules, double counting notes). Changes are saved locally (`saveProfile()`) and, when signed in, on the account (`PATCH /api/me`, one request at a time). The role badge's Edit (onboarding) still works too.
 
@@ -765,7 +765,7 @@ Note: course statuses live only in the browser too; saving them on the account c
 
 **Progress** (`computeMinorProgress()`). One course fills one category. Each marked course is assigned to at most one bottom-level category: the categories with the fewest matching marked courses are filled first (then the narrower lists, then file order), each with completed courses before in progress ones and only until its rule is met; then a group that counts courses or units across its parts (Sociology Electives, Writing's Core Writing) takes more courses into its parts, never past a `max_units` cap. A category is Done when its completed courses meet its rule (`take_all`, `required`, `pick` n with an optional unit floor, `min_units`, parts for groups), In progress when completed plus in progress courses meet it, and otherwise shows what is left ("1 course left", "9 units left", "1 part left"). A row says where a marked course is counted ("Counted in Survey Courses") or that it is not needed. The header sums up the top-level requirements ("2 of 5 requirements done, 1 in progress, 2 left"). In the major tree, a category shows how many of its courses are marked.
 
-**Double counting.** A course in a minor's tree that also counts for the student's major is tagged "Also counts for CS" (a major requirement) or "Also counts for CS Gen Ed"; in the major tree a course a chosen minor can use is tagged "Also counts for Psychology minor". The header states the limit (`minorDoubleCountLimitText()`): "At most 2 courses may also count toward your major or another minor", "No course may ..." with the categories that are free, "... without a limit" with the categories that may never be shared, or "Confirm double counting with your advisor" when the file states no rule (Biological Sciences, Student-defined). `checkMinorDoubleCounting()` takes the marked courses used for the minor that also count for a major requirement of the student's major (General Education overlap is free) or are used by another of their minors; courses in a `no_limit` category are free, courses in a `no_sharing` category are flagged, and the rest count toward the one shared limit (`max_with_major`, which equals `max_with_other_minors` in every file). Over the limit, the header warns and names the courses.
+**Double counting.** A course in a minor's tree that also counts for the student's major is tagged "Also counts for CS" (a major requirement) or "Also counts for CS Gen Ed"; in the major tree a course a chosen minor can use is tagged "Also counts for Psychology minor". The header states the limit (`minorDoubleCountLimitText()`): "At most 2 courses may also count toward your major or another minor", "No course may ..." with the categories that are free, "... without a limit" with the categories that may never be shared, or "Confirm double counting with your advisor" when the file states no rule (Biological Sciences, Student-defined). `checkMinorDoubleCounting()` takes the marked courses used for the minor that also count for a major requirement of the student's major (General Education overlap is free) or are used by another of their minors; courses in a `no_limit` category are free, courses in a `no_sharing` category are flagged, and the rest count toward the one shared limit (`max_with_major`, which equals `max_with_other_minors` in every file). Over the limit, the header warns and names the courses. A course counts for the major through any of its rows for that major, including a row kept as an earlier requirement (14.10), so a warning can name a course that only an earlier version of the major lists; the student confirms it with their advisor. The app offers every minor to every major, AI included, except to the majors a minor's `blocked_majors` names.
 
 **Browse view.** Every role has a Minors tab after the major tabs. It lists all 16 minors; choosing one shows its full tree. Students also see their progress there and an "Add to my minors" button (or "Not open to BA majors"); an advisor with minor scope starts on their minor. Course cards list the minors a course counts for ("Psychology: Survey Courses or Psychology Elective", the student's own first), and the home search offers each minor ("Minor · Neuroscience minor").
 
@@ -1191,6 +1191,8 @@ On November 10, 2026 the requirement paths of all five majors moved to the bucke
 - AI became a live major, built from its catalog page; its general education rows are the SCS ones CS uses, with Category 1A (Cognitive Studies) in place of Category 1.
 
 Every bucket name has a rule chip in `FULFILLMENT_RULES` (`js/data.js`), and the rules are listed in catalog order, which is also the order the tree shows sibling buckets in. `frontend/tests/catalog-data.test.js` checks the served catalog against `js/data.js`: known roots only, no dash punctuation in bucket names, a rule chip for every bucket, no stale `LABEL_OVERRIDES` or rule keys, and a reason on every earlier row.
+
+The minors did not change with the bucket names: `frontend/data/minors.json` lists course codes and number rules, not requirement paths (8.10).
 
 The old to new paths are in `backend/data/requirement_path_renames.json`. The pipeline does not read it: `courses.json` carries the new paths, and reconcile keeps them; `mapping_overlays.json` and the constants in `apply_mapping_overlays.py` use the new paths, so the daily overlay step adds no old path back.
 
@@ -1835,13 +1837,13 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 10, 2026 (`minors-tree` branch)
+### 16.2 Results on November 10, 2026 (`cleanup` branch, after the catalog and minors merges)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **172 passed, 6 failed** (the known failures below) |
+| `python -m pytest backend/tests` | **173 passed, 6 failed** (the known failures below) |
 | `python -m pytest backend/scraper/tests` | 173 passed |
-| `node scripts/run-data-tests.js` | 164 passed (profile 51/51, data 59/59, minors 25/25, utils 5/5, dash guard 3/3, minors file 6/6, app views 15/15) |
+| `node scripts/run-data-tests.js` | 175 passed (profile 51/51, data 64/64, minors 25/25, utils 5/5, dash guard 3/3, minors file 6/6, app views 15/15, catalog data 6/6) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
@@ -1946,7 +1948,7 @@ Requirement data is the hard part. The scrape does not produce requirement mappi
 3. Frontend:
    - `js/data.js`: add the code to `MAJOR_ORDER`; check `MAJOR_META` and `MAJOR_BRAND`; add a `LABEL_OVERRIDES` entry for the degree root and a `setRule(...)` line for every bucket name, in catalog order. `annotateMultiProgram()` and `splitTreeSections()` need no change.
    - `js/profile.js`: set `dataPending: false` in `PROGRAM_GROUPS`.
-   - `css/styles.css`: add `--major-<code>` tokens next to `--major-cs` (line 26) for light and dark themes, and the per-major classes the tree uses (copy the ones for `ai`: `.tr-leaf-tag-ai`, `.role-badge.rb-ai`, `.cc-cf-ai`, `.cc-cf-col-ai`, `.typeahead-cat-major-ai`, `.major-tab[data-major="AI"]`).
+   - `css/styles.css`: add `--major-<code>` tokens next to `--major-cs` (line 26) for light and dark themes, and the per-major classes the tree uses (copy the ones for `ai`: `.tr-leaf-tag-ai`, `.tr-dc-tag-ai`, `.role-badge.rb-ai`, `.cc-cf-ai`, `.cc-cf-col-ai`, `.typeahead-cat-major-ai`, `.major-tab[data-major="AI"]`).
 4. Backend: `VALID_PROGRAMS_FOR_PATCH` (`auth.py`), `REQUIREMENT_PROGRAMS` (`course_overrides.py`) and `_VALID_PROGRAMS` (`search_analytics.py`) already include `AI` and `GS`. For a brand new code, add it to all three.
 5. If students of the new major may not take some minors, add the major to those minors' `blocked_majors` in `frontend/data/minors.json`, to `MAJOR_MINOR_COLLISION` (`auth.py`) and to `MINOR_BLOCKED_MAJORS` (`profile.js`); `backend/tests/test_auth.py` and `frontend/tests/minors-file.test.js` fail until all three agree.
 6. Test: a student with that major sees the tree; course cards show the new column.
@@ -2107,7 +2109,7 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 1. **The move to the CMU-Q server is not done.** The live site still runs on GitHub Pages and Render from `main`, and the old scrape workflow still commits to `main` with the old parser. Follow 15.15.
 2. **Saved data under the old Psychology numbers.** The old Psychology numbers were removed on 2026-11-09 after their mappings moved to the current numbers. Wishlist items, flags, schedule plan items, search counts and admin course edits saved under them in production must be moved with 15.8 step 8 when the database is imported.
-3. **6 backend tests and 1 JS test fail** (16.2). The tests are stale, not the code. No CI runs any tests.
+3. **6 backend tests fail** (16.2). The tests are stale, not the code. No CI runs any tests.
 4. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
 5. Whether production has an email provider for password resets is not known (on Render the values were set only in the dashboard). Decide at the cutover (15.6).
 6. The deploy files (15) have not been run on the real server yet; the certificate names, the time zone and outbound network access are unknown until then.
