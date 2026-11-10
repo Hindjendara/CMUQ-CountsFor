@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scrap
 
 import apply_mapping_overlays as amo  # noqa: E402
 from pipeline_paths import COURSES_JSON, MAPPING_OVERLAYS_JSON  # noqa: E402
+from psychology_renumbering import load_renumbering  # noqa: E402
 from apply_mapping_overlays import (  # noqa: E402
     OverlayError,
     apply_file,
@@ -233,16 +234,19 @@ def test_overlay_paths_exist_in_catalog(real_courses):
 def test_overlay_file_lists_only_settled_entries():
     assert set(OVERLAY_DOC) == {"description", "overlays", "remove_mappings", "qatar_visibility"}
     removals = {e["course_code"]: e["programs"] for e in OVERLAY_DOC["remove_mappings"]}
-    assert removals == {"85-414": "all", "85-426": "all"}
+    # 85-414 needs no entry since the renumbering migration: its old course's rows are 85-472's.
+    assert removals == {"85-426": "all"}
     assert [(e["course_code"], e["rule"]) for e in OVERLAY_DOC["qatar_visibility"]] == [
         ("85-100", "show_only_if_offered_qatar"),
     ]
     sheet = [o for o in OVERLAY_DOC["overlays"] if o["id"].startswith("hss-sheet-")]
     codes = [c for o in sheet for c in o["course_codes"]]
+    # The sheet lists Personality as 85-251, which the renumbering list makes 85-151.
     assert sorted(codes) == sorted([
         "85-170", "85-364", "85-413", "85-130", "85-150", "85-310", "85-300",
-        "85-452", "85-190", "85-110", "85-251", "85-450",
+        "85-452", "85-190", "85-110", "85-151", "85-450",
     ])
+    assert all(o["id"] == f"hss-sheet-{o['course_codes'][0]}" for o in sheet)
     assert all(o["create_missing"] is False for o in sheet)
     assert all(o["note"] == "H&SS Course Offerings sheet (Qatar), approved 2026-11-07" for o in sheet)
 
@@ -252,7 +256,9 @@ def test_real_overlay_merge_result(real_courses):
     stats = apply_overlay_document(courses, OVERLAY_DOC)
     rows = by_code(courses)
     assert stats["overlay_codes_missing"] == []
-    assert "85-459" not in rows
+    assert stats["courses_created"] == 0
+    # 85-459 Emotion and Motivation, a new CMU-Q course, has its row from the renumbering list.
+    assert rows["85-459"]["source"] == "Psychology renumbering list"
 
     def leaves(code):
         return {(m, r["requirement"].split("---")[-1], r["type"])
@@ -279,21 +285,28 @@ def test_real_overlay_merge_result(real_courses):
     }
     assert leaves("85-414") == set()
     assert leaves("85-426") == set()
+    assert leaves("85-151") == {
+        ("CS", "Category 1: Cognition, Choice and Behavior", True),
+        ("CS", "C. Humanities and Arts Electives", True),
+        ("BA", "Scientific Reasoning", True),
+        ("BS", "E. Nontechnical Elective Courses", True),
+        ("AI", "C. Humanities and Arts Electives", True),
+    }
     assert rows["85-100"]["qatar_only"] is True
 
 
-# Removed on 2026-11-09 after their mappings moved to the current numbers.
-OLD_PSYCHOLOGY_NUMBERS = {
-    "85-104": "85-190", "85-253": "85-190", "85-261": "85-190", "85-211": "85-110",
-    "85-219": "85-170", "85-221": "85-130", "85-241": "85-150", "85-377": "85-452",
-    "85-442": "85-454", "85-359": "85-411", "85-340": "85-350",
-}
+# Removed on 2026-11-09 and not on the department's renumbering list.
+OLD_PSYCHOPATHOLOGY_NUMBERS = {"85-253": "85-190", "85-261": "85-190"}
 
 
 def test_old_psychology_numbers_stay_removed(real_courses):
+    ren = load_renumbering()
     codes = {c["course_code"] for c in real_courses}
-    assert not codes & set(OLD_PSYCHOLOGY_NUMBERS)
-    assert set(OLD_PSYCHOLOGY_NUMBERS.values()) <= codes
+    assert not codes & (set(ren.retired) | set(OLD_PSYCHOPATHOLOGY_NUMBERS))
+    assert set(ren.new_codes) | set(OLD_PSYCHOPATHOLOGY_NUMBERS.values()) <= codes
     rows = by_code(real_courses)
-    for current in ("85-454", "85-411"):
+    for current in ("85-454", "85-411", "85-151", "85-418"):
         assert any(rows[current]["requirements"][m] for m in ("CS", "IS", "BA", "BS")), current
+    # 85-104 (Psychopathology until Fall 2025, now 85-190) is reused for a new course.
+    assert rows["85-104"]["course_name"] == "Psychology and Society - Inside Out Program"
+    assert not any(rows["85-104"]["requirements"].values())

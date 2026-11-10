@@ -215603,14 +215603,18 @@
             "major": "CS"
           }
         ],
-        "IS": [],
+        "IS": [
+          {
+            "requirement": "GenEd---Disciplinary Perspectives---Social Sciences",
+            "type": true,
+            "major": "IS"
+          }
+        ],
         "BA": [
           {
             "requirement": "GenEd---University Core---Scientific Reasoning",
             "type": true,
-            "major": "BA",
-            "earlier": true,
-            "earlier_reason": "older degree version"
+            "major": "BA"
           }
         ],
         "BS": [
@@ -216597,74 +216601,6 @@
       "qatar_only": true
     },
     {
-      "course_code": "85-102",
-      "course_name": "Introduction to Psychology",
-      "department": "85",
-      "units": 9,
-      "description": "The world is a crazy, confusing place. Much of what we encounter is ambiguous, dynamic, and misleading. Somehow, we have to make sense of it. This class is about how we do that. The course provides an overview of the major areas of scientific psychology, exploring the models of our mind, brain, and behavior that explain wide areas of human and nonhuman functioning. Topics range from neuroscience and the biological basis of behavior, to memory and thought, to social interaction and psychological development over the lifespan, to abnormal psychology, psychopathology, and treatment. Tuesday and Thursday lectures provide a broad survey of topics and findings in psychology. In recitation sections students get hands on experiencing thinking about psychological science by designing and running psychological studies and discussing the real world implications of the concepts they have investigated.  While all sections will be completing the same activities, some of the sections are themed.  Themed sections will frame the discussion in the context of the theme, thus allowing students in those sections to better appreciate the links between the work being done in the class and the theme of that section.  However, the core material will be the same and all sections will prepare students equally well for exams and upper division courses.  General unthemed sections will sample across themes and topics, rather than being focused on a single theme.  At the end of this course, students will not only be more knowledgeable about psychology, but be able to apply their knowledge about psychology to be better thinkers, learners, and consumers of information in general.   Themed sections     Design  Register through Design     Medicine, health, and Biosciences  Section I     Decision Science, business, and economics  Section A",
-      "prerequisites": "None",
-      "offered": [
-        "S18",
-        "S19",
-        "M20",
-        "M22",
-        "M23",
-        "F23",
-        "S24",
-        "F24",
-        "S25",
-        "M25"
-      ],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior",
-            "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "renumbered as 85-100"
-          },
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "CS"
-          }
-        ],
-        "IS": [
-          {
-            "requirement": "GenEd---Disciplinary Perspectives---Social Sciences",
-            "type": true,
-            "major": "IS"
-          }
-        ],
-        "BA": [
-          {
-            "requirement": "GenEd---University Core---Scientific Reasoning",
-            "type": true,
-            "major": "BA"
-          }
-        ],
-        "BS": [
-          {
-            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
-            "type": true,
-            "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI"
-          }
-        ]
-      },
-      "soc_sections": [],
-      "offerings": []
-    },
-    {
       "course_code": "85-105",
       "course_name": "Hack Your Life",
       "department": "85",
@@ -217213,88 +217149,6 @@
       "offerings": []
     },
     {
-      "course_code": "85-251",
-      "course_name": "Personality",
-      "department": "85",
-      "units": 9,
-      "description": "The primary purpose of personality psychology is to understand human uniquenesshow and why it is that one person differs from others, in terms of the ways that they thinks, feels, and acts. Students in the course will be exposed to several broad theoretical perspectives, each of which attempts to capture and understand the origins and consequences of individual distinctiveness from a slightly different vantage point. Included among these approaches are the dispositional or trait, psychoanalytic, learning, humanistic, and cognitive self regulation perspectives. This is a survey course and is intended to provide students with a broad background of theory and research in the area. Class meetings consist primarily of lecture, but there is some discussion too. Students will be given the opportunity to assess their own personalities during the course. A consistent theme throughout the course is the relationships between aspects of ones personality and physical health.",
-      "prerequisites": "None",
-      "offered": [
-        "S24",
-        "F20",
-        "F21",
-        "M23",
-        "M24",
-        "M25"
-      ],
-      "offered_qatar": false,
-      "offered_pitts": true,
-      "requirements": {
-        "CS": [
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior",
-            "type": true,
-            "major": "CS"
-          },
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "CS"
-          }
-        ],
-        "IS": [],
-        "BA": [
-          {
-            "requirement": "GenEd---University Core---Scientific Reasoning",
-            "type": true,
-            "major": "BA"
-          }
-        ],
-        "BS": [
-          {
-            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
-            "type": true,
-            "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI"
-          }
-        ]
-      },
-      "soc_sections": [
-        {
-          "section": "A6",
-          "days": "MTWRF",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "Remote only",
-          "campus": "Pittsburgh",
-          "modality": "Remote",
-          "semester_code": "M26",
-          "semester": "Summer 2026"
-        }
-      ],
-      "offerings": [
-        {
-          "semester": "Summer 2026",
-          "semester_code": "M26",
-          "campus": "Pittsburgh",
-          "section": "A6",
-          "modality": "Remote",
-          "units": "9",
-          "days_times": "MTWRF 09:30AM-10:50AM",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "Remote only"
-        }
-      ]
-    },
-    {
       "course_code": "85-252",
       "course_name": "Intro to Health Psychology: SES and Health Inequalities",
       "department": "85",
@@ -217521,56 +217375,6 @@
       ]
     },
     {
-      "course_code": "85-314",
-      "course_name": "Cognitive Neuroscience Research Methods",
-      "department": "85",
-      "units": 9,
-      "description": "This is a handson laboratory course designed to foster basic skills in the empirical approaches used in cognitive neuroscience research. Students will learn how to evaluate which cognitive neuroscience method is best suited to a research question, basic experimental design and analysis, and how to formally present empirical results. The course will focus on functional MRI, but will also cover structural MRI diffusion imaging and EEG, and survey various other methods. Students will work with actual datasets using the current software used by cognitive neuroscience researchers.",
-      "prerequisites": "((36-309 [] at least D) or (85-309 [] at least D)) and ((85-211 [] at least D) or (85-219 [] at least D))",
-      "offered": [
-        "S21",
-        "S22",
-        "S23",
-        "S24",
-        "S25"
-      ],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "CS"
-          }
-        ],
-        "IS": [],
-        "BA": [
-          {
-            "requirement": "GenEd---University Core---Scientific Reasoning",
-            "type": true,
-            "major": "BA"
-          }
-        ],
-        "BS": [
-          {
-            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
-            "type": true,
-            "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Science and Engineering",
-            "type": true,
-            "major": "AI"
-          }
-        ]
-      },
-      "soc_sections": [],
-      "offerings": []
-    },
-    {
       "course_code": "85-339",
       "course_name": "Bilingualism",
       "department": "85",
@@ -217745,13 +217549,7 @@
             "major": "CS"
           }
         ],
-        "IS": [
-          {
-            "requirement": "GenEd---Special Seminars---Perspectives on Justice and Injustice",
-            "type": true,
-            "major": "IS"
-          }
-        ],
+        "IS": [],
         "BA": [
           {
             "requirement": "GenEd---University Core---Scientific Reasoning",
@@ -217760,13 +217558,6 @@
           }
         ],
         "BS": [
-          {
-            "requirement": "GenEd---Nontechnical Breadth Requirements---D. Cultural/Global Understanding Course",
-            "type": true,
-            "major": "BS",
-            "earlier": true,
-            "earlier_reason": "the listed course is now 85-450"
-          },
           {
             "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
             "type": true,
@@ -217960,60 +217751,6 @@
       "offerings": []
     },
     {
-      "course_code": "85-360",
-      "course_name": "Origins of Intelligence",
-      "department": "85",
-      "units": 9,
-      "description": "The nature and origins of human intelligence is a muchdebated topic. Questions about the evolution and development of intelligence in humans, how intelligence compares among animals, the basis of intelligence in the brain, how to create intelligence in machines, the role of genes and experience, and individual variability in intelligence are all areas of vigorous scientific inquiry. Popular folk views of intelligence that may be misguided or incorrect have shaped all levels of society from parenting to politics. There is no universally accepted definition of human intelligence but one conceptualization is the ability to remember, reason, plan, and solve novel problems. This course will explore scientific and popular views of the origins of intelligence. The approach will be to read popular science articles and books that deal with intelligence in humans, animals, and machines and locate the primary scientific work on which those claims are made in order to evaluate the rigor and validity of intelligence theories. The course assignments will primarily consist of oral and written critiques of theories and data on the science of intelligence.",
-      "prerequisites": "None",
-      "offered": [
-        "S20",
-        "S21",
-        "S22"
-      ],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "CS"
-          }
-        ],
-        "IS": [
-          {
-            "requirement": "GenEd---Foundations---Scientific Inquiry",
-            "type": true,
-            "major": "IS"
-          }
-        ],
-        "BA": [
-          {
-            "requirement": "GenEd---University Core---Scientific Reasoning",
-            "type": true,
-            "major": "BA"
-          }
-        ],
-        "BS": [
-          {
-            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
-            "type": true,
-            "major": "BS"
-          }
-        ],
-        "AI": [
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI"
-          }
-        ]
-      },
-      "soc_sections": [],
-      "offerings": []
-    },
-    {
       "course_code": "85-363",
       "course_name": "Attention, Its Development and Disorders",
       "department": "85",
@@ -218132,20 +217869,6 @@
       "requirements": {
         "CS": [
           {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior",
-            "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "older degree version"
-          },
-          {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "CS",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          },
-          {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
             "major": "CS"
@@ -218173,13 +217896,6 @@
         ],
         "AI": [
           {
-            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "not covered by the 2026-27 rule"
-          },
-          {
             "requirement": "GenEd---Science and Engineering",
             "type": true,
             "major": "AI"
@@ -218188,13 +217904,6 @@
             "requirement": "GenEd---Science and Engineering---Laboratory Requirement",
             "type": true,
             "major": "AI"
-          },
-          {
-            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1A: Cognitive Studies",
-            "type": true,
-            "major": "AI",
-            "earlier": true,
-            "earlier_reason": "older degree version"
           }
         ]
       },
@@ -727646,131 +727355,6 @@
       "soc_ingested": true
     },
     {
-      "course_code": "85-294",
-      "course_name": "Teaching Assistantship",
-      "department": "85",
-      "units": 0,
-      "description": "",
-      "prerequisites": "",
-      "offered": [
-        "F25",
-        "S26",
-        "F26",
-        "S27"
-      ],
-      "offered_qatar": false,
-      "offered_pitts": true,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [],
-        "BS": []
-      },
-      "soc_sections": [
-        {
-          "section": "A",
-          "days": "TBA",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "In-person Expectation",
-          "campus": "Pittsburgh",
-          "modality": "In Person",
-          "semester_code": "S27",
-          "semester": "Spring 2027"
-        },
-        {
-          "section": "A",
-          "days": "TBA",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "Remote only",
-          "campus": "Pittsburgh",
-          "modality": "Remote",
-          "semester_code": "F26",
-          "semester": "Fall 2026"
-        },
-        {
-          "section": "A",
-          "days": "TBA",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "In-person Expectation",
-          "campus": "Pittsburgh",
-          "modality": "In Person",
-          "semester_code": "S26",
-          "semester": "Spring 2026"
-        },
-        {
-          "section": "A",
-          "days": "TBA",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "Remote only",
-          "campus": "Pittsburgh",
-          "modality": "Remote",
-          "semester_code": "F25",
-          "semester": "Fall 2025"
-        }
-      ],
-      "offerings": [
-        {
-          "semester": "Spring 2027",
-          "semester_code": "S27",
-          "campus": "Pittsburgh",
-          "section": "A",
-          "modality": "In Person",
-          "units": "VAR",
-          "days_times": "TBA",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "In-person Expectation"
-        },
-        {
-          "semester": "Fall 2026",
-          "semester_code": "F26",
-          "campus": "Pittsburgh",
-          "section": "A",
-          "modality": "Remote",
-          "units": "VAR",
-          "days_times": "TBA",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "Remote only"
-        },
-        {
-          "semester": "Spring 2026",
-          "semester_code": "S26",
-          "campus": "Pittsburgh",
-          "section": "A",
-          "modality": "In Person",
-          "units": "VAR",
-          "days_times": "TBA",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "In-person Expectation"
-        },
-        {
-          "semester": "Fall 2025",
-          "semester_code": "F25",
-          "campus": "Pittsburgh",
-          "section": "A",
-          "modality": "Remote",
-          "units": "VAR",
-          "days_times": "TBA",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "Remote only"
-        }
-      ],
-      "soc_title": "Teaching Assistantship",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
       "course_code": "85-300",
       "course_name": "Introduction to Research Methods",
       "department": "85",
@@ -728470,8 +728054,20 @@
           }
         ],
         "IS": [],
-        "BA": [],
-        "BS": [],
+        "BA": [
+          {
+            "requirement": "GenEd---University Core---Scientific Reasoning",
+            "type": true,
+            "major": "BA"
+          }
+        ],
+        "BS": [
+          {
+            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
+            "type": true,
+            "major": "BS"
+          }
+        ],
         "AI": [
           {
             "requirement": "GenEd---Science and Engineering",
@@ -912427,28 +912023,6 @@
       "soc_ingested": true
     },
     {
-      "course_code": "85-101",
-      "course_name": "Psychology Research Requirement",
-      "department": "85",
-      "units": 9,
-      "description": "",
-      "prerequisites": "",
-      "offered": [],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [],
-        "BS": []
-      },
-      "soc_sections": [],
-      "offerings": [],
-      "soc_title": "Psychology Research Requirement",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
       "course_code": "85-270",
       "course_name": "Computational Approaches for Neuroscience Questions",
       "department": "85",
@@ -912699,50 +912273,6 @@
       "soc_ingested": true
     },
     {
-      "course_code": "85-361",
-      "course_name": "Domains in dialogue: Interactions shaping child development",
-      "department": "85",
-      "units": 9,
-      "description": "",
-      "prerequisites": "",
-      "offered": [],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [],
-        "BS": []
-      },
-      "soc_sections": [],
-      "offerings": [],
-      "soc_title": "Domains in dialogue: Interactions shaping child development",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
-      "course_code": "85-372",
-      "course_name": "tba This Section Cancelled",
-      "department": "85",
-      "units": 9,
-      "description": "",
-      "prerequisites": "",
-      "offered": [],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [],
-        "BS": []
-      },
-      "soc_sections": [],
-      "offerings": [],
-      "soc_title": "tba This Section Cancelled",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
       "course_code": "85-403",
       "course_name": "Data Science for Psychology and Neuroscience",
       "department": "85",
@@ -912814,28 +912344,6 @@
         }
       ],
       "soc_title": "Data Science for Psychology and Neuroscience",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
-      "course_code": "85-407",
-      "course_name": "How the Brain Makes Meaning",
-      "department": "85",
-      "units": 9,
-      "description": "",
-      "prerequisites": "",
-      "offered": [],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [],
-        "BS": []
-      },
-      "soc_sections": [],
-      "offerings": [],
-      "soc_title": "How the Brain Makes Meaning",
       "soc_department": "Psychology",
       "soc_ingested": true
     },
@@ -913561,28 +913069,6 @@
         }
       ],
       "soc_title": "How the Brain Makes Meaning",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
-      "course_code": "85-483",
-      "course_name": "Internship in Psychology - Mini",
-      "department": "85",
-      "units": 0,
-      "description": "",
-      "prerequisites": "",
-      "offered": [],
-      "offered_qatar": false,
-      "offered_pitts": false,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [],
-        "BS": []
-      },
-      "soc_sections": [],
-      "offerings": [],
-      "soc_title": "Internship in Psychology - Mini",
       "soc_department": "Psychology",
       "soc_ingested": true
     },
@@ -955157,56 +954643,6 @@
       "soc_ingested": true
     },
     {
-      "course_code": "85-482",
-      "course_name": "Internship in Psychology",
-      "department": "85",
-      "units": 3,
-      "description": "",
-      "prerequisites": "",
-      "offered": [
-        "M26"
-      ],
-      "offered_qatar": false,
-      "offered_pitts": true,
-      "requirements": {
-        "CS": [],
-        "IS": [],
-        "BA": [],
-        "BS": []
-      },
-      "soc_sections": [
-        {
-          "section": "I",
-          "days": "TBA",
-          "begin_time": "",
-          "end_time": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode": "In-person Expectation",
-          "campus": "Pittsburgh",
-          "modality": "In Person",
-          "semester_code": "M26",
-          "semester": "Summer 2026"
-        }
-      ],
-      "offerings": [
-        {
-          "semester": "Summer 2026",
-          "semester_code": "M26",
-          "campus": "Pittsburgh",
-          "section": "I",
-          "modality": "In Person",
-          "units": "3-12",
-          "days_times": "TBA",
-          "instructor": "",
-          "location": "Pittsburgh, Pennsylvania",
-          "delivery_mode_raw": "In-person Expectation"
-        }
-      ],
-      "soc_title": "Internship in Psychology",
-      "soc_department": "Psychology",
-      "soc_ingested": true
-    },
-    {
       "course_code": "85-798",
       "course_name": "Graduate Internship",
       "department": "85",
@@ -955729,6 +955165,438 @@
       "soc_title": "Summer Research",
       "soc_department": "Carnegie Mellon University-Wide Studies",
       "soc_ingested": true
+    },
+    {
+      "course_code": "85-109",
+      "course_name": "Changing your brain",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-104",
+      "course_name": "Psychology and Society - Inside Out Program",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-200",
+      "course_name": "Special Topics: Mid Level Course",
+      "department": "85",
+      "units": 0,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-151",
+      "course_name": "Personality",
+      "department": "85",
+      "units": 9,
+      "description": "The primary purpose of personality psychology is to understand human uniquenesshow and why it is that one person differs from others, in terms of the ways that they thinks, feels, and acts. Students in the course will be exposed to several broad theoretical perspectives, each of which attempts to capture and understand the origins and consequences of individual distinctiveness from a slightly different vantage point. Included among these approaches are the dispositional or trait, psychoanalytic, learning, humanistic, and cognitive self regulation perspectives. This is a survey course and is intended to provide students with a broad background of theory and research in the area. Class meetings consist primarily of lecture, but there is some discussion too. Students will be given the opportunity to assess their own personalities during the course. A consistent theme throughout the course is the relationships between aspects of ones personality and physical health.",
+      "prerequisites": "None",
+      "offered": [
+        "F20",
+        "F21",
+        "M23",
+        "S24",
+        "M24",
+        "M25"
+      ],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [
+          {
+            "requirement": "GenEd---Humanities and Arts---B. Breadth Requirement---Category 1: Cognition, Choice and Behavior",
+            "type": true,
+            "major": "CS"
+          },
+          {
+            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
+            "type": true,
+            "major": "CS"
+          }
+        ],
+        "IS": [],
+        "BA": [
+          {
+            "requirement": "GenEd---University Core---Scientific Reasoning",
+            "type": true,
+            "major": "BA"
+          }
+        ],
+        "BS": [
+          {
+            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
+            "type": true,
+            "major": "BS"
+          }
+        ],
+        "AI": [
+          {
+            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
+            "type": true,
+            "major": "AI"
+          }
+        ]
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-303",
+      "course_name": "Analytic Research Methods",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-400",
+      "course_name": "Special Topics: Advanced Seminar",
+      "department": "85",
+      "units": 0,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-430",
+      "course_name": "Infant Language Development",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-451",
+      "course_name": "Pro-Social Behavior",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-418",
+      "course_name": "Origins of Intelligence",
+      "department": "85",
+      "units": 9,
+      "description": "The nature and origins of human intelligence is a muchdebated topic. Questions about the evolution and development of intelligence in humans, how intelligence compares among animals, the basis of intelligence in the brain, how to create intelligence in machines, the role of genes and experience, and individual variability in intelligence are all areas of vigorous scientific inquiry. Popular folk views of intelligence that may be misguided or incorrect have shaped all levels of society from parenting to politics. There is no universally accepted definition of human intelligence but one conceptualization is the ability to remember, reason, plan, and solve novel problems. This course will explore scientific and popular views of the origins of intelligence. The approach will be to read popular science articles and books that deal with intelligence in humans, animals, and machines and locate the primary scientific work on which those claims are made in order to evaluate the rigor and validity of intelligence theories. The course assignments will primarily consist of oral and written critiques of theories and data on the science of intelligence.",
+      "prerequisites": "None",
+      "offered": [
+        "S20",
+        "S21",
+        "S22"
+      ],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [
+          {
+            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
+            "type": true,
+            "major": "CS"
+          }
+        ],
+        "IS": [
+          {
+            "requirement": "GenEd---Foundations---Scientific Inquiry",
+            "type": true,
+            "major": "IS"
+          }
+        ],
+        "BA": [
+          {
+            "requirement": "GenEd---University Core---Scientific Reasoning",
+            "type": true,
+            "major": "BA"
+          }
+        ],
+        "BS": [
+          {
+            "requirement": "GenEd---Nontechnical Breadth Requirements---E. Nontechnical Elective Courses",
+            "type": true,
+            "major": "BS"
+          }
+        ],
+        "AI": [
+          {
+            "requirement": "GenEd---Humanities and Arts---C. Humanities and Arts Electives",
+            "type": true,
+            "major": "AI"
+          }
+        ]
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-431",
+      "course_name": "Domains in dialogue: Interactions shaping child development",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-415",
+      "course_name": "Auditory Perception: Sense of Sound",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-432",
+      "course_name": "Development in Context: Applying Theory and Research to Support Thriving",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-402",
+      "course_name": "Multilevel Modeling",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-420",
+      "course_name": "Biologically Intelligent Exploration",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-455",
+      "course_name": "Social Factors and Well-Being",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-457",
+      "course_name": "Psychology of Gender",
+      "department": "85",
+      "units": 9,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-459",
+      "course_name": "Emotion and Motivation",
+      "department": "85",
+      "units": 0,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
+    },
+    {
+      "course_code": "85-504",
+      "course_name": "Internship in Psychology - Mini",
+      "department": "85",
+      "units": 0,
+      "description": "",
+      "prerequisites": "",
+      "offered": [],
+      "offered_qatar": false,
+      "offered_pitts": false,
+      "requirements": {
+        "CS": [],
+        "IS": [],
+        "BA": [],
+        "BS": []
+      },
+      "soc_sections": [],
+      "offerings": [],
+      "source": "Psychology renumbering list"
     }
   ],
   "_meta": {

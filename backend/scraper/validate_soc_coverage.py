@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Verify every SOC course (PIT + Qatar) exists in courses.json with offerings.
 
+A SOC course under an old Psychology number that the renumbering list retires
+(backend/data/psychology_renumbering.json) counts as present when its new
+number has a row: the overlay step moves such a row to the new number and
+deletes it.
+
 Also warns (without failing) about possible renumberings: two rows of the same
 department with the same cleaned title, one in the SOC and one not. Nothing is
 changed automatically; a person decides what to do with the older row.
@@ -15,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pipeline_paths import COURSES_JSON, SOC_JSON  # noqa: E402
+from psychology_renumbering import covered_by_new_number, load_renumbering  # noqa: E402
 from soc_parse import (  # noqa: E402
     clean_soc_title,
     course_number_to_code,
@@ -130,12 +136,18 @@ def main() -> int:
         data = json.load(f)
     courses = data["courses"] if isinstance(data, dict) else data
     known = catalog_codes(courses)
+    by_sem = soc_course_codes(soc)
+    renumbered = covered_by_new_number(set().union(*by_sem.values()), known, load_renumbering())
+    known |= set(renumbered)
 
     fresh_bad = fresh_malformed(soc)
     all_missing: set[str] = set()
     print("SOC coverage check (PIT + Qatar)")
     print("=" * 50)
-    for sem_code, codes in sorted(soc_course_codes(soc).items()):
+    if renumbered:
+        print(f"  {len(renumbered)} SOC course(s) under an old Psychology number count as their new number: "
+              + ", ".join(f"{old} ({new})" for old, new in renumbered.items()))
+    for sem_code, codes in sorted(by_sem.items()):
         missing = sorted(codes - known)
         qatar_count = sum(
             1

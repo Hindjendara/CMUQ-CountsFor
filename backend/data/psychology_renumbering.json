@@ -1,0 +1,563 @@
+{
+  "source": "Psychology department course renumbering list, provided by the CountsFor maintainer on 2026-11-10",
+  "courses": [
+    {
+      "Old Course #": "85-101",
+      "New Course #": "85-030",
+      "Long Title": "Research Requirement",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-102",
+      "New Course #": "85-100",
+      "Long Title": "Introduction to Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-104",
+      "New Course #": "85-190",
+      "Long Title": "Psychopathology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-105",
+      "New Course #": "85-105",
+      "Long Title": "Hack Your Life",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-106",
+      "New Course #": "85-106",
+      "Long Title": "Animal Minds",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-107",
+      "New Course #": "85-107",
+      "Long Title": "The Psychology of Video Games",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-108",
+      "New Course #": "85-108",
+      "Long Title": "Mind and Body: Pathways to Health",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-117",
+      "New Course #": "85-109",
+      "Long Title": "Changing your brain",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-201",
+      "New Course #": "85-104",
+      "Long Title": "Psychology and Society - Inside Out Program",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-211",
+      "New Course #": "85-110",
+      "Long Title": "Cognitive Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-200",
+      "New Course #": "85-200",
+      "Long Title": "Special Topics: Mid Level Course",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-213",
+      "New Course #": "85-213",
+      "Long Title": "Human Information Processing and Artificial Intelligence",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-219",
+      "New Course #": "85-170",
+      "Long Title": "Foundations of Brain and Behavior",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-221",
+      "New Course #": "85-130",
+      "Long Title": "Principles of Child Development - Developmental Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-241",
+      "New Course #": "85-150",
+      "Long Title": "Social Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-251",
+      "New Course #": "85-151",
+      "Long Title": "Personality",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-293",
+      "New Course #": "85-500",
+      "Long Title": "Student Teaching Practicum",
+      "Units": 1
+    },
+    {
+      "Old Course #": "85-294",
+      "New Course #": "85-501",
+      "Long Title": "Teaching Assistantship",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-300",
+      "New Course #": "85-300",
+      "Long Title": "Introduction to Research Methods",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-301",
+      "New Course #": "85-301",
+      "Long Title": "Special Topics: Research Methods",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-309",
+      "New Course #": "85-309",
+      "Long Title": "Statistical Concepts and Methods for Behavioral and Social Science",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-310",
+      "New Course #": "85-310",
+      "Long Title": "Research Methods in Cognitive Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-311",
+      "New Course #": "85-302",
+      "Long Title": "Modern Methods: Cumulative Methods",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-314",
+      "New Course #": "85-370",
+      "Long Title": "Cognitive Neuroscience Research Methods",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-320",
+      "New Course #": "85-330",
+      "Long Title": "Research Methods in Developmental Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-330",
+      "New Course #": "85-303",
+      "Long Title": "Analytic Research Methods",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-333",
+      "New Course #": "x",
+      "Long Title": "Volition, Agency and the Brain",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-337",
+      "New Course #": "x",
+      "Long Title": "Cognitive and Neural Basis of Cognitive Control",
+      "Units": 12
+    },
+    {
+      "Old Course #": "85-339",
+      "New Course #": "x",
+      "Long Title": "Bilingualism",
+      "Units": 3
+    },
+    {
+      "Old Course #": "85-340",
+      "New Course #": "85-350",
+      "Long Title": "Research Methods in Social Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-400",
+      "New Course #": "85-400",
+      "Long Title": "Special Topics: Advanced Seminar",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-341",
+      "New Course #": "x",
+      "Long Title": "Hidden Assumptions in Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-342",
+      "New Course #": "x",
+      "Long Title": "Social Influence",
+      "Units": 3
+    },
+    {
+      "Old Course #": "85-343",
+      "New Course #": "x",
+      "Long Title": "Children, Race, and Racism",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-345",
+      "New Course #": "x",
+      "Long Title": "Meaning in Mind and Brain",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-347",
+      "New Course #": "x",
+      "Long Title": "Stress and Health Across the Lifecourse",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-350",
+      "New Course #": "85-450",
+      "Long Title": "Psychology of Prejudice",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-351",
+      "New Course #": "x",
+      "Long Title": "What is Attention?",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-352",
+      "New Course #": "x",
+      "Long Title": "Evolutionary Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-353",
+      "New Course #": "x",
+      "Long Title": "Mindfulness: Science and Practice",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-354",
+      "New Course #": "85-430",
+      "Long Title": "Infant Language Development",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-355",
+      "New Course #": "x",
+      "Long Title": "Neuroscience and the City",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-356",
+      "New Course #": "x",
+      "Long Title": "Expertise: The cognitive (neuro)science of mastering almost any skill",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-357",
+      "New Course #": "x",
+      "Long Title": "Navigating Race and Identity in America: The Role of Psychology in Racial Intera",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-358",
+      "New Course #": "85-451",
+      "Long Title": "Pro-Social Behavior",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-359",
+      "New Course #": "85-411",
+      "Long Title": "Introduction to Music Cognition Research",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-360",
+      "New Course #": "85-418",
+      "Long Title": "Origins of Intelligence",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-361",
+      "New Course #": "85-431",
+      "Long Title": "Domains in dialogue: Interactions shaping child development",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-362",
+      "New Course #": "x",
+      "Long Title": "Seminar on Addiction",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-363",
+      "New Course #": "x",
+      "Long Title": "Attention, Its Development and Disorders",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-370",
+      "New Course #": "85-413",
+      "Long Title": "Perception",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-372",
+      "New Course #": "85-414",
+      "Long Title": "Cognition in the Age of AI",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-375",
+      "New Course #": "85-409",
+      "Long Title": "Crosscultural",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-377",
+      "New Course #": "85-452",
+      "Long Title": "Attitudes and Persuasion",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-385",
+      "New Course #": "85-415",
+      "Long Title": "Auditory Perception: Sense of Sound",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-394",
+      "New Course #": "85-432",
+      "Long Title": "Development in Context: Applying Theory and Research to Support Thriving",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-395",
+      "New Course #": "85-416",
+      "Long Title": "Applications of Cognitive Science",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-398",
+      "New Course #": "85-470",
+      "Long Title": "Big Data in Cognitive Neuroscience",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-401",
+      "New Course #": "85-401",
+      "Long Title": "Psychology of Aging",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-402",
+      "New Course #": "85-402",
+      "Long Title": "Multilevel Modeling",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-407",
+      "New Course #": "85-471",
+      "Long Title": "How the Brain Makes Meaning",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-408",
+      "New Course #": "x",
+      "Long Title": "Visual Cognition",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-409",
+      "New Course #": "85-453",
+      "Long Title": "Stigma and its Consequences",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-412",
+      "New Course #": "85-412",
+      "Long Title": "Cognitive Modeling",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-414",
+      "New Course #": "85-472",
+      "Long Title": "Cognitive Neuropsychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": null,
+      "New Course #": "85-473",
+      "Long Title": "TBA - COG Course by Dr. Feathers",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-417",
+      "New Course #": "85-417",
+      "Long Title": "Multilingual Minds and the Brain",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-418",
+      "New Course #": "85-433",
+      "Long Title": "Infant development: Inside the Mind of Babies",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-419",
+      "New Course #": "85-419",
+      "Long Title": "Introduction to Parallel Distributed Processing",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-421",
+      "New Course #": "85-421",
+      "Long Title": "Language and Thought",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-422",
+      "New Course #": "85-490",
+      "Long Title": "Clinical Psychology: Science and Practice",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-426",
+      "New Course #": "x",
+      "Long Title": "Learning in Humans and Machines",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-432",
+      "New Course #": "85-403",
+      "Long Title": "Data Science for Psychology and Neuroscience",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-435",
+      "New Course #": "85-420",
+      "Long Title": "Biologically Intelligent Exploration",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-438",
+      "New Course #": "x",
+      "Long Title": "Educational Goals, Instruction, and Assessment",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-442",
+      "New Course #": "85-454",
+      "Long Title": "Health Psychology",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-443",
+      "New Course #": "85-455",
+      "Long Title": "Social Factors and Well-Being",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-444",
+      "New Course #": "85-456",
+      "Long Title": "Relationships",
+      "Units": 9
+    },
+    {
+      "Old Course #": "85-446",
+      "New Course #": "85-457",
+      "Long Title": "Psychology of Gender",
+      "Units": 9
+    },
+    {
+      "Old Course #": "CMUQ",
+      "New Course #": "85-458",
+      "Long Title": "Psychology of Sleep",
+      "Units": null
+    },
+    {
+      "Old Course #": "CMUQ",
+      "New Course #": "85-459",
+      "Long Title": "Emotion and Motivation",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-480",
+      "New Course #": "85-590",
+      "Long Title": "Internship in Clinical Psychology",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-482",
+      "New Course #": "85-503",
+      "Long Title": "Internship in Psychology",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-483",
+      "New Course #": "85-504",
+      "Long Title": "Internship in Psychology - Mini",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-484",
+      "New Course #": "85-530",
+      "Long Title": "Practicum in Child Development",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-506",
+      "New Course #": "85-506",
+      "Long Title": "Readings in Psychology",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-505",
+      "New Course #": "85-505",
+      "Long Title": "Readings in Psychology",
+      "Units": null
+    },
+    {
+      "Old Course #": "85-507",
+      "New Course #": "85-507",
+      "Long Title": "Research in Psychology",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-508",
+      "New Course #": "85-508",
+      "Long Title": "Research in Psychology",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-509",
+      "New Course #": "85-509",
+      "Long Title": "Research in Psychology Practicum",
+      "Units": 1
+    },
+    {
+      "Old Course #": "85-510",
+      "New Course #": "85-510",
+      "Long Title": "Research in Psychology - Mini",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-601",
+      "New Course #": "85-601",
+      "Long Title": "Senior Thesis",
+      "Units": "VAR"
+    },
+    {
+      "Old Course #": "85-602",
+      "New Course #": "85-602",
+      "Long Title": "Senior Thesis",
+      "Units": "VAR"
+    }
+  ]
+}

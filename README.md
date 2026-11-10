@@ -314,10 +314,11 @@ The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The p
 
 | File | Purpose |
 |---|---|
-| `frontend/data/courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`, 6,784 courses, about 30 MB (about 1.2 MB gzipped). Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`, plus `AI: [...]` on courses that count for AI; each row `{requirement, type, major}`, plus `earlier` and `earlier_reason` on rows kept from an earlier requirement, 14.10), `soc_sections`, `offerings`. Set by the overlay step (14.5): `qatar_only`. Set by reconcile: `previous_course_name` when a number was reused for a different course. |
-| `frontend/data/minors.json` | Minor requirements: the 15 minors that have an official file in `backend/data/minors/`, plus `self_defined` (no fixed requirements). Each minor has its blocked majors, unit total, double counting limits (the audit file's), grade rules, notes and a tree of categories; each category has a rule and lists its courses by code (`courses`), matches them by number (`select`) or holds sub categories (`children`). One course fills one category. Built by hand from the official files, with old Psychology numbers shown as their current numbers; `backend/scraper/tests/test_minors_file.py` checks it against them. The daily update does not touch it. The app loads it with `fetchMinors()` and builds each minor's tree against the catalog (8.10). |
+| `frontend/data/courses.json` | **The catalog the app loads.** `{ "_meta": {...}, "courses": [ ... ] }`, 6,791 courses, about 30 MB (about 1.2 MB gzipped). Each course: `course_code`, `course_name`, `department`, `units`, `description`, `prerequisites`, `offered` (semester codes), `offered_qatar`, `offered_pitts`, `requirements` (`{CS: [...], IS: [...], BA: [...], BS: [...]}`, plus `AI: [...]` on courses that count for AI; each row `{requirement, type, major}`, plus `earlier` and `earlier_reason` on rows kept from an earlier requirement, 14.10), `soc_sections`, `offerings`. Set by the overlay step (14.5): `qatar_only`. Set by reconcile: `previous_course_name` when a number was reused for a different course. On a row created from the Psychology renumbering list (14.6): `source` (`"Psychology renumbering list"`). |
+| `frontend/data/minors.json` | Minor requirements: the 15 minors that have an official file in `backend/data/minors/`, plus `self_defined` (no fixed requirements). Each minor has its blocked majors, unit total, double counting limits (the audit file's), grade rules, notes and a tree of categories; each category has a rule and lists its courses by code (`courses`), matches them by number (`select`) or holds sub categories (`children`). One course fills one category. Built by hand from the official files, with old Psychology numbers shown as their new numbers from the department's renumbering list (14.6); `backend/scraper/tests/test_minors_file.py` checks it against them. The daily update does not touch it. The app loads it with `fetchMinors()` and builds each minor's tree against the catalog (8.10). |
 | `backend/data/soc.json` | Raw SOC scrape output (`metadata.last_scrape`, `semesters`). About 31 MB. The admin Overview reads `last_scrape` from its first 4 KB. A cancelled section stays in a course's `sections` with `cancelled: true` but is left out of its `offerings` and `campus`; a section subtitle is in `section_title`; summer sections carry `session`. Data scraped before November 7, 2026 has none of these fields (see 21.2). |
-| `backend/data/mapping_overlays.json` | The one place for Qatar information and other manual complements to the SOC scrape (14.5): `overlays` (additive mappings, 21 entries, including the H&SS Course Offerings sheet), `remove_mappings` (85-414, 85-426) and `qatar_visibility` (85-100). |
+| `backend/data/mapping_overlays.json` | The one place for Qatar information and other manual complements to the SOC scrape (14.5): `overlays` (additive mappings, 21 entries, including the H&SS Course Offerings sheet), `remove_mappings` (85-426) and `qatar_visibility` (85-100). |
+| `backend/data/psychology_renumbering.json` | The Psychology department's official course renumbering list, verbatim (93 entries: old number, new number or `x` for discontinued, Long Title, units), provided on 2026-11-10 (14.6). The overlay step and the coverage check read it. |
 | `backend/data/faculty_directory.json` | 65 CMU-Q faculty scraped from the public People page. The directory seed in production (`SEED_USERS_PATH` in `deploy/countsfor.env.example`). |
 | `backend/data/directory_admins.json` | Hand-kept admins layered over the faculty seed (7.1, 19.7). |
 | `backend/data/requirement_path_renames.json` | Old to new requirement paths from the move to the 2026-27 catalog bucket names (14.10). Only needed to update admin course edits saved before that change (15.8 step 8). |
@@ -328,10 +329,12 @@ The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The p
 | `backend/scraper/soc_parse.py`, `soc_departments.py` | Shared parsing helpers. `soc_parse.clean_soc_title()` cleans titles already stored in `soc.json` (cancelled note, " : subtitle", trailing ": TBA") and returns `None` when nothing usable is left. |
 | `backend/scraper/json_io.py`, `pipeline_paths.py` | Shared `load_json` and `save_json` helpers; default file locations. |
 | `backend/scraper/reconcile_offerings.py` | Merges `soc.json` into `courses.json` (14.3 step 3). |
-| `backend/scraper/apply_mapping_overlays.py` | Applies every section of `mapping_overlays.json` to `courses.json`, in a fixed order (14.5). |
-| `backend/scraper/validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json`. Warns about same-title pairs that may be renumberings. |
+| `backend/scraper/apply_mapping_overlays.py` | Runs the daily step of the Psychology renumbering list, then applies every section of `mapping_overlays.json` to `courses.json`, in a fixed order (14.5, 14.6). |
+| `backend/scraper/psychology_renumbering.py` | Reads `psychology_renumbering.json` and holds its daily step (14.6). |
+| `backend/scraper/migrate_psychology_numbers.py` | The one-time migration that applied the renumbering list to `courses.json` by course on 2026-11-10 (14.6). Dry run by default, `--apply` writes; a second run changes nothing. |
+| `backend/scraper/validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json` (a course under a retired old Psychology number counts as its new number). Warns about same-title pairs that may be renumberings. |
 | `backend/scraper/scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand (14.8). |
-| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py`, `scripts/bump_cf_build.py` and `frontend/data/minors.json` (173 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
+| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py`, `scripts/bump_cf_build.py` and `frontend/data/minors.json` (203 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
 
 ---
 
@@ -501,6 +504,7 @@ Email behaviour summary (`forgot_password()` plus `email_util.py`): if neither R
 | `SOC_JSON_PATH`, `COURSES_JSON_PATH` | reconcile and validate | `backend/data/soc.json`, `frontend/data/courses.json` | File locations. |
 | `CATALOG_PATHS` | `apply_mapping_overlays.py` | `frontend/data/courses.json` | Semicolon list of catalogs to patch. |
 | `MAPPING_OVERLAYS_PATH` | `apply_mapping_overlays.py`, `validate_soc_coverage.py` | `backend/data/mapping_overlays.json` | Overlay file location. `update_data.py` passes it on unchanged (default `<deploy root>/backend/data/mapping_overlays.json`). |
+| `PSYCHOLOGY_RENUMBERING_PATH` | `apply_mapping_overlays.py`, `validate_soc_coverage.py`, `migrate_psychology_numbers.py` | `backend/data/psychology_renumbering.json` (found from the script) | The Psychology department's renumbering list (14.6). |
 | `CF_DEPLOY_ROOT` | `update_data.py` (exported by `run_scrape.sh`) | the folder that holds `backend/` | Where the live files are: `<root>/backend/data/soc.json` and `<root>/frontend/data/courses.json`. `/var/www/html/countsfor` on the server, the repo root in a checkout. |
 | `CF_STAGING_DIR` | `update_data.py` | `<root>/backend/var/staging` | Where the pipeline works on copies before they go live. Keep it on the same file system, outside the DocumentRoot. |
 | `CF_MIN_SECTION_RATIO` | `update_data.py` | `0.98` | Refuse to publish if any campus of a semester falls below this fraction of its live section count. A number from 0 to 1. |
@@ -1044,9 +1048,9 @@ The catalog the app loads, `frontend/data/courses.json`, is built from three thi
 
 1. **The SOC scrape is the rule.** Offerings, campus, units and titles come from it. When the SOC and another source disagree about what is offered, the SOC wins.
 2. **Qatar information lives only in `backend/data/mapping_overlays.json`.** Never hand-edit `courses.json` for content, and never put Qatar facts into the scraper or reconcile code.
-3. **Never infer a renumbering.** Treat an old and a new number as the same course only when an official source says so (the H&SS Course Offerings sheet, an official minor file). Same titles, same meeting times or the validator's warnings are hints, not evidence. The old Psychology numbers were removed on 2026-11-09 after their mappings moved to the current numbers.
+3. **Never infer a renumbering.** Treat an old and a new number as the same course only when an official source says so (the Psychology department's renumbering list, the H&SS Course Offerings sheet, an official minor file). Same titles, same meeting times or the validator's warnings are hints, not evidence. Every Psychology number follows the department's list (14.6).
 4. **The catalog is the base and the sheet only adds.** The mappings in `courses.json` come from the upstream catalog; the H&SS sheet and the other overlays only add mappings. A mapping is removed only by an explicit `remove_mappings` entry with a reason.
-5. **The pipeline never deletes catalog rows.** Rows the SOC no longer lists keep their history. The daily update refuses to publish a catalog that lost any course code.
+5. **The pipeline never deletes catalog rows**, with one exception: a row under an old Psychology number that the department's list retires (no course has that number now) moves to its new number and is deleted (14.6). The published catalog has no such rows, so none is ever lost. Rows the SOC no longer lists keep their history. The daily update refuses to publish a catalog that lost any course code.
 
 ### 14.2 The daily update on the server
 
@@ -1070,8 +1074,8 @@ Settings (`/etc/countsfor/scraper.env`): `CF_DEPLOY_ROOT` (default: the folder t
 1. **Gate:** the two parser test files (14.2 step 2).
 2. **`scrape_soc.py`:** scrapes every semester on the SOC form for Pittsburgh and Qatar, all departments, and writes `soc.json` only if the scrape is non-empty and above `MIN_COURSES_FOR_VALID_SCRAPE` (100; `MIN_COURSES_FOR_SUMMER_SCRAPE`, 10, for summer). A semester below the threshold counts as not released yet and its previous data is kept. Rows are split on `</tr>`, because only the first row of each course has an opening `<tr>` (the first header-based parser, before November 8, 2026, read only complete `<tr>...</tr>` pairs and kept only the first section of each course; that output was never adopted). Columns are read from each table's header, so the summer Session column does not shift cells. Cancelled sections are kept with `cancelled: true`; a table without a header is skipped rather than guessed. Pages are decoded with the charset the server declares (the SOC sends ISO-8859-1, read as windows-1252), so accented titles such as "Production Prep: L'étoile" are kept; before November 8, 2026 they were decoded as UTF-8 and the letter became U+FFFD. A full scrape takes 30 to 90 minutes with polite delays.
 3. **`reconcile_offerings.py`:** merges SOC sections into `courses.json` (offerings, campus flags, units). Cancelled sections do not count as offerings and do not set `offered_qatar` or `offered_pitts`. For each field the newest semester wins (within a year: spring, then summer, then fall). `course_name` becomes the newest SOC title after `clean_soc_title()` (the catalog name stays only when cleaning leaves nothing). A title with a "TBA" placeholder, such as "Production Prep: TBA 5", is used only when no semester has another title. When the old name and the SOC title share no words, the number was probably reused: the old name, cleaned with `clean_soc_title()`, goes into `previous_course_name` (an existing `previous_course_name` is kept) and the code is printed under `REVIEW`; a SOC title that matches the stored `previous_course_name` is not a reuse. Mappings are never removed here. A SOC course missing from the catalog gets a new row (`soc_ingested`). `offered` on those rows is rebuilt from their SOC offerings for every semester in `soc.json`, so a semester that does not list the row, or lists it with only cancelled sections, drops out, and `offered` can become empty; semesters `soc.json` does not hold are kept, and a row that is no longer in `soc.json` at all keeps its `offered` unchanged. Catalog rows keep their history. Malformed SOC data is ignored, not deleted: a course whose units cell is not units (a number, a range or list of numbers, or VAR; the old fixed-column parser put the summer Session text such as "qatar summer" there) and a section whose section cell is not a section id (`soc_parse.usable_sections`) give no offerings, campus flags, titles or new rows; a course whose sections are all cancelled or malformed, with at least one malformed, is ignored whole (`soc_parse.is_ignored_course`, also used by step 5), and a semester where a `soc_ingested` row appears only as malformed data stays in its `offered`. Reconcile prints the ignored counts per semester (`IGNORED malformed SOC data in M25: 90 course(s), 827 section(s)`). It does **not** create requirement mappings.
-4. **`apply_mapping_overlays.py`:** applies `backend/data/mapping_overlays.json` (14.5): additive mappings, mapping removals, Qatar visibility. It fails, without saving, if the file is invalid. It then prints a verification line (`verify courses.json: OK IGI=60 missing=[]`) and an audit line (`audit courses.json: OK checked=19 gaps=0`).
-5. **`validate_soc_coverage.py`:** fails if a SOC course is missing from the catalog (courses with only cancelled sections and courses reconcile ignores as malformed are not required). It also fails if any semester the newest scrape wrote (`scraped_at` equal to `metadata.last_scrape`) has malformed data, because the current parser should produce none and the pipeline would silently drop those courses; semesters carried forward from older scrapes, such as M25, are allowed. It also prints a `WARNING` (not a failure) listing same-department, same-title pairs where one row is outside the SOC (43 pairs on November 9, 2026, none in Psychology), so possible renumberings show up in the log. Nothing is changed automatically.
+4. **`apply_mapping_overlays.py`:** first runs the daily step of the Psychology renumbering list (14.6), then applies `backend/data/mapping_overlays.json` (14.5): additive mappings, mapping removals, Qatar visibility. It fails, without saving, if either file is invalid or the overlay file names a retired old Psychology number. It prints the renumbering line (`courses.json: renumbering created=0 merged=3 (85-251->85-151, 85-294->85-501, 85-482->85-503)`), then a verification line (`verify courses.json: OK IGI=60 missing=[]`) and an audit line (`audit courses.json: OK checked=19 gaps=0`).
+5. **`validate_soc_coverage.py`:** fails if a SOC course is missing from the catalog (courses with only cancelled sections and courses reconcile ignores as malformed are not required; a course under a retired old Psychology number counts as present when its new number has a row, and is printed, 14.6). It also fails if any semester the newest scrape wrote (`scraped_at` equal to `metadata.last_scrape`) has malformed data, because the current parser should produce none and the pipeline would silently drop those courses; semesters carried forward from older scrapes, such as M25, are allowed. It also prints a `WARNING` (not a failure) listing same-department, same-title pairs where one row is outside the SOC (45 pairs on November 10, 2026; the two in Psychology are 85-420 against 85-473 and 85-873, 14.6), so possible renumberings show up in the log. Nothing is changed automatically.
 
 ### 14.4 Run the pipeline by hand
 
@@ -1079,7 +1083,7 @@ Locally, from the repo root:
 
 ```bash
 source .venv/bin/activate
-python -m pytest backend/scraper/tests -q            # 173 tests
+python -m pytest backend/scraper/tests -q            # 203 tests
 python backend/scraper/update_data.py --no-scrape    # rebuild frontend/data/courses.json from backend/data/soc.json
 python backend/scraper/update_data.py                # full run: scrape, rebuild, check, publish (30 to 90 minutes)
 git diff --stat
@@ -1124,7 +1128,7 @@ The SOC scrape stays the rule. This file is the one place for manual complements
     }
   ],
   "remove_mappings": [
-    {"course_code": "85-414", "programs": "all", "reason": "..."}
+    {"course_code": "85-426", "programs": "all", "reason": "..."}
   ],
   "qatar_visibility": [
     {"course_code": "85-100", "rule": "show_only_if_offered_qatar", "note": "..."}
@@ -1132,7 +1136,7 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 }
 ```
 
-`apply_mapping_overlays.py` applies the sections in this order, in one step. Running it twice gives the same file.
+`apply_mapping_overlays.py` applies the sections in this order, in one step. Running it twice gives the same file. Before them it runs the daily step of the Psychology renumbering list (14.6), so the file names new Psychology numbers only: an entry naming a retired old number fails the step.
 
 1. **`overlays`**: additive mappings. `create_missing: false` skips (with a warning) a code the catalog lacks instead of creating a `manual_seed` row. `ensure_course_defaults_codes` limits `ensure_course_defaults` (and creation) to those codes.
 2. **`remove_mappings`**: removes the requirement rows of the listed programs (`["BA", "BS"]` or `"all"`, which covers CS, IS, BA, BS and AI). It runs after step 1, and step 1 skips those programs, so nothing re-adds them.
@@ -1140,25 +1144,50 @@ The SOC scrape stays the rule. This file is the one place for manual complements
 
 `qatar_only` belongs to this step: a row the file no longer lists loses it. Use the file for mapping fixes that should live in git and apply to every deploy; use the admin course editor for quick fixes by non-developers. After you change the file, deploy it (15.16), which runs `--no-scrape`. Tests: `backend/scraper/tests/test_mapping_overlay_sections.py` (also checks that every requirement path in the file exists in `frontend/data/courses.json`) and `backend/scraper/tests/test_is_igi_modern_languages.py`.
 
-### 14.6 Psychology decisions and open data questions
+### 14.6 Psychology numbers and open data questions
 
-Settled in November 2026 (the Entry column says where each one lives):
+**The renumbering list.** The Psychology department renumbered its courses from Fall 2025. Its official list, provided by the CountsFor maintainer on 2026-11-10, is `backend/data/psychology_renumbering.json`, kept verbatim: one entry per course with `Old Course #`, `New Course #` (`x` means discontinued), `Long Title` and `Units` (a number, `VAR` or null); an old number of `CMUQ` or null marks a new course. The list is one renaming applied all at once, never a chain: 85-314 becomes 85-370 and stops there, although old 85-370 itself becomes 85-413. Its terms (`backend/scraper/psychology_renumbering.py`):
+
+- **renumbered**: an old number whose new number is a different code (46);
+- **reused**: a renumbered old number that is also another course's new number (8): 85-104, 85-330, 85-350, 85-370, 85-409, 85-414, 85-418 and 85-432;
+- **retired**: a renumbered old number that is no course's new number (38), such as 85-102 (now 85-100) and 85-251 (now 85-151);
+- **discontinued**: `x` (19). Their rows stay as past courses with their mappings, except 85-426 (below).
+
+Titles come from the SOC when it lists the course (reconcile keeps setting them); a row created from the list has its Long Title.
+
+**The migration** (`backend/scraper/migrate_psychology_numbers.py`, run once on 2026-11-10: `--dry-run` by default, `--apply` writes, `--report` writes a Markdown report). The requirement rows from the old 2023-24 audits belong to the course that had the number then. Their provenance is `git show 79e29ec:data/courses.json` with the paths translated by `requirement_path_renames.json`, plus the AI rows that mirror those CS rows. For each renumbered number:
+
+- its old course's rows go to the new number;
+- a retired number's row also gives its new number every other row and its empty description and prerequisites, and is deleted (11 rows: 85-101, 85-102, 85-251, 85-294, 85-314, 85-360, 85-361, 85-372, 85-407, 85-482 and 85-483);
+- a reused number keeps its row for the course that has the number now, with only that course's rows: the old audit rows of its own old number (85-314's for 85-370), and the rows the 2026-27 catalog lists or the H&SS sheet gave the number as it is now (both name current numbers). The old course's other rows leave it. Rule rows (`"source": "rule"`) stay; the rule step recomputes them.
+
+New numbers without a row got one from the list (18 rows with `"source": "Psychology renumbering list"`: the Long Title, the units, 0 for `VAR` or none, no offerings, and `offered` set to the old row's history before F25). The result depends only on the provenance, the list and the catalog's rows, so the script can run again on a catalog that other changes reshaped (without `earlier` marks, with rule rows), and a second run changes nothing. It stops if a number the SOC lists has no row yet (run reconcile first).
+
+**The daily step** (`psychology_renumbering.apply_renumbering()`, which `apply_mapping_overlays.py` runs before the overlays): a new number without a row gets one from the list, and a retired number that has a row again gives its requirement rows (not its rule rows) and its empty text fields to its new number and is deleted. Reconcile creates such a row when the SOC still lists the old number: M26 lists 85-251 Personality and 85-482, and F25 to S27 list 85-294. A reused number's row is never deleted. `validate_soc_coverage.py` counts such a SOC course as covered by its new number and prints it. Running the step again changes nothing. Tests: `backend/scraper/tests/test_psychology_renumbering.py`.
+
+Settled decisions (the Entry column says where each one lives):
 
 | Decision | Entry |
 |---|---|
-| The old Psychology numbers were removed on 2026-11-09 after their mappings moved to the current numbers. Each old row's requirement mappings were copied onto its current number first (85-104, 85-253 and 85-261 to 85-190, 85-211 to 85-110, 85-219 to 85-170, 85-221 to 85-130, 85-241 to 85-150, 85-377 to 85-452, 85-442 to 85-454, 85-359 to 85-411, 85-340 to 85-350). | none (a one-time change to `courses.json`) |
-| The approved H&SS sheet mappings for 85-110, 85-130, 85-150, 85-170, 85-190, 85-251, 85-300, 85-310, 85-364, 85-413, 85-450 and 85-452. | `overlays`, one `hss-sheet-<code>` entry each |
-| 85-414 (now "Cognition in the Age of AI") loses its mappings: the number was reused, and the mappings belonged to the old Cognitive Neuropsychology. The sheet lists none for it. | `remove_mappings` |
-| 85-426 loses its mappings: it was renamed to "Reverse Engineering Brains and Machines", and the mappings came from "Learning in Humans and Machines". | `remove_mappings` |
-| 85-100 (Introduction to Psychology) is not on the H&SS sheet, so it shows only when the SOC lists it for Qatar. | `qatar_visibility` |
-| Kept as separate courses: 85-102 and 85-100, 85-421 and 85-210, and graduate versions such as 85-852 and 85-854. | none |
+| Every Psychology number follows the department's list (above). Before it, on 2026-11-09, the mappings of 11 old numbers were copied onto their current numbers and the old rows removed (85-104, 85-253 and 85-261 to 85-190, 85-211 to 85-110, 85-219 to 85-170, 85-221 to 85-130, 85-241 to 85-150, 85-377 to 85-452, 85-442 to 85-454, 85-359 to 85-411, 85-340 to 85-350). The list agrees with each of them; 85-253 and 85-261 are not on it. | `psychology_renumbering.json`, the migration, the daily step |
+| 85-102 Introduction to Psychology is now 85-100: its mappings are 85-100's and its row is gone. 85-100's BA Scientific Reasoning row is no longer marked earlier, because the 2026-27 Tepper rule ("Any Psychology course 85-102 or higher") counts the course under its old number. | the migration |
+| 85-100 is not on the H&SS sheet, so it shows only when the SOC lists it for Qatar. | `qatar_visibility` |
+| The approved H&SS sheet mappings for 85-110, 85-130, 85-150, 85-151, 85-170, 85-190, 85-300, 85-310, 85-364, 85-413, 85-450 and 85-452. The sheet lists Personality as 85-251, which the list makes 85-151. | `overlays`, one `hss-sheet-<code>` entry each |
+| 85-414 is now Cognition in the Age of AI (old 85-372). The mappings it had belonged to its old course, Cognitive Neuropsychology, now 85-472, which has them (BA Scientific Reasoning, BS Nontechnical Elective Courses). 85-414 has none until a 2026-27 source or rule gives it one, so it needs no `remove_mappings` entry any more. | the migration |
+| 85-350 is now Research Methods in Social Psychology (old 85-340), and 85-370 is Cognitive Neuroscience Research Methods (old 85-314). They lost the mappings of their old courses, now 85-450 Psychology of Prejudice (IS Perspectives on Justice and Injustice, BS Cultural/Global Understanding) and 85-413 Perception (CS Category 1, Humanities and Arts Electives and their AI copies). | the migration |
+| 85-426 has no mappings: the list discontinues 85-426 Learning in Humans and Machines, where the mappings came from, and the SOC now lists 85-426 as "Reverse Engineering Brains and Machines". | `remove_mappings` |
+| Kept as separate courses: 85-421 and 85-210, and graduate versions such as 85-852 and 85-854. | none |
+| `frontend/data/minors.json` shows the old numbers in the minor files as their new numbers, by course: a reused number changes only when the file means its old course. Sociology's 85-350 Psychology of Prejudice is 85-450; Neuroscience lists 85-370 and 85-414 with the titles of the courses that have those numbers now, so they stay. | `minors.json`, `test_minors_file.py` |
 
 Open questions (nothing in the data changes until someone with authority answers them):
 
 1. **85-426** has no mappings until it is confirmed what "Reverse Engineering Brains and Machines" should count for.
-2. **85-102** (Introduction to Psychology, last offered M25 and never in Qatar in the SOC data) keeps its base catalog mappings (CS, IS, BA, BS, and AI through the SCS general education) and stays visible; since 14.10 its CS Category 1 row is marked earlier (the 2026-27 list has 85-100). Should it keep them, or be hidden like 85-100?
-3. **85-421** (Language and Thought, last offered F25, not in Qatar) keeps its base catalog mappings (CS, BA, BS); the 2026-27 AI page lists it for Category 1A. Are they still right?
-4. **The 43 same-title pairs** that `validate_soc_coverage.py` logs as warnings on every run (other departments, none in Psychology) are hints only; change nothing without an official source.
+2. **85-421** (Language and Thought, last offered F25, not in Qatar) keeps its base catalog mappings (CS, BA, BS); the 2026-27 AI page lists it for Category 1A. Are they still right?
+3. **85-473**: the list names it "TBA - COG Course by Dr. Feathers", while the SOC lists it (and 85-873) as "Biologically Intelligent Exploration", the title the list gives 85-420 (old 85-435). The SOC title stays, and the validator logs 85-420 with 85-473 and with 85-873 as same-title pairs. Which is right?
+4. **SOC titles that differ from the list**: the catalog keeps the SOC title for 85-030, 85-130, 85-301, 85-302, 85-330, 85-370, 85-470 (SOC "Frontiers in Brain and Behavior", list "Big Data in Cognitive Neuroscience") and 85-530, and for 85-490 and 85-505, where only case or punctuation differ.
+5. **The Psychology minor's Advanced Courses range** (85-350 to 85-499) comes from the official file, written with the old numbers. With the new numbers it also takes 85-350 and 85-370, which are research methods courses now. Confirm with the department.
+6. **Sections listed under an old number**: the SOC still lists 85-251 (M26), 85-294 (F25 to S27) and 85-482 (M26). Their rows are merged into 85-151, 85-501 and 85-503 every day, and the app does not show those sections.
+7. **The 45 same-title pairs** that `validate_soc_coverage.py` logs as warnings on every run are hints only; change nothing without an official source.
 
 The other data questions (SOC-created rows that keep F26, codes printed under `REVIEW`, M25) are in 21.2.
 
@@ -1470,15 +1499,22 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
 
    Every row should say `ok` = `t`. For a row that says `f`, set the sequence, for example `SELECT setval('users_id_seq', (SELECT max(id) FROM users));`.
 
-8. **Move saved data off the old Psychology numbers** (14.6). The catalog no longer has rows for them, so wishlist items, flags, schedule plan items and search counts saved under them would match nothing. In the same `psql` session, paste this once:
+8. **Move saved data off the old Psychology numbers** (14.6). The catalog no longer has rows for them, so wishlist items, flags, schedule plan items and search counts saved under them would match nothing. The pairs are the retired numbers of the department's renumbering list with their new numbers, plus 85-104, 85-253 and 85-261, which moved to 85-190 on 2026-11-09. 85-201 is left out: it never had a row, and its new number 85-104 is moved here itself. The other reused numbers (14.6) are not moved: their rows are the courses that have those numbers now. In the same `psql` session, paste this once:
 
    ```sql
    BEGIN;
    CREATE TEMP TABLE psych_numbers (old_code text PRIMARY KEY, new_code text NOT NULL) ON COMMIT DROP;
    INSERT INTO psych_numbers VALUES
-     ('85-104','85-190'), ('85-253','85-190'), ('85-261','85-190'), ('85-211','85-110'),
-     ('85-219','85-170'), ('85-221','85-130'), ('85-241','85-150'), ('85-377','85-452'),
-     ('85-442','85-454'), ('85-359','85-411'), ('85-340','85-350');
+     ('85-104','85-190'), ('85-253','85-190'), ('85-261','85-190'), ('85-101','85-030'),
+     ('85-102','85-100'), ('85-117','85-109'), ('85-211','85-110'), ('85-219','85-170'),
+     ('85-221','85-130'), ('85-241','85-150'), ('85-251','85-151'), ('85-293','85-500'),
+     ('85-294','85-501'), ('85-311','85-302'), ('85-314','85-370'), ('85-320','85-330'),
+     ('85-340','85-350'), ('85-354','85-430'), ('85-358','85-451'), ('85-359','85-411'),
+     ('85-360','85-418'), ('85-361','85-431'), ('85-372','85-414'), ('85-375','85-409'),
+     ('85-377','85-452'), ('85-385','85-415'), ('85-394','85-432'), ('85-395','85-416'),
+     ('85-398','85-470'), ('85-407','85-471'), ('85-422','85-490'), ('85-435','85-420'),
+     ('85-442','85-454'), ('85-443','85-455'), ('85-444','85-456'), ('85-446','85-457'),
+     ('85-480','85-590'), ('85-482','85-503'), ('85-483','85-504'), ('85-484','85-530');
    -- wishlist_items allows one row per user and course: drop an old-code row when the user
    -- already has the current code, or has an older old-code row for the same current code.
    DELETE FROM wishlist_items w USING psych_numbers p
@@ -1501,14 +1537,22 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    DELETE FROM course_search_counts c USING psych_numbers p WHERE c.course_code = p.old_code;
    COMMIT;
    SELECT course_code, is_new, archived, updated_by_email, updated_at FROM course_overrides
-   WHERE course_code IN ('85-104','85-253','85-261','85-211','85-219','85-221','85-241','85-377','85-442','85-359','85-340');
+   WHERE course_code IN ('85-104','85-253','85-261','85-101','85-102','85-117','85-211','85-219',
+     '85-221','85-241','85-251','85-293','85-294','85-311','85-314','85-320','85-340','85-354',
+     '85-358','85-359','85-360','85-361','85-372','85-375','85-377','85-385','85-394','85-395',
+     '85-398','85-407','85-422','85-435','85-442','85-443','85-444','85-446','85-480','85-482',
+     '85-483','85-484');
    ```
 
    The last query lists admin course edits saved under an old number. An edit there no longer applies to anything, and a row with `is_new` true would bring the old number back as an added course. No rows: nothing to do. Otherwise an admin redoes each change on the current number in the course editor, and then you delete the old rows:
 
    ```sql
    DELETE FROM course_overrides
-   WHERE course_code IN ('85-104','85-253','85-261','85-211','85-219','85-221','85-241','85-377','85-442','85-359','85-340');
+   WHERE course_code IN ('85-104','85-253','85-261','85-101','85-102','85-117','85-211','85-219',
+     '85-221','85-241','85-251','85-293','85-294','85-311','85-314','85-320','85-340','85-354',
+     '85-358','85-359','85-360','85-361','85-372','85-375','85-377','85-385','85-394','85-395',
+     '85-398','85-407','85-422','85-435','85-442','85-443','85-444','85-446','85-480','85-482',
+     '85-483','85-484');
    ```
 
    Admin edits saved before November 10, 2026 that changed what a course counts for still use the old requirement paths (14.10). The browser applies an edit's whole "counts for" list, so such a course would show under an old bucket with no rule chip. List them:
@@ -1842,7 +1886,7 @@ python scripts/dev_server.py
 | Suite | Result |
 |---|---|
 | `python -m pytest backend/tests` | **173 passed, 6 failed** (the known failures below) |
-| `python -m pytest backend/scraper/tests` | 173 passed |
+| `python -m pytest backend/scraper/tests` | 203 passed |
 | `node scripts/run-data-tests.js` | 175 passed (profile 51/51, data 64/64, minors 25/25, utils 5/5, dash guard 3/3, minors file 6/6, app views 15/15, catalog data 6/6) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
@@ -1866,7 +1910,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 - `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, the SMTP relay check end to end, and that production never returns a reset token or reads `backend/.env`.
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
-- `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the IS Intercultural and Global Inquiry list, the daily update (`test_update_data.py`), `scripts/dev_server.py` (`test_dev_server.py`), `scripts/bump_cf_build.py` and `frontend/data/minors.json` (`test_minors_file.py`: every course code comes from that minor's official file, with old Psychology numbers as their current numbers, no listed code is lost, the number ranges, rule numbers, unit totals and double counting sentences match the file, every category has a rule, no category lists a code twice, and the user-facing text has no dashes). `backend/scraper/tests/` has no `__init__.py`; its `conftest.py` puts `backend/scraper/` on `sys.path`, which is why the scripts are imported as top-level modules there.
+- `backend/scraper/tests/` cover SOC parsing, title reconciliation, the coverage validator, every section of the overlay file (`test_mapping_overlay_sections.py`), the Psychology renumbering list, its daily step and its migration (`test_psychology_renumbering.py`), the IS Intercultural and Global Inquiry list, the daily update (`test_update_data.py`), `scripts/dev_server.py` (`test_dev_server.py`), `scripts/bump_cf_build.py` and `frontend/data/minors.json` (`test_minors_file.py`: every course code comes from that minor's official file, with old Psychology numbers as their new numbers from the department's list, no listed code is lost, the number ranges, rule numbers, unit totals and double counting sentences match the file, every category has a rule, no category lists a code twice, and the user-facing text has no dashes). `backend/scraper/tests/` has no `__init__.py`; its `conftest.py` puts `backend/scraper/` on `sys.path`, which is why the scripts are imported as top-level modules there.
 - `frontend/tests/test-runner.js` is a 48-line assertion helper; `scripts/run-data-tests.js` loads it with Node's `vm`, gives the tests an in-memory `localStorage` and `sessionStorage` (cleared before each test), waits for a test that returns a promise, and prints counts per file and in total. It exits non-zero if any test fails.
 - `frontend/tests/minors.test.js` covers the minors logic of `js/data.js` with small fixtures: selection rules, category expansion, rule chips, the trees, progress (one course fills one category, unit floors, parts, caps, completed before in progress), the double counting limit text, shared courses, warnings and the major and minor tags. `frontend/tests/minors-file.test.js` (Node only) loads the real `data/minors.json` through `fetchMinors()` with a fake `fetch`, checks that the fallback `MINOR_LIST` and `MINOR_BLOCKED_MAJORS` match it, that every category has a known rule and builds, and that the text the app shows has no dashes. `backend/tests/test_auth.py` checks that `VALID_MINORS_FOR_PATCH` and `MAJOR_MINOR_COLLISION` match the file.
 - `frontend/tests/dash-guard.test.js` (Node only) enforces rule 18.1: it scans string and template literals in `js/*.js`, the four HTML pages (`index.html`, `app.html`, `reset.html`, `landing/index.html`, including inline scripts and styles) and CSS `content:` values, skipping comments, and fails on any em or en dash (also written as an HTML entity) or a spaced hyphen between words. Its `ALLOWLIST` holds the strings that must keep a spaced hyphen, each with a reason; it is empty since the 2026-27 catalog bucket names (no requirement path has a spaced hyphen).
@@ -2108,19 +2152,19 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 ### 21.2 Operational and data issues
 
 1. **The move to the CMU-Q server is not done.** The live site still runs on GitHub Pages and Render from `main`, and the old scrape workflow still commits to `main` with the old parser. Follow 15.15.
-2. **Saved data under the old Psychology numbers.** The old Psychology numbers were removed on 2026-11-09 after their mappings moved to the current numbers. Wishlist items, flags, schedule plan items, search counts and admin course edits saved under them in production must be moved with 15.8 step 8 when the database is imported.
+2. **Saved data under the old Psychology numbers.** The catalog has no rows for the old Psychology numbers that the department's renumbering list retires (14.6), nor for 85-253 and 85-261; their mappings moved to the new numbers. Wishlist items, flags, schedule plan items, search counts and admin course edits saved under them in production must be moved with 15.8 step 8 when the database is imported.
 3. **6 backend tests fail** (16.2). The tests are stale, not the code. No CI runs any tests.
 4. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
 5. Whether production has an email provider for password resets is not known (on Render the values were set only in the dashboard). Decide at the cutover (15.6).
 6. The deploy files (15) have not been run on the real server yet; the certificate names, the time zone and outbound network access are unknown until then.
 7. **A failed daily update is silent.** `MAILTO` in `deploy/countsfor.cron` is empty, so the failure line the job prints goes nowhere and the log is the only record. Decide who should be told, have IT confirm the server can send mail (a mailer such as `postfix` or `msmtp-mta` through the campus relay), then set `MAILTO` (15.12). Until then, check the last scrape date on Admin, Overview.
 8. Render naming and ownership are unclear until the old hosting is retired (15.20): who pays, and whether the stray `countsfor-backend` service and `countsfor-db` database still exist.
-9. M25 in `backend/data/soc.json` was written by the old scraper, which read every row as 10 cells, so the summer Session column shifted every field after the title (units hold "summer two" or "qatar summer", the section cell holds the units, and later courses sit inside earlier courses' `sections`). M25 is no longer on the SOC form, so a new scrape cannot repair it, and it is kept as it is (90 courses, 827 rows). The pipeline ignores such data instead of deleting it: reconcile and the coverage check skip a course whose units cell is not units and a section whose section cell is not a section id (`soc_parse.usable_sections`, 14.3 step 3). All 90 M25 courses and their 827 rows are ignored; no semester on the form has any. Effects: 79-234, 17-403 and 67-313 no longer get `offered_qatar` from their bad M25 rows, 14 rows lose `offered_pitts` that only bad summer rows gave, and 45-920 keeps its catalog name "Data Science for Finance This Section Cancelled" because its only SOC title is in M25. 85-372 and 85-822 also keep their catalog names (their only SOC title is "tba This Section Cancelled").
+9. M25 in `backend/data/soc.json` was written by the old scraper, which read every row as 10 cells, so the summer Session column shifted every field after the title (units hold "summer two" or "qatar summer", the section cell holds the units, and later courses sit inside earlier courses' `sections`). M25 is no longer on the SOC form, so a new scrape cannot repair it, and it is kept as it is (90 courses, 827 rows). The pipeline ignores such data instead of deleting it: reconcile and the coverage check skip a course whose units cell is not units and a section whose section cell is not a section id (`soc_parse.usable_sections`, 14.3 step 3). All 90 M25 courses and their 827 rows are ignored; no semester on the form has any. Effects: 79-234, 17-403 and 67-313 no longer get `offered_qatar` from their bad M25 rows, 14 rows lose `offered_pitts` that only bad summer rows gave, and 45-920 keeps its catalog name "Data Science for Finance This Section Cancelled" because its only SOC title is in M25. 85-822 also keeps its catalog name (its only SOC title is "tba This Section Cancelled"); 85-372, which had the same title, is now 85-414 (14.6).
 10. **Open questions from the November 8, 2026 catalog regeneration** (6,704 to 6,795 rows; 91 rows added for courses that only the correctly parsed M26 lists):
     - The 8 SOC-created rows that `soc.json` no longer lists (04-801, 54-382, 54-757, 54-882, 57-453, 57-579, 57-753, 62-318) keep `offered: ["F26"]` from the base catalog, because reconcile leaves `offered` unchanged on a row that is not in `soc.json` at all. Whether they should keep F26 is open, since the SOC is the rule and F26 is still on the form (04-801 is in none of the checked `soc.json` versions for F26).
     - 144 SOC-created rows have an empty `offered` (143 because their only semester is now cancelled-only, and 57-979 because F26 no longer lists it and F25 lists it cancelled-only); 12 SOC-created rows lost an F26 that the current F26 does not list (45-706, 54-389, 54-653, 54-889, 57-391, 57-584, 57-787, 57-788, 57-884, 57-979, 57-982, 66-400).
     - 23 codes got a `previous_course_name` for the first time because their SOC title shares no words with the old name; reconcile prints them under `REVIEW` and keeps their mappings: 12-711, 15-435, 15-635, 36-690, 36-712, 36-795, 42-663, 45-986, 47-900, 48-516, 48-616, 48-648, 51-907, 54-152, 54-195, 54-653, 76-802, 79-329, 82-196, 90-874, 94-784, 94-816, 95-877. Some look like renames of the same course rather than reused numbers (54-152 and 54-653 "Stagecraft" to "Stage and Shop Craft"); check them before relying on the mappings.
-11. The Psychology questions (85-426, 85-102 and 85-421) are in 14.6.
+11. The Psychology questions (85-426, 85-421, 85-473, the titles that differ from the department's list, the Psychology minor's advanced range and the sections listed under old numbers) are in 14.6.
 
 ### 21.3 Code hygiene
 
