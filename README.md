@@ -40,6 +40,7 @@ Written: November 2026. Keep it current: when you change how something works, up
     - [15.16 Updating the code later](#1516-updating-the-code-later)
     - [15.19 Troubleshooting the server](#1519-troubleshooting-the-server)
     - [15.20 Old hosting: GitHub Pages and Render (historical)](#1520-old-hosting-github-pages-and-render-historical)
+    - [15.21 Test copy on GitHub Pages](#1521-test-copy-on-github-pages)
 16. [Testing](#16-testing)
 17. [Git workflow](#17-git-workflow)
 18. [Project rules and conventions](#18-project-rules-and-conventions)
@@ -216,7 +217,7 @@ CountsFor/
 |   |-- tests/           API tests
 |   `-- requirements.txt
 |-- deploy/              server files: systemd unit, Apache site, cron, logrotate, env templates
-|-- scripts/             dev_server.py, bump_cf_build.py, run-data-tests.js
+|-- scripts/             dev_server.py, bump_cf_build.py, run-data-tests.js, publish_test_site.sh
 |-- docs/                analytics plan, landing design notes, archive
 |-- pytest.ini           "python -m pytest" runs backend/tests and backend/scraper/tests
 `-- README.md            this manual
@@ -240,7 +241,8 @@ CountsFor/
 | `deploy/` | yes | Everything the CMU-Q server needs besides the code. No secrets. See [4.3](#43-deploy). | Live |
 | `scripts/dev_server.py` | yes | Local server that mirrors production: serves `frontend/` on port 8765 and proxies `/api` and `/health` to the API on `127.0.0.1:5050` (5.6). Standard library only. | Live |
 | `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `frontend/app.html`, and every `?v=` tag in `frontend/index.html`. A release tool, run by hand. Optional on the server, where Apache makes browsers revalidate (15.16). | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js`, `minors.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js`, `minors-file.test.js`, `app-views.test.js` and `catalog-data.test.js`. It waits for tests that return a promise. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js`, `minors.test.js`, `course-edits.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js`, `minors-file.test.js`, `app-views.test.js`, `admin-editor.test.js` and `catalog-data.test.js`. It waits for tests that return a promise. | Live |
+| `scripts/publish_test_site.sh` | yes | Publishes `frontend/` of a commit (without `tests/`, plus `.nojekyll`) to the `gh-pages` branch of Hind's working repo, the GitHub Pages test copy, as a fast-forward push; refuses a dirty tree and the main repo (15.21). Run by hand. | Live |
 | `pytest.ini` | yes | Lets `python -m pytest` from the repo root run `backend/tests` and `backend/scraper/tests` together. | Live |
 | `.gitattributes` | yes | Keeps `*.sh` and everything in `deploy/` at LF line endings in every checkout (a CR breaks bash, cron and systemd, for example on Windows with `core.autocrlf`), and marks the archived source pages in `backend/data/sources/*/` as `-text`, so git never converts their bytes. | Live |
 | `README.md` | yes | This manual. | Keep current |
@@ -2042,13 +2044,38 @@ To restore for real: `sudo systemctl stop countsfor-api`, drop and recreate `cou
 
 This is how CountsFor was hosted until the cutover. **It is still the live site on November 8, 2026.** Its configuration files were removed on the `cleanup` branch (they are in git history: `git show 49d22b2:render.yaml`, `git show 49d22b2:.github/workflows/pages.yml`).
 
-**Frontend: GitHub Pages.** Repo settings: build type "workflow" (GitHub Actions), public, URL `https://adicmu.github.io/Countsfor-Summer-26/`, HTTPS enforced, no custom domain. `pages.yml` deployed on every push to `main`, copying only what the browser loads (`index.html`, `app.html`, `reset.html`, `js/`, `css/`, `assets/`, `landing/`, `data/courses.json`, `data/minor_courses.json`). The `gh-pages` branch (last commit August 9, 2026) is a leftover from an experiment and is not served.
+**Frontend: GitHub Pages.** Repo settings: build type "workflow" (GitHub Actions), public, URL `https://adicmu.github.io/Countsfor-Summer-26/`, HTTPS enforced, no custom domain. `pages.yml` deployed on every push to `main`, copying only what the browser loads (`index.html`, `app.html`, `reset.html`, `js/`, `css/`, `assets/`, `landing/`, `data/courses.json`, `data/minor_courses.json`). The main repo's `gh-pages` branch (last commit August 9, 2026) is a leftover from an experiment and is not served. (Hind's working repo has its own `gh-pages` branch: the test copy, 15.21.)
 
 **Backend: Render.** Web service `countsfor-summer-26` (`https://countsfor-summer-26.onrender.com`; the blueprint called it `countsfor-backend`), Python, plan `starter`, region Ohio, auto-deploying from `main` (confirmed November 3, 2026). Build `pip install -r requirements.txt`, pre-deploy `python -m backend.bootstrap_db`, start `SKIP_DB_BOOTSTRAP=1 gunicorn --workers=1 --bind 0.0.0.0:$PORT --timeout 120 --access-logfile - 'backend.app:create_app()'`, health check `/health`. Database `CountsFor_Summer_2026` (Postgres, plan `starter`, Ohio, host `dpg-d9osve67...`; an older host `dpg-d8nqt2...` was used earlier in 2026, so it was recreated at least once after a free trial expired and the data was lost). Environment: `FLASK_ENV=production`, `DATABASE_URL` from the database, a generated `SECRET_KEY`, `ALLOWED_EMAIL_DOMAIN`, `FRONTEND_ORIGIN`, `SEED_USERS_PATH`, `FRONTEND_RESET_BASE`, and dashboard-only values (`GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `MAIL_FROM`, `SMTP_*`). `keepalive.yml` pinged `/health` every 10 minutes during the day. Older notes mention a second service `countsfor-backend.onrender.com` and an Oregon database `countsfor-db`; check the dashboard and delete them if they still exist. Who pays for the Render account is not recorded.
 
 **Supabase** was once considered instead of Render Postgres. Nothing in the code is Supabase specific and there is no sign it was ever used.
 
 **`countsfor.qatar.cmu.edu` before this move:** older docs called it "the CMU-Q deployment" of the original open-cmuq CountsFor app. It is not known what it serves today; ask CMU-Q IT before you point it at the new server.
+
+### 15.21 Test copy on GitHub Pages
+
+Until the server runs, the `cleanup` frontend can be tried at **[hindjendara.github.io/CMUQ-CountsFor](https://hindjendara.github.io/CMUQ-CountsFor/)**. It is a test copy, not production and not a home for CountsFor: the CMU-Q server is (this section), and nothing on the test copy is backed up or monitored. GitHub Pages serves it from the `gh-pages` branch of Hind's working repo, `Hindjendara/CMUQ-CountsFor` (public; `origin` in the checkout where `cleanup` was made, 17.1). The main repo's `gh-pages` branch is a different, unused branch (15.20).
+
+- **What the branch holds:** only the site, `frontend/` of one commit without `tests/`, plus an empty `.nojekyll`, so GitHub serves the files as they are (no Jekyll). Each publish adds one commit on top of the last.
+- **No backend.** Every `/api` request answers 404 there (checked November 11, 2026), so the app runs as a guest: search, course cards, the requirement trees, the minors and the planner work, with plans and saved courses kept in the browser. Signing in, flags, shared plans and the admin pages need the server, and admin course edits and minor settings are not applied (the app shows the catalog and `minors.json` as they are).
+- **What it serves:** on November 11, 2026, `gh-pages` was `a116b27` ("Deploy cleanup 8b599b2 to GitHub Pages"), with the `cf-build` tag `release-2026-11-10b`. To see what it serves now, compare `curl -s https://hindjendara.github.io/CMUQ-CountsFor/app.html | grep cf-build` with `frontend/app.html`.
+
+To publish a commit (usually the tip of `cleanup`), use `scripts/publish_test_site.sh` with bash (Git Bash on Windows), from a checkout whose `origin` is Hind's working repo. After a frontend change, first give the pages a new cache tag and commit it: `python scripts/bump_cf_build.py release-$(date +%F)` (add a letter for a second release on the same day, as in `release-2026-11-10b`). Then:
+
+```bash
+git status --short             # must print nothing: the script refuses otherwise
+git push origin cleanup        # so the commit the test copy names is on GitHub too
+scripts/publish_test_site.sh   # publishes HEAD; or: scripts/publish_test_site.sh [--no-wait] COMMIT
+```
+
+The script:
+
+1. Refuses a working tree with uncommitted or untracked files, and refuses the main repo (a remote named `adi`, or any fetch or push URL of the `Adicmu` account), whose Pages site was production.
+2. Builds the site from the commit itself, so nothing uncommitted can reach it: `frontend/` without `tests/`, plus `.nojekyll`.
+3. Commits that tree on top of the `gh-pages` it has just fetched and pushes it as a fast-forward. It never forces: if `gh-pages` moved in the meantime, the push is refused, nothing changes, and you run it again. If the copy already matches the commit, it publishes nothing.
+4. Waits up to 5 minutes until the live `app.html` shows the commit's `cf-build` tag (`--no-wait` skips this). GitHub's "pages build and deployment" run usually takes a minute or two; if the wait runs out, look at that run in the repo's **Actions** tab.
+
+GitHub Pages lets browsers keep each file for 10 minutes (`Cache-Control: max-age=600`), so after a frontend change a returning visitor can get old files mixed with new ones unless the `?v=` tags changed: bump them, as above, before you publish. The script warns when the published copy already had the same `cf-build` tag, and notes when the commit is on no branch of `origin`. Never publish to the main repo, and never force-push `gh-pages`.
 
 ---
 
@@ -2131,7 +2158,7 @@ There is no CI that runs the tests. On the server, the daily update runs the two
 |---|---|---|
 | Main repo | `https://github.com/Adicmu/Countsfor-Summer-26.git` | Public, not a fork. GitHub Pages and Render are attached to its `main` until the cutover (15.15). A fresh clone calls it `origin`. |
 | Partner fork | `https://github.com/Hindjendara/Countsfor-Summer-26.git` | Hind's public fork (remote `hind` in 5.2). Its own scrape workflow commits data there. |
-| Hind's working repo | `https://github.com/Hindjendara/CMUQ-CountsFor.git` | The checkout where the `cleanup` branch was made uses this as `origin` and the main repo as `adi`, with pushing to `adi` disabled. Check `git remote -v` in any checkout before you push. |
+| Hind's working repo | `https://github.com/Hindjendara/CMUQ-CountsFor.git` | Public. The checkout where the `cleanup` branch was made uses this as `origin` and the main repo as `adi`, with pushing to `adi` disabled. Its `gh-pages` branch is the GitHub Pages test copy (15.21). Check `git remote -v` in any checkout before you push. |
 
 ### 17.2 Branches (November 2026)
 
@@ -2143,7 +2170,7 @@ There is no CI that runs the tests. On the server, the daily update runs the two
 | `feature/password-reset-email` | Merged (PR #13). Safe to delete. |
 | `feat/login-landing-guest-flags`, `feat/multiple-minors` | Old branches with open PRs #10 and #12 (June 2026). Each has one commit not on `main`, but guest mode, the landing page and multiple minors already exist on `main` in reworked form. Review, then close the PRs and delete the branches. |
 | `feat/ui-ux-overhaul`, `landing-copy-and-signin-fixes`, `roster-and-role-views-backup`, `worktree-role-aware-onboarding` | Local-only branches on the original laptop. |
-| `gh-pages` | Stale, unused (15.20). |
+| `gh-pages` | On the main repo: stale, unused (15.20). On Hind's working repo: the GitHub Pages test copy; publish to it only with `scripts/publish_test_site.sh` (15.21). |
 | `hind/main` | Fork main with its own SOC data commits. |
 | `hind/cursor/adicmu-pages-deploy` | Old experiment. |
 
