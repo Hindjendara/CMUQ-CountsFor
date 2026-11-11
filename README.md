@@ -2,7 +2,7 @@
 
 A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Students, faculty and advisors look up any course and see exactly which major, minor and Gen Ed requirements it counts for, plan schedules, save courses and flag catalog mistakes. Admins edit the catalog and see usage.
 
-**Live site today:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) (GitHub Pages) with the API on Render (`https://countsfor-summer-26.onrender.com`), both built from `main`. **New home:** `https://countsfor.qatar.cmu.edu` on a CMU-Q Ubuntu server ([section 15](#15-deploy-to-the-cmu-q-server)), not live yet. **Repo:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26)
+**Real home:** `https://countsfor.qatar.cmu.edu` on a CMU-Q Ubuntu server ([section 15](#15-deploy-to-the-cmu-q-server)), not live yet. **Production until then:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) (GitHub Pages, built from `main`), whose API on Render (`https://countsfor-summer-26.onrender.com`) answered 503 "This service has been suspended by its owner" on November 11, 2026, so nothing there that needs the server worked that day. **Test copy** of the `cleanup` frontend, guest only: [hindjendara.github.io/CMUQ-CountsFor](https://hindjendara.github.io/CMUQ-CountsFor/) ([15.21](#1521-test-copy-on-github-pages)). **Repos:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26) (`main`) and [Hindjendara/CMUQ-CountsFor](https://github.com/Hindjendara/CMUQ-CountsFor) (`cleanup` and the test copy, [17.1](#171-remotes)).
 
 **Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short, from the repo root: create a virtualenv in `.venv` and `pip install -r backend/requirements.txt`, copy `backend/.env.example` to `backend/.env`, run the API with `python -m backend.app` (port 5050), serve the site with `python scripts/dev_server.py` (port 8765; it serves `frontend/` and proxies `/api` to the API), and open `http://localhost:8765/`.
 
@@ -10,7 +10,7 @@ A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Studen
 
 This README is the project's complete maintainer manual. It was written so that a new student developer can take over CountsFor alone, with no access to the original authors. Every statement was checked against the code on the `cleanup` branch in November 2026 unless it is explicitly marked as uncertain. If anything else in the repo disagrees with this file, trust this file and the code, and then fix whichever is wrong.
 
-> **Where things stand (November 8, 2026).** The `cleanup` branch moves CountsFor from GitHub Pages and Render to a CMU-Q server: the repo is split into `frontend/` (the static site) and `backend/` (the Flask API, the scraper and private data), every setting comes from the environment, the site calls the API by relative path, a system cron job replaces the GitHub Actions scrape, and `deploy/` holds the server files (systemd, Apache, cron, logrotate, environment templates). The branch is **not merged into `main` yet**. Until someone carries out the cutover in [15.15](#1515-cutover-from-github-pages-and-render), the live site keeps running on GitHub Pages and Render from `main`, with the old layout. Sections that describe the old hosting say so.
+> **Where things stand (November 11, 2026).** The `cleanup` branch moves CountsFor from GitHub Pages and Render to a CMU-Q server: the repo is split into `frontend/` (the static site) and `backend/` (the Flask API, the scraper and private data), every setting comes from the environment, the site calls the API by relative path, a system cron job replaces the GitHub Actions scrape, and `deploy/` holds the server files (systemd, Apache, cron, logrotate, environment templates). The branch is **not merged into `main` yet**; it is on Hind's working repo, `Hindjendara/CMUQ-CountsFor` (pushed November 10, 2026; newer commits were made after that push, 15.4). Until someone carries out the cutover in [15.15](#1515-cutover-from-github-pages-and-render), production is the old site from `main`, with the old layout: its pages still load on GitHub Pages, but on November 11, 2026 its API on Render answered 503 "This service has been suspended by its owner", so signing in and everything else that needs the server failed there. A guest-only test copy of the `cleanup` frontend runs on GitHub Pages ([15.21](#1521-test-copy-on-github-pages)); the CMU-Q server is CountsFor's real home. Sections that describe the old hosting say so.
 
 Paths in this file are relative to the repo root (`frontend/js/app.js`, `backend/auth.py`). Inside the frontend sections, `js/`, `css/` and `tests/` mean `frontend/js/`, `frontend/css/` and `frontend/tests/`, because that is how the pages refer to them.
 
@@ -108,7 +108,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **Daily update** | `backend/scraper/update_data.py`, run by cron through `run_scrape.sh`: scrape, rebuild, check and publish the catalog in place (14.2). |
 | **`countsfor`** | The system user that owns the deploy root, runs the API and the daily update, and owns the PostgreSQL database of the same name. |
 | **Render** | Old hosting: the company that runs the Flask backend and its Postgres database until the cutover (15.20). |
-| **GitHub Pages** | Old hosting: static hosting for the frontend until the cutover (15.20). |
+| **GitHub Pages** | Static hosting: the old production frontend until the cutover (15.20), and the guest-only test copy of the `cleanup` frontend (15.21). |
 
 ---
 
@@ -116,7 +116,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 
 ### 3.1 Big picture
 
-This is the CMU-Q server setup (section 15). Until the cutover the live site still runs on GitHub Pages and Render (15.20). Locally, `scripts/dev_server.py` plays Apache's part and SQLite stands in for PostgreSQL (section 5).
+This is the CMU-Q server setup (section 15). Until the cutover, production is the old site on GitHub Pages and Render (15.20; its Render API answered 503 "suspended by its owner" on November 11, 2026), and a guest-only test copy of this frontend runs on GitHub Pages (15.21). Locally, `scripts/dev_server.py` plays Apache's part and SQLite stands in for PostgreSQL (section 5).
 
 ```
   Browser
@@ -989,7 +989,7 @@ So:
 - New columns added to an existing table should be nullable or have a default, otherwise the `ALTER TABLE` fails on existing rows.
 - Booleans: the existing migrations use `DEFAULT 0` for SQLite and `DEFAULT FALSE` for Postgres. Follow that pattern.
 
-Since November 3, 2026 production `/health` on Render reports `"tables": 14` (the admin page and sign-in analytics are deployed). The deploy created `admin_audit_events`, `course_overrides`, `sign_in_events` and `user_activity_days` through `create_all()` and backfilled sign-in history once (section 13.2). `minor_overrides` (November 2026) is a new table, so the next bootstrap creates it with no migration step, and the count becomes 15.
+From November 3, 2026 production `/health` on Render reported `"tables": 14` (the admin page and sign-in analytics were deployed); on November 11, 2026 the Render web service answered 503 "This service has been suspended by its owner" instead. The deploy created `admin_audit_events`, `course_overrides`, `sign_in_events` and `user_activity_days` through `create_all()` and backfilled sign-in history once (section 13.2). `minor_overrides` (November 2026) is a new table, so the next bootstrap creates it with no migration step, and the count becomes 15.
 
 ---
 
@@ -1386,7 +1386,7 @@ The old to new paths are in `backend/data/requirement_path_renames.json`. The pi
 
 CountsFor's new home is an Ubuntu 24.04 server at CMU-Q, `https://countsfor.qatar.cmu.edu`. Apache serves the static frontend over HTTPS and proxies `/api` to the Flask API, which runs under Gunicorn on `127.0.0.1:8000`. The database is a local PostgreSQL. A system cron job runs the scraper once a day.
 
-> **Status on November 8, 2026: not deployed yet.** Everything below is written from the files in `deploy/` and checked against the code, but nobody has run it on the real server yet. The live site still runs on GitHub Pages and Render from `main` (15.20) and keeps running there until the cutover (15.15). When you do the first deploy, correct this section wherever reality differs, and record the date.
+> **Status on November 11, 2026: not deployed yet.** Everything below is written from the files in `deploy/` and checked against the code, but nobody has run it on the real server yet. Production is still the old site from `main` (15.20) until the cutover (15.15), but that day its API on Render answered 503 "This service has been suspended by its owner": read the note at the top of 15.8 before you plan the import. The `cleanup` frontend can be tried as a guest on the GitHub Pages test copy (15.21), which has no API. When you do the first deploy, correct this section wherever reality differs, and record the date.
 
 The first deploy goes through 15.2 to 15.14 in order. Later deploys only need 15.16.
 
@@ -1460,7 +1460,7 @@ git checkout main
 git status --short         # must print nothing
 ```
 
-**Before the merge (the rehearsal, 15.15 step 1)** `main` still has the old layout, and on November 8, 2026 the `cleanup` branch existed only in the checkout it was made in (17.2): it is on neither GitHub repo. Push it first to a repo the server can clone, then clone that repo and check out `cleanup` instead of `main`. For example, if it was pushed to Hind's working repo (17.1):
+**Before the merge (the rehearsal, 15.15 step 1)** `main` still has the old layout. The `cleanup` branch is on Hind's working repo, `Hindjendara/CMUQ-CountsFor` (public, 17.1), and on no branch of the main repo. It was pushed there on November 10, 2026 (`5106dd7`), and the checkout it was made in had newer commits on November 11: push them first, with `git push origin cleanup` in that checkout (`git status` there shows how far the branch is ahead of `origin/cleanup`). Then clone that repo and check out `cleanup` instead of `main`:
 
 ```bash
 git clone https://github.com/Hindjendara/CMUQ-CountsFor.git ~/countsfor-src
@@ -1469,7 +1469,7 @@ git checkout cleanup
 git status --short         # must print nothing
 ```
 
-After the merge, replace that checkout with a fresh clone of the main repo on `main`, as above (`rm -rf ~/countsfor-src` first). Which repo to push `cleanup` to for the rehearsal is the owner's choice; the server must be able to clone it (a private repo needs a deploy key or token).
+After the merge, replace that checkout with a fresh clone of the main repo on `main`, as above (`rm -rf ~/countsfor-src` first). Whichever repo you use, the server must be able to clone it (a private repo needs a deploy key or token).
 
 First deploy:
 
@@ -1541,9 +1541,11 @@ The OS user `countsfor` connects as the database role `countsfor` by peer authen
 
 Accounts, directory entries, flags, saved courses, shared plans, admin course edits, the audit log and the analytics live in Render's Postgres database `CountsFor_Summer_2026`. Move them with `pg_dump` and `pg_restore`.
 
+> **Render on November 11, 2026:** the web service `countsfor-summer-26` answered 503 "This service has been suspended by its owner" (who suspended it, and when, is not recorded). While it is suspended nothing writes to the database, which is what the final copy needs (15.15 step 4). The import needs the database itself, which that answer says nothing about: before you plan the cutover, check in the Render dashboard that `CountsFor_Summer_2026` still exists and is available, and run steps 1 to 3 as soon as you can. Keep that dump off the server like the final one (step 10): if the database is deleted before the cutover, it is the only copy. If the database is already gone, there is nothing to import: start from an empty database and skip this section (15.7).
+
 **Restore before the first bootstrap or service start.** `python -m backend.bootstrap_db`, and the service's `ExecStartPre` that runs it, create every missing table, empty. `pg_restore` then stops at "relation ... already exists", and because the restore runs as one transaction, nothing is imported.
 
-Do it twice: a **rehearsal** while the old site still runs (into a scratch database, below), and the **final copy** during the cutover (15.15), after writes have stopped.
+Do it twice: a **rehearsal** (below) and the **final copy** during the cutover (15.15), after writes have stopped.
 
 1. **Get the External Database URL:** Render dashboard, database `CountsFor_Summer_2026`, **Connect**, **External Database URL**. It has the form `postgresql://USER:PASSWORD@HOST/DBNAME` and contains the password. Keep the password out of your shell history and off every command line (other users on the server can read a running command's arguments with `ps`): put the parts in a connection service file that only you can read, and name the service in the commands below.
 
@@ -1759,7 +1761,7 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
 
 10. **Clean up:** `sudo rm -f /var/tmp/countsfor-render.dump /var/tmp/countsfor-courses-main.json` and `rm -f ~/.pg_service.conf ~/courses-main.json` (`.pg_service.conf` holds the Render password). Keep the final dump file off the server as the last backup of the Render database.
 
-**Rehearsal:** for the full rehearsal (15.15 step 1), run steps 1 to 9 as written, into `countsfor`, while Render keeps running (the dump is simply a little older than the final one). Then 15.9 starts the service on the imported accounts, and every check in 15.13 can pass. At the cutover the database is recreated and imported again (15.15 step 5).
+**Rehearsal:** for the full rehearsal (15.15 step 1), run steps 1 to 9 as written, into `countsfor` (its dump is simply older than the final one). Then 15.9 starts the service on the imported accounts, and every check in 15.13 can pass. At the cutover the database is recreated and imported again (15.15 step 5).
 
 To try only the import, without touching `countsfor` (for example after the service already created empty tables in it), use a scratch database, `countsfor_rehearsal`, after steps 1 to 4. Do not use the commands of steps 5 to 9 as printed above for this: they name `countsfor`, and the two Python commands read `DATABASE_URL=postgresql:///countsfor` from the environment file. Every command below names the scratch database instead.
 
@@ -1927,9 +1929,9 @@ In the Google Cloud Console, **APIs & Services**, **Credentials**, the OAuth 2.0
 
 ### 15.15 Cutover from GitHub Pages and Render
 
-As of November 8, 2026 the live site is still the old one: GitHub Pages serves the frontend from `main`, Render runs the API and the database, and the GitHub Actions scrape still commits data to `main`. Nothing has been deployed to the CMU-Q server, and `cleanup` is not merged. The cutover, in order:
+As of November 11, 2026 production is still the old site: GitHub Pages serves the frontend from `main`, and the GitHub Actions scrape still commits data to `main`. Render holds the API and the database, but that day its web service answered 503 "This service has been suspended by its owner", so the old site could not sign anyone in or reach anything else on the server. Nothing has been deployed to the CMU-Q server, and `cleanup` is not merged; a guest-only test copy of its frontend runs on GitHub Pages (15.21). The cutover, in order:
 
-1. **Rehearse** 15.2 to 15.14 on the server, deploying the `cleanup` branch (push it first, 15.4) and importing a current dump into `countsfor` (15.8, "Rehearsal"), while the old site keeps running. The server can be fully tested, sign-in with existing accounts included, before anyone uses it.
+1. **Rehearse** 15.2 to 15.14 on the server, deploying the `cleanup` branch (push it first, 15.4) and importing a current dump into `countsfor` (15.8, "Rehearsal"; read the note at the top of 15.8 first). The server can be fully tested, sign-in with existing accounts included, before anyone uses it.
 2. **Freeze `main`:** in the Render dashboard, turn off **Auto-Deploy** for the web service `countsfor-summer-26`; in the GitHub Actions tab, **disable** the "Scrape SOC" workflow. Render auto-deploys `main`, and its build command installed the root `requirements.txt`, which `cleanup` deletes, so a Render deploy of the merged `main` would most likely fail and keep the old version running (not tested). Turning it off removes the question.
 3. **Merge `cleanup` into `main`** and push. If `main` has not moved since `cleanup` was last updated (`git merge-base --is-ancestor main cleanup` succeeds), the merge is a fast-forward with no conflicts. Otherwise every bot commit on `main` changed `app.html` (the `?v=` tags), `data/courses.json`, `data/soc.json` and `data_all_courses.json`, which `cleanup` moved or deleted. A test merge of a simulated bot commit (November 8, 2026) gave modify/delete conflicts on `app.html` and `data_all_courses.json` and merged the bot's data changes into `backend/data/soc.json` and `frontend/data/courses.json`; real changes to the data can also conflict there. Take the `cleanup` side of every one of these files (its data comes from the fixed parser; the server rebuilds the data anyway):
 
@@ -1943,12 +1945,12 @@ As of November 8, 2026 the live site is still the old one: GitHub Pages serves t
    ```
 
    After the merge, GitHub Pages keeps serving its last build (its workflow is gone) and Render keeps the old API.
-4. **Stop writes:** announce a short downtime, then in the Render dashboard **Suspend** the web service. The old site now shows "Could not reach the server".
+4. **Stop writes:** on November 11, 2026 the Render web service was already suspended (`curl -s -o /dev/null -w '%{http_code}\n' https://countsfor-summer-26.onrender.com/health` printed 503). If it runs again by now, announce a short downtime, then in the Render dashboard **Suspend** the web service. While it is suspended, the old site shows "Could not reach the server" and nothing writes to the database.
 5. **Final database copy:** `sudo systemctl stop countsfor-api`, then drop and recreate the `countsfor` database, which holds the rehearsal import (the two commands at the end of 15.8 step 5), and run 15.8 steps 3 to 10 (recreate `~/.pg_service.conf` first, step 1, if you already removed it).
 6. **Deploy the merged `main`** (15.16) and start the API: `sudo systemctl start countsfor-api`. Run the checks in 15.13.
 7. **DNS and Google:** make sure IT points `countsfor.qatar.cmu.edu` at the server, and that the Google origin is in place (15.14).
 8. **Tell users:** everyone signs in again (sign-in tokens are kept per site). Accounts, saved courses, flags and shared plans moved with the database. Schedule plans that were never shared live only in the browser's storage for the old address and do not move; a student can carry one over by creating a share link on the old site before step 4 and opening it on the new site with the host changed (the link token is in the database).
-9. **Retire the old hosting**, once the new site has worked for a few days: unpublish GitHub Pages (repo **Settings**, **Pages**) or replace it with a page that links to the new address; keep the final dump in two places; then delete the Render web service and database (they are paid plans). Update the top of this README, section 15.20 and 23.1.
+9. **Retire the old hosting**, once the new site has worked for a few days: unpublish GitHub Pages (repo **Settings**, **Pages**) or replace it with a page that links to the new address; keep the final dump in two places; then delete the Render web service and database (they are paid plans). Decide whether the GitHub Pages test copy (15.21) stays; if not, unpublish it in Hind's working repo (**Settings**, **Pages**). Update the top of this README, sections 15.20 and 15.21, and 23.1.
 
 ### 15.16 Updating the code later
 
@@ -2042,7 +2044,7 @@ To restore for real: `sudo systemctl stop countsfor-api`, drop and recreate `cou
 
 ### 15.20 Old hosting: GitHub Pages and Render (historical)
 
-This is how CountsFor was hosted until the cutover. **It is still the live site on November 8, 2026.** Its configuration files were removed on the `cleanup` branch (they are in git history: `git show 49d22b2:render.yaml`, `git show 49d22b2:.github/workflows/pages.yml`).
+This is how CountsFor was hosted until the cutover. **It is still production on November 11, 2026, but without its API:** that day the Render web service answered 503 "This service has been suspended by its owner", while the GitHub Pages frontend still loaded. Its configuration files were removed on the `cleanup` branch (they are in git history: `git show 49d22b2:render.yaml`, `git show 49d22b2:.github/workflows/pages.yml`).
 
 **Frontend: GitHub Pages.** Repo settings: build type "workflow" (GitHub Actions), public, URL `https://adicmu.github.io/Countsfor-Summer-26/`, HTTPS enforced, no custom domain. `pages.yml` deployed on every push to `main`, copying only what the browser loads (`index.html`, `app.html`, `reset.html`, `js/`, `css/`, `assets/`, `landing/`, `data/courses.json`, `data/minor_courses.json`). The main repo's `gh-pages` branch (last commit August 9, 2026) is a leftover from an experiment and is not served. (Hind's working repo has its own `gh-pages` branch: the test copy, 15.21.)
 
@@ -2164,8 +2166,8 @@ There is no CI that runs the tests. On the server, the daily update runs the two
 
 | Branch | State |
 |---|---|
-| `main` | Production today (GitHub Pages and Render deploy it). Old layout (`js/`, `data/` at the root), Render and GitHub Actions files. Includes the admin page, course editor and sign-in analytics (November 3, 2026). The scrape bot still commits to it daily. |
-| `cleanup` | The work this README describes: dead code removal, the parser and data fixes, the Qatar overlay sections, the `frontend/` and `backend/` layout, environment-only configuration, the cron scraper, the `deploy/` files and the removal of the Render, GitHub Actions and Pages files. Not pushed yet and not merged. Merge it at the cutover (15.15 step 3), not before. |
+| `main` | Production today (GitHub Pages and Render deploy it; the Render web service answered 503 "suspended by its owner" on November 11, 2026). Old layout (`js/`, `data/` at the root), Render and GitHub Actions files. Includes the admin page, course editor and sign-in analytics (November 3, 2026). The scrape bot still commits to it daily. |
+| `cleanup` | The work this README describes: dead code removal, the parser and data fixes, the Qatar overlay sections, the `frontend/` and `backend/` layout, environment-only configuration, the cron scraper, the `deploy/` files and the removal of the Render, GitHub Actions and Pages files. On Hind's working repo since November 10, 2026 (`origin/cleanup` in the checkout where it was made; push newer commits before you rely on that copy, 15.4), on no branch of the main repo, and not merged. Merge it at the cutover (15.15 step 3), not before. |
 | `feat/admin-page` | Merged into `main` on November 3, 2026. Safe to delete. |
 | `feature/password-reset-email` | Merged (PR #13). Safe to delete. |
 | `feat/login-landing-guest-flags`, `feat/multiple-minors` | Old branches with open PRs #10 and #12 (June 2026). Each has one commit not on `main`, but guest mode, the landing page and multiple minors already exist on `main` in reworked form. Review, then close the PRs and delete the branches. |
@@ -2365,7 +2367,7 @@ Read the end of `/var/log/countsfor/scrape.log` on the server; 15.19 lists the u
 See the known failures in 16.2.
 
 **My page changes do not show on the live site.**
-Merging does not deploy anything: copy the code to the server (15.16). Apache makes browsers revalidate every file, so a normal reload shows the new version. (Before the cutover, GitHub Pages deploys `main` and Render auto-deploys it.)
+Merging does not deploy anything: copy the code to the server (15.16). Apache makes browsers revalidate every file, so a normal reload shows the new version. (Before the cutover, GitHub Pages deploys `main` and Render auto-deploys it.) The GitHub Pages test copy changes only when you publish it (15.21), and browsers may keep its old files for up to 10 minutes unless the `?v=` tags changed.
 
 ---
 
@@ -2379,7 +2381,7 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 ### 21.2 Operational and data issues
 
-1. **The move to the CMU-Q server is not done.** The live site still runs on GitHub Pages and Render from `main`, and the old scrape workflow still commits to `main` with the old parser. Follow 15.15.
+1. **The move to the CMU-Q server is not done.** Production is still the old site from `main` on GitHub Pages and Render, whose web service answered 503 "suspended by its owner" on November 11, 2026, and the old scrape workflow still commits to `main` with the old parser. Follow 15.15.
 2. **Saved data under the old Psychology numbers.** The catalog has no rows for the old Psychology numbers that the department's renumbering list retires (14.6), nor for 85-253 and 85-261; their mappings moved to the new numbers. Wishlist items, flags, schedule plan items, search counts and admin course edits saved under them in production must be moved with 15.8 step 8 when the database is imported.
 3. **6 backend tests fail** (16.2). The tests are stale, not the code. No CI runs any tests.
 4. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
@@ -2437,7 +2439,7 @@ No secret values belong in this file or in git. Hand secrets over in person or t
 - [ ] **CMU-Q server**: an account with `sudo` on the Ubuntu server, and the name of the IT contact who manages it, its DNS (`countsfor.qatar.cmu.edu`), its certificate (renewal date) and its backups.
 - [ ] **Server secrets**: the filled-in `/etc/countsfor/countsfor.env` (`SECRET_KEY`, email credentials) in a password manager.
 - [ ] **GitHub**: admin (or at least write) access to `Adicmu/Countsfor-Summer-26`. Consider transferring the repo to a CMU-Q organization so it does not depend on a personal account.
-- [ ] **GitHub fork and working repo**: decide what happens to `Hindjendara/Countsfor-Summer-26` and `Hindjendara/CMUQ-CountsFor`. Once the server's cron scrape runs, the fork's scrape is not needed.
+- [ ] **GitHub fork and working repo**: decide what happens to `Hindjendara/Countsfor-Summer-26` and `Hindjendara/CMUQ-CountsFor` (which holds the `cleanup` branch and serves the GitHub Pages test copy, 15.21). Once the server's cron scrape runs, the fork's scrape is not needed.
 - [ ] **Render (until it is retired)**: membership on the Render account or team that owns the `countsfor-summer-26` web service and the `CountsFor_Summer_2026` database, including billing (paid `starter` plans). Record who pays, and delete both after the cutover (15.15 step 9).
 - [ ] **Database**: `sudo -u countsfor psql -d countsfor` on the server, and the nightly dumps (15.17) copied somewhere off the server. Keep the final Render dump.
 - [ ] **Google Cloud**: owner or editor on the project that holds the OAuth client `378923997481-...` (to edit authorized origins and the consent screen).
