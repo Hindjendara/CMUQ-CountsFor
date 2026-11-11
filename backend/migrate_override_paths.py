@@ -4,20 +4,27 @@
         [--renames FILE] [--catalog FILE]
 
 Run from the folder that holds the backend package, with the API's environment
-(DATABASE_URL). Without --apply it is a dry run: it prints what it would change
-and writes nothing.
+(DATABASE_URL). The report starts with the database it reads and the baseline it
+uses. Without --apply it is a dry run: it prints what it would change and writes
+nothing.
 
 Until November 10, 2026 the course editor saved the whole "counts for" list of
 every program of a course (a list value per program), in the bucket names of the
 time. The browser now applies such a list to its own program only, but it keeps
 the old names (ghost buckets) and freezes the program. For every list value:
 
-  with --baseline FILE (frontend/data/courses.json from before the renames, for
-  example `git show 174e856:frontend/data/courses.json > /tmp/courses-2026-11-09.json`):
+  with --baseline FILE, the catalog the old editor saved against: main's
+  data/courses.json at 79e29ec (`git show 79e29ec:data/courses.json > FILE`), whose
+  requirement rows production served unchanged from November 3, 2026 on:
     the list and that course's baseline rows are both renamed with
     backend/data/requirement_path_renames.json, and only their difference is kept,
     as {"add": [...], "remove": [...]}. A program the old editor saved without a
     change goes back to the catalog, so it follows the daily updates again.
+    A catalog of the cleanup branch is the wrong baseline: on 2026-11-09 and
+    2026-11-10 its Psychology rows moved to the department's new numbers (README
+    14.6), so an edit saved on a new number (85-150 had no rows in production)
+    would remove the rows that moved onto it. A baseline without the old numbers
+    in PRODUCTION_ONLY_CODES is refused.
   without it:
     the paths are renamed in place and the list is kept. Open the course in the
     course editor to check it; saving there turns it into a change.
@@ -42,6 +49,27 @@ DEFAULT_RENAMES = REPO / "backend" / "data" / "requirement_path_renames.json"
 DEFAULT_CATALOG = REPO / "frontend" / "data" / "courses.json"
 ACTOR = "system: migrate_override_paths"
 GENED_ROOT = "GenEd"
+# The catalog the old editor saved against (the merge-base of main and cleanup).
+PRODUCTION_CATALOG = "79e29ec:data/courses.json"
+# Old Psychology numbers that have requirement rows in production's catalog and
+# in no catalog from 2026-11-09 on (their rows moved to the new numbers).
+PRODUCTION_ONLY_CODES = ("85-211", "85-219", "85-221", "85-241", "85-253",
+                         "85-261", "85-340", "85-359", "85-377", "85-442")
+
+
+class BaselineError(ValueError):
+    """The --baseline file is not the catalog the old course editor saved against."""
+
+
+def check_baseline(baseline: dict[str, dict[str, list[str]]]) -> None:
+    """Refuse a baseline that lacks the old Psychology numbers production's catalog has."""
+    missing = [code for code in PRODUCTION_ONLY_CODES if not any(baseline.get(code, {}).values())]
+    if missing:
+        raise BaselineError(
+            f"The baseline has no requirement rows for {', '.join(missing)}, old Psychology numbers "
+            "that production's catalog has, so it is not the catalog the old course editor saved "
+            f"against. Use main's data/courses.json: git show {PRODUCTION_CATALOG} > FILE "
+            "(README 15.8 step 8).")
 
 
 def _code(raw) -> str:
@@ -135,9 +163,15 @@ def _describe(value) -> str:
 
 def run(*, renames: Path = DEFAULT_RENAMES, catalog: Path = DEFAULT_CATALOG, baseline: Path | None = None,
         apply: bool = False, out: TextIO | None = None) -> dict:
-    """Migrate (or, without apply, report) every course edit with an old list. Needs an app context."""
+    """Migrate (or, without apply, report) every course edit with an old list. Needs an app context.
+
+    Raises BaselineError, before reading the database, when the baseline is not production's catalog.
+    """
     out = out or sys.stdout
+    from flask import current_app
+
     from .db import db
+    from .db_schema import redact_database_url
     from .models import AdminAuditEvent, CourseOverride
 
     programs, per_course = load_renames(renames)
@@ -147,7 +181,12 @@ def run(*, renames: Path = DEFAULT_RENAMES, catalog: Path = DEFAULT_CATALOG, bas
         for prog, paths in rows.items():
             known.setdefault(prog, set()).update(paths)
     base = load_catalog(baseline) if baseline else None
+    if base is not None:
+        check_baseline(base)
 
+    print(f"Database target: {redact_database_url(current_app.config.get('SQLALCHEMY_DATABASE_URI') or '')}", file=out)
+    print(f"Baseline: {baseline} ({len(base)} courses)" if base is not None
+          else "Baseline: none (paths are renamed in place and the lists kept)", file=out)
     summary = {"rows": 0, "changed": 0, "deleted": 0, "unknown_paths": 0}
     rows = db.session.query(CourseOverride).filter(CourseOverride.requirements.isnot(None)) \
         .order_by(CourseOverride.course_code).all()
@@ -207,7 +246,8 @@ def run(*, renames: Path = DEFAULT_RENAMES, catalog: Path = DEFAULT_CATALOG, bas
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Update admin course edits saved in the old whole-list shape.")
-    parser.add_argument("--baseline", type=Path, help="courses.json from before the 2026-11-10 renames")
+    parser.add_argument("--baseline", type=Path,
+                        help=f"the catalog the old editor saved against: git show {PRODUCTION_CATALOG} > FILE")
     parser.add_argument("--renames", type=Path, default=DEFAULT_RENAMES)
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG, help="today's courses.json")
     parser.add_argument("--apply", action="store_true", help="write the changes (default: dry run)")
@@ -215,8 +255,19 @@ def main(argv: list[str] | None = None) -> int:
 
     from .app import create_app
     app = create_app(bootstrap_db=False)
-    with app.app_context():
-        run(renames=args.renames, catalog=args.catalog, baseline=args.baseline, apply=args.apply)
+    try:
+        with app.app_context():
+            run(renames=args.renames, catalog=args.catalog, baseline=args.baseline, apply=args.apply)
+    except BaselineError as e:
+        print(f"ERROR: {e} Nothing was written.", file=sys.stderr)
+        return 2
+    except OSError as e:
+        if e.filename is None:
+            raise
+        # Most often a baseline the countsfor user cannot read (README 15.8 step 8). The
+        # files are read before the database, so nothing was written.
+        print(f"ERROR: cannot read {e.filename}: {e.strerror}. Nothing was written.", file=sys.stderr)
+        return 2
     return 0
 
 

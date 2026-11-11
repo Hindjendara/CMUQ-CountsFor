@@ -1,6 +1,7 @@
 """Course catalog edits: admins add, edit, renumber and archive courses.
 
-Reads are public so every visitor sees the corrected catalog; writes are admin only.
+Reads are public so every visitor sees the corrected catalog (who saved an edit is
+shown to admins only); writes are admin only.
 Edits are stored as overrides because the daily SOC scrape regenerates
 frontend/data/courses.json and would otherwise erase them.
 
@@ -27,7 +28,7 @@ from .admin import record_event
 from .db import db
 from .minors_file import known_minor_codes, minor_leaf_paths, minor_name
 from .models import CourseOverride
-from .permissions import require_role_group, ROLE_GROUP_ADMIN
+from .permissions import current_user, is_admin, require_role_group, ROLE_GROUP_ADMIN
 
 bp = Blueprint("course_overrides", __name__, url_prefix="/api/courses/overrides")
 
@@ -57,7 +58,9 @@ MINOR_PREFIX = "MINOR:"
 MINOR_CODE_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 # Used only when minors.json cannot be read: the shape of a category path.
 MINOR_PATH_RE = re.compile(r"^[a-z0-9_]+(---[a-z0-9_]+)*$")
-DASH_RE = re.compile(r"[\u2012-\u2015]")  # figure dash to horizontal bar, as the dash guard test
+# Long dashes: figure dash to horizontal bar, as the dash guard test. Refused in category
+# paths, in the course texts admins type and in minor notes (minor_overrides.py).
+DASH_RE = re.compile(r"[\u2012-\u2015]")
 PATH_MAX = 400
 EDIT_ROWS_MAX = 200
 BATCH_MAX = 200
@@ -92,11 +95,16 @@ def _clean_fields(data: dict) -> tuple[dict, str | None]:
         out["course_code"] = code
     for field, max_len in TEXT_FIELDS.items():
         if field in data:
+            label = field.replace("_", " ")
+            if data[field] is not None and not isinstance(data[field], str):
+                return {}, f"{label.capitalize()} must be text."
             value = (data[field] or "").strip()
             if field == "course_name" and not value:
                 return {}, "Course name cannot be empty."
             if len(value) > max_len:
-                return {}, f"{field.replace('_', ' ').capitalize()} is too long (max {max_len} characters)."
+                return {}, f"{label.capitalize()} is too long (max {max_len} characters)."
+            if DASH_RE.search(value):
+                return {}, f"Use plain hyphens in the {label}, not long dashes."
             out[field] = value
     if "department" in data:
         dept = str(data["department"] or "").strip().lstrip("0") or None
@@ -355,8 +363,10 @@ def _apply_edit(key: str, data: dict) -> dict:
 
 @bp.route("", methods=["GET"])
 def list_overrides():
+    """Every edit, for every visitor. Who saved it (updated_by_email) only for admins."""
     rows = db.session.query(CourseOverride).order_by(CourseOverride.course_code).all()
-    resp = jsonify(items=[r.to_dict() for r in rows])
+    editor = is_admin(current_user())
+    resp = jsonify(items=[r.to_dict(include_editor=editor) for r in rows])
     resp.headers["Cache-Control"] = "no-cache"
     return resp
 
@@ -369,7 +379,10 @@ def add_course():
     code = _normalize_code(data.get("course_code"))
     if not code:
         return jsonify(error="invalid_code", message="Course number must look like 15-122."), 400
-    if not (data.get("course_name") or "").strip():
+    name = data.get("course_name")
+    if name is not None and not isinstance(name, str):
+        return jsonify(error="invalid_field", message="Course name must be text."), 400
+    if not (name or "").strip():
         return jsonify(error="missing_name", message="Course name is required."), 400
     if db.session.query(CourseOverride).filter_by(course_code=code).one_or_none():
         return jsonify(error="exists", message=f"{code} already has an entry here. Edit it instead."), 409

@@ -6,11 +6,9 @@ from .admin import record_event
 from .db import db
 from .models import User
 from .permissions import require_role_group, ROLE_GROUP_ADMIN
-from .models import VALID_DEPARTMENTS, FACULTY_ROLES
+from .models import FACULTY_ROLES
 
 bp = Blueprint("users", __name__, url_prefix="/api/users")
-
-MANAGER_ROLES = (ROLE_GROUP_ADMIN,)  # user management is admin-only
 
 ALLOWED_PATCH_FIELDS = {
     "name",

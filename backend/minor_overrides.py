@@ -3,15 +3,16 @@
 The minor file is built by hand from the official minor files (README 4.4), and a
 few of its numbers are open questions (double counting limits, unit totals). An
 override changes them for everyone without editing the file; the browser applies
-it after loading the file (applyMinorOverrides in js/data.js). Reads are public,
-writes admin only. Which courses fill a category is a course edit instead
-(MINOR:<code> keys in course_overrides.py).
+it after loading the file (applyMinorOverrides in js/data.js). Reads are public
+(who saved a minor's settings only for admins), writes admin only. Which courses
+fill a category is a course edit instead (MINOR:<code> keys in course_overrides.py).
 
 Fields, each optional:
   total_units            integer 0 to 400, or null when the minor states no total
   max_with_major         integer 0 to 10, or null for no limit (as in minors.json)
   max_with_other_minors  integer 0 to 10, or null for no limit
-  admin_note             up to 1000 characters, shown to students as a note from CMU-Q
+  admin_note             up to 1000 characters with no long dashes, shown to students
+                         as a note from CMU-Q
 A value equal to the file's is not stored, so setting a field back to the file
 value removes it, and a row with nothing left is deleted.
 """
@@ -22,10 +23,11 @@ import json
 from flask import Blueprint, g, jsonify, request
 
 from .admin import record_event
+from .course_overrides import DASH_RE
 from .db import db
 from .minors_file import known_minor_codes, load_minors
 from .models import MinorOverride
-from .permissions import require_role_group, ROLE_GROUP_ADMIN
+from .permissions import current_user, is_admin, require_role_group, ROLE_GROUP_ADMIN
 
 bp = Blueprint("minor_overrides", __name__, url_prefix="/api/minors/overrides")
 
@@ -74,6 +76,9 @@ def _clean(data: dict) -> dict:
         note = (note or "").strip()
         if len(note) > NOTE_MAX:
             raise SettingError(f"The note is too long (max {NOTE_MAX} characters).")
+        if DASH_RE.search(note):
+            # Students read the note, so it follows the minor file's rule (no long dashes).
+            raise SettingError("Use plain hyphens in the note, not long dashes.")
         out["admin_note"] = note
     return out
 
@@ -110,8 +115,10 @@ def _minor_code(raw: str) -> str | None:
 
 @bp.route("", methods=["GET"])
 def list_minor_overrides():
+    """Every minor's settings, for every visitor. Who saved them (updated_by_email) only for admins."""
     rows = db.session.query(MinorOverride).order_by(MinorOverride.minor_code).all()
-    resp = jsonify(items=[r.to_dict() for r in rows])
+    editor = is_admin(current_user())
+    resp = jsonify(items=[r.to_dict(include_editor=editor) for r in rows])
     resp.headers["Cache-Control"] = "no-cache"
     return resp
 

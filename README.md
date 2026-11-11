@@ -2,7 +2,7 @@
 
 A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Students, faculty and advisors look up any course and see exactly which major, minor and Gen Ed requirements it counts for, plan schedules, save courses and flag catalog mistakes. Admins edit the catalog and see usage.
 
-**Live site today:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) (GitHub Pages) with the API on Render (`https://countsfor-summer-26.onrender.com`), both built from `main`. **New home:** `https://countsfor.qatar.cmu.edu` on a CMU-Q Ubuntu server ([section 15](#15-deploy-to-the-cmu-q-server)), not live yet. **Repo:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26)
+**Real home:** `https://countsfor.qatar.cmu.edu` on a CMU-Q Ubuntu server ([section 15](#15-deploy-to-the-cmu-q-server)), not live yet. **Production until then:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) (GitHub Pages, built from `main`), whose API on Render (`https://countsfor-summer-26.onrender.com`) answered 503 "This service has been suspended by its owner" on November 11, 2026, so nothing there that needs the server worked that day. **Test copy** of the `cleanup` frontend, guest only: [hindjendara.github.io/CMUQ-CountsFor](https://hindjendara.github.io/CMUQ-CountsFor/) ([15.21](#1521-test-copy-on-github-pages)). **Repos:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26) (`main`) and [Hindjendara/CMUQ-CountsFor](https://github.com/Hindjendara/CMUQ-CountsFor) (`cleanup` and the test copy, [17.1](#171-remotes)).
 
 **Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short, from the repo root: create a virtualenv in `.venv` and `pip install -r backend/requirements.txt`, copy `backend/.env.example` to `backend/.env`, run the API with `python -m backend.app` (port 5050), serve the site with `python scripts/dev_server.py` (port 8765; it serves `frontend/` and proxies `/api` to the API), and open `http://localhost:8765/`.
 
@@ -10,7 +10,7 @@ A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Studen
 
 This README is the project's complete maintainer manual. It was written so that a new student developer can take over CountsFor alone, with no access to the original authors. Every statement was checked against the code on the `cleanup` branch in November 2026 unless it is explicitly marked as uncertain. If anything else in the repo disagrees with this file, trust this file and the code, and then fix whichever is wrong.
 
-> **Where things stand (November 8, 2026).** The `cleanup` branch moves CountsFor from GitHub Pages and Render to a CMU-Q server: the repo is split into `frontend/` (the static site) and `backend/` (the Flask API, the scraper and private data), every setting comes from the environment, the site calls the API by relative path, a system cron job replaces the GitHub Actions scrape, and `deploy/` holds the server files (systemd, Apache, cron, logrotate, environment templates). The branch is **not merged into `main` yet**. Until someone carries out the cutover in [15.15](#1515-cutover-from-github-pages-and-render), the live site keeps running on GitHub Pages and Render from `main`, with the old layout. Sections that describe the old hosting say so.
+> **Where things stand (November 11, 2026).** The `cleanup` branch moves CountsFor from GitHub Pages and Render to a CMU-Q server: the repo is split into `frontend/` (the static site) and `backend/` (the Flask API, the scraper and private data), every setting comes from the environment, the site calls the API by relative path, a system cron job replaces the GitHub Actions scrape, and `deploy/` holds the server files (systemd, Apache, cron, logrotate, environment templates). The branch is **not merged into `main` yet**; it is on Hind's working repo, `Hindjendara/CMUQ-CountsFor` (pushed November 10, 2026; newer commits were made after that push, 15.4). Until someone carries out the cutover in [15.15](#1515-cutover-from-github-pages-and-render), production is the old site from `main`, with the old layout: its pages still load on GitHub Pages, but on November 11, 2026 its API on Render answered 503 "This service has been suspended by its owner", so signing in and everything else that needs the server failed there. A guest-only test copy of the `cleanup` frontend runs on GitHub Pages ([15.21](#1521-test-copy-on-github-pages)); the CMU-Q server is CountsFor's real home. Sections that describe the old hosting say so.
 
 Paths in this file are relative to the repo root (`frontend/js/app.js`, `backend/auth.py`). Inside the frontend sections, `js/`, `css/` and `tests/` mean `frontend/js/`, `frontend/css/` and `frontend/tests/`, because that is how the pages refer to them.
 
@@ -40,6 +40,7 @@ Written: November 2026. Keep it current: when you change how something works, up
     - [15.16 Updating the code later](#1516-updating-the-code-later)
     - [15.19 Troubleshooting the server](#1519-troubleshooting-the-server)
     - [15.20 Old hosting: GitHub Pages and Render (historical)](#1520-old-hosting-github-pages-and-render-historical)
+    - [15.21 Test copy on GitHub Pages](#1521-test-copy-on-github-pages)
 16. [Testing](#16-testing)
 17. [Git workflow](#17-git-workflow)
 18. [Project rules and conventions](#18-project-rules-and-conventions)
@@ -107,7 +108,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | **Daily update** | `backend/scraper/update_data.py`, run by cron through `run_scrape.sh`: scrape, rebuild, check and publish the catalog in place (14.2). |
 | **`countsfor`** | The system user that owns the deploy root, runs the API and the daily update, and owns the PostgreSQL database of the same name. |
 | **Render** | Old hosting: the company that runs the Flask backend and its Postgres database until the cutover (15.20). |
-| **GitHub Pages** | Old hosting: static hosting for the frontend until the cutover (15.20). |
+| **GitHub Pages** | Static hosting: the old production frontend until the cutover (15.20), and the guest-only test copy of the `cleanup` frontend (15.21). |
 
 ---
 
@@ -115,7 +116,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 
 ### 3.1 Big picture
 
-This is the CMU-Q server setup (section 15). Until the cutover the live site still runs on GitHub Pages and Render (15.20). Locally, `scripts/dev_server.py` plays Apache's part and SQLite stands in for PostgreSQL (section 5).
+This is the CMU-Q server setup (section 15). Until the cutover, production is the old site on GitHub Pages and Render (15.20; its Render API answered 503 "suspended by its owner" on November 11, 2026), and a guest-only test copy of this frontend runs on GitHub Pages (15.21). Locally, `scripts/dev_server.py` plays Apache's part and SQLite stands in for PostgreSQL (section 5).
 
 ```
   Browser
@@ -216,7 +217,7 @@ CountsFor/
 |   |-- tests/           API tests
 |   `-- requirements.txt
 |-- deploy/              server files: systemd unit, Apache site, cron, logrotate, env templates
-|-- scripts/             dev_server.py, bump_cf_build.py, run-data-tests.js
+|-- scripts/             dev_server.py, bump_cf_build.py, run-data-tests.js, publish_test_site.sh
 |-- docs/                analytics plan, landing design notes, archive
 |-- pytest.ini           "python -m pytest" runs backend/tests and backend/scraper/tests
 `-- README.md            this manual
@@ -240,7 +241,8 @@ CountsFor/
 | `deploy/` | yes | Everything the CMU-Q server needs besides the code. No secrets. See [4.3](#43-deploy). | Live |
 | `scripts/dev_server.py` | yes | Local server that mirrors production: serves `frontend/` on port 8765 and proxies `/api` and `/health` to the API on `127.0.0.1:5050` (5.6). Standard library only. | Live |
 | `scripts/bump_cf_build.py` | yes | Rewrites the `cf-build` meta and every `?v=` tag in `frontend/app.html`, and every `?v=` tag in `frontend/index.html`. A release tool, run by hand. Optional on the server, where Apache makes browsers revalidate (15.16). | Live |
-| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js`, `minors.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js`, `minors-file.test.js`, `app-views.test.js` and `catalog-data.test.js`. It waits for tests that return a promise. | Live |
+| `scripts/run-data-tests.js` | yes | Node runner for `frontend/tests/profile.test.js`, `data.test.js`, `minors.test.js`, `course-edits.test.js` and `utils.test.js`, with an in-memory `localStorage`, plus the Node-only `dash-guard.test.js`, `minors-file.test.js`, `app-views.test.js`, `admin-editor.test.js` and `catalog-data.test.js`. It waits for tests that return a promise. | Live |
+| `scripts/publish_test_site.sh` | yes | Publishes `frontend/` of a commit (without `tests/`, plus `.nojekyll`) to the `gh-pages` branch of Hind's working repo, the GitHub Pages test copy, as a fast-forward push; refuses a dirty tree and the main repo (15.21). Run by hand. | Live |
 | `pytest.ini` | yes | Lets `python -m pytest` from the repo root run `backend/tests` and `backend/scraper/tests` together. | Live |
 | `.gitattributes` | yes | Keeps `*.sh` and everything in `deploy/` at LF line endings in every checkout (a CR breaks bash, cron and systemd, for example on Windows with `core.autocrlf`), and marks the archived source pages in `backend/data/sources/*/` as `-text`, so git never converts their bytes. | Live |
 | `README.md` | yes | This manual. | Keep current |
@@ -812,8 +814,9 @@ Tests: the planner part of `tests/data.test.js` (linking, filters, choices, grou
 3. Unless `SKIP_DB_BOOTSTRAP` is truthy, runs `init_database(app)`: imports models, `db.create_all()`, then `run_migrations()`.
 4. Enables CORS for `/api/*` only, for `FRONTEND_ORIGINS`, with credentials and the `Content-Type` and `Authorization` headers.
 5. Registers blueprints: `auth`, `flags`, `wishlist`, `users`, `directory`, `search_analytics`, `plans`, `admin`, `course_overrides`, `minor_overrides`.
-6. Adds `GET /health` (no `/api` prefix, so no CORS). It runs `SELECT 1` and checks `REQUIRED_TABLES`, and returns 503 if tables are missing or the DB errors. With SQLite it also lists the table names (`table_names`), so a local bootstrap can be checked by eye; with Postgres it reports only their count (`tables`).
-7. JSON 404 handler: `{"error":"not_found","message":"Route not found."}`.
+6. Adds a `before_request` hook: a POST, PUT, PATCH or DELETE whose JSON body is not an object (a list, a number, a string, true or false) gets 400 `{"error": "invalid_body", "message": "The request body must be a JSON object."}`. Every route reads its body as an object, so such a body used to end in a 500 inside the route. No body, `null` and a body that is not JSON still reach the route, which reads them as `{}`.
+7. Adds `GET /health` (no `/api` prefix, so no CORS). It runs `SELECT 1` and checks `REQUIRED_TABLES`, and returns 503 if tables are missing or the DB errors. With SQLite it also lists the table names (`table_names`), so a local bootstrap can be checked by eye; with Postgres it reports only their count (`tables`).
+8. JSON 404 handler: `{"error":"not_found","message":"Route not found."}`.
 
 On the server systemd runs `gunicorn --workers 3 --bind 127.0.0.1:8000 --timeout 120 --forwarded-allow-ips 127.0.0.1 ... 'backend.app:create_app()'` from `/var/www/html/countsfor`, with `SKIP_DB_BOOTSTRAP=1` and `TRUST_PROXY=1` from `/etc/countsfor/countsfor.env` (15.9).
 
@@ -823,7 +826,8 @@ On the server systemd runs `gunicorn --workers 3 --bind 127.0.0.1:8000 --timeout
 - `@require_login`: 401 unless signed in. Sets `g.user`.
 - `@require_role_group("faculty", "admin")`: 403 unless the user's role group is listed. **Use this for permissions.**
 - `@require_role("student")`: exact role match. Used for student-only routes (wishlist, search event).
-- Constants: `ROLE_GROUP_STUDENT`, `ROLE_GROUP_FACULTY`, `ROLE_GROUP_ADMIN`, `FACULTY_OR_ADMIN`.
+- `current_user()` and `is_admin(user)`: for a public route that shows admins more, such as the editor's email in the course and minor edit lists (12.2).
+- Constants: `ROLE_GROUP_STUDENT`, `ROLE_GROUP_FACULTY`, `ROLE_GROUP_ADMIN`.
 
 Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 
@@ -849,7 +853,7 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 
 ### 9.5 Users (`backend/users.py`)
 
-Admin only (`MANAGER_ROLES = (ROLE_GROUP_ADMIN,)`). List with `search`, `role_group`, `incomplete`, `limit` (max 1000). Patch validates like `PATCH /api/me`, writes a `user.update` audit row with before and after values. Remember 7.1: the role part is overwritten on next sign-in unless the directory agrees. Some code comments still mention area heads managing users; that is no longer allowed.
+Admin only: both routes have `@require_role_group(ROLE_GROUP_ADMIN)`. List with `search`, `role_group`, `incomplete`, `limit` (max 1000). Patch validates like `PATCH /api/me`, writes a `user.update` audit row with before and after values. Remember 7.1: the role part is overwritten on next sign-in unless the directory agrees. Some code comments still mention area heads managing users; that is no longer allowed.
 
 ### 9.6 Flags (`backend/flags.py`)
 
@@ -890,7 +894,7 @@ When a signed-in **student** opens a course, the frontend posts `/api/search-ana
 
 ## 10. API reference (every route)
 
-All `/api/*` routes return JSON. "Login" means any signed-in user. Files are under `backend/`.
+All `/api/*` routes return JSON. "Login" means any signed-in user. Files are under `backend/`. A write whose JSON body is not an object gets 400 `invalid_body` (9.1).
 
 | Method | Path | Who | File | Purpose |
 |---|---|---|---|---|
@@ -930,14 +934,14 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | GET | `/api/admin/insights` | admin | `admin.py` | Usage insights |
 | GET | `/api/admin/sign-ins` | admin | `admin.py` | Sign-in activity (section 13) |
 | GET | `/api/admin/activity` | admin | `admin.py` | Audit log |
-| GET | `/api/courses/overrides` | public | `course_overrides.py` | All catalog edits (`Cache-Control: no-cache`) |
+| GET | `/api/courses/overrides` | public | `course_overrides.py` | All catalog edits (`Cache-Control: no-cache`); who saved each one (`updated_by_email`) only for admins |
 | POST | `/api/courses/overrides` | admin | `course_overrides.py` | Add a new course |
 | PATCH | `/api/courses/overrides/<code>` | admin | `course_overrides.py` | Edit a course (creates the override); `requirements` changes only the keys it names (12.2) |
 | POST | `/api/courses/overrides/<code>/archive` | admin | `course_overrides.py` | Hide a course |
 | POST | `/api/courses/overrides/<code>/restore` | admin | `course_overrides.py` | Unhide |
 | DELETE | `/api/courses/overrides/<code>` | admin | `course_overrides.py` | Revert a scraped course to the scrape (added courses cannot be reverted, only archived) |
 | POST | `/api/courses/overrides/batch` | admin | `course_overrides.py` | Change what several courses count for at once (`{"items": [{"course_code", "requirements"}]}`, at most 200): one transaction, one `course.update` event per course |
-| GET | `/api/minors/overrides` | public | `minor_overrides.py` | All minor settings (`Cache-Control: no-cache`) |
+| GET | `/api/minors/overrides` | public | `minor_overrides.py` | All minor settings (`Cache-Control: no-cache`); who saved each one (`updated_by_email`) only for admins |
 | PATCH | `/api/minors/overrides/<code>` | admin | `minor_overrides.py` | Set a minor's `total_units`, `max_with_major`, `max_with_other_minors` or `admin_note` (12.6) |
 | DELETE | `/api/minors/overrides/<code>` | admin | `minor_overrides.py` | Back to what `minors.json` says |
 
@@ -985,7 +989,7 @@ So:
 - New columns added to an existing table should be nullable or have a default, otherwise the `ALTER TABLE` fails on existing rows.
 - Booleans: the existing migrations use `DEFAULT 0` for SQLite and `DEFAULT FALSE` for Postgres. Follow that pattern.
 
-Since November 3, 2026 production `/health` on Render reports `"tables": 14` (the admin page and sign-in analytics are deployed). The deploy created `admin_audit_events`, `course_overrides`, `sign_in_events` and `user_activity_days` through `create_all()` and backfilled sign-in history once (section 13.2). `minor_overrides` (November 2026) is a new table, so the next bootstrap creates it with no migration step, and the count becomes 15.
+From November 3, 2026 production `/health` on Render reported `"tables": 14` (the admin page and sign-in analytics were deployed); on November 11, 2026 the Render web service answered 503 "This service has been suspended by its owner" instead. The deploy created `admin_audit_events`, `course_overrides`, `sign_in_events` and `user_activity_days` through `create_all()` and backfilled sign-in history once (section 13.2). `minor_overrides` (November 2026) is a new table, so the next bootstrap creates it with no migration step, and the count becomes 15.
 
 ---
 
@@ -1013,10 +1017,11 @@ One row per course code:
 - Course added by an admin: `is_new = true`, keyed by its own code; renumbering moves the key. Its `requirements` are changes against an empty catalog, so additions only.
 - `archived = true` hides the course from everyone; nothing is deleted.
 - If an edit leaves a scraped course identical to the scrape (no fields, no requirements, not archived) the row is deleted.
+- `updated_by_id`, `updated_by_email` and `updated_at` record the last save. Everyone reads the edits (`GET /api/courses/overrides`), but only an admin's request gets `updated_by_email`, for the editor's "Last edited ... by" line; other visitors, guests included, get the edits without it. `minor_overrides` works the same way.
 
 ### 12.3 Validation rules (`course_overrides.py`)
 
-Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`.
+Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000; each must be text (null empties the description or the prerequisites). Students read these texts, so like category paths they may not contain long dashes (U+2012 to U+2015, the characters the dash guard tests look for); the message names the field, for example "Use plain hyphens in the course name, not long dashes." The editor sends only the fields an admin changed, so a save is refused only for text the admin typed. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`.
 
 What a course counts for:
 
@@ -1047,11 +1052,15 @@ A successful Add course or Save changes opens a confirmation screen (`_renderCou
 
 ### 12.6 Minor settings
 
-`frontend/data/minors.json` is built by hand (4.4) and some of its numbers are open questions (double counting limits, unit totals). The **Minor settings** view of the Courses tab (also opened with **Edit minor settings** in the Minors tab) corrects them for everyone without editing the file: `total_units` (a whole number, or empty when the minor states none), `max_with_major` and `max_with_other_minors` (0 to 10, or No limit) and `admin_note` (up to 1000 characters, shown to students in the minor's header as a note from CMU-Q). They are stored in the `minor_overrides` table (`backend/minor_overrides.py`, `/api/minors/overrides`: read by everyone, written by admins), one row per minor with only the values that differ from the file; a value set back to the file's is removed, and **Undo all edits** deletes the row. The browser applies them with `applyMinorOverrides()` (8.10). Which courses fill a category is a course edit instead (12.2).
+`frontend/data/minors.json` is built by hand (4.4) and some of its numbers are open questions (double counting limits, unit totals). The **Minor settings** view of the Courses tab (also opened with **Edit minor settings** in the Minors tab) corrects them for everyone without editing the file: `total_units` (a whole number, or empty when the minor states none), `max_with_major` and `max_with_other_minors` (0 to 10, or No limit) and `admin_note` (up to 1000 characters, shown to students in the minor's header as a note from CMU-Q; long dashes are refused with "Use plain hyphens in the note, not long dashes.", the rule the minor file's own text follows). They are stored in the `minor_overrides` table (`backend/minor_overrides.py`, `/api/minors/overrides`: read by everyone, with who saved them for admins only, and written by admins), one row per minor with only the values that differ from the file; a value set back to the file's is removed, and **Undo all edits** deletes the row. The browser applies them with `applyMinorOverrides()` (8.10). Which courses fill a category is a course edit instead (12.2).
 
 ### 12.7 Edits saved before the 2026-27 names
 
-Before November 10, 2026 the editor saved the whole "counts for" list of every program of a course, in the bucket names of the time. `python -m backend.migrate_override_paths` updates them (15.8 step 8). With `--baseline FILE` (the `courses.json` from before the renames) it renames both the saved list and that course's baseline rows with `backend/data/requirement_path_renames.json` (its `per_course` exceptions first) and keeps only their difference, as a change; a program the old editor saved without a change goes back to the catalog. Without `--baseline` it renames the paths in place and keeps the list for a look in the editor. It prints every course, each program before and after, and every path that is still not in today's catalog. It is a dry run unless `--apply`, which writes the rows, deletes a row left with no edit, and adds one `course.migrate` event per course.
+Before November 10, 2026 the editor saved the whole "counts for" list of every program of a course, in the bucket names of the time. `python -m backend.migrate_override_paths` updates them (15.8 step 8). With `--baseline FILE` it renames both the saved list and that course's baseline rows with `backend/data/requirement_path_renames.json` (its `per_course` exceptions first) and keeps only their difference, as a change; a program the old editor saved without a change goes back to the catalog. Without `--baseline` it renames the paths in place and keeps the list for a look in the editor.
+
+The baseline must be the catalog those edits were saved against: `main`'s `data/courses.json` at `79e29ec` (`git show 79e29ec:data/courses.json > FILE`). Production served the same requirement rows from November 3, 2026, when the editor shipped, and still did on November 11. A catalog of the `cleanup` branch is the wrong baseline: its Psychology rows moved to the department's new numbers (14.6), so an edit saved on a new number (85-150 had no rows in production) would turn into removals of the rows that moved onto it. The script refuses a baseline without rows for the old numbers in `PRODUCTION_ONLY_CODES` (85-211, 85-219, 85-221, 85-241, 85-253, 85-261, 85-340, 85-359, 85-377 and 85-442: production's catalog has rows for them, and no catalog from November 9, 2026 on does), before it reads the database.
+
+It prints the database it reads, the baseline, every course, each program before and after, and every path that is still not in today's catalog. It is a dry run unless `--apply`, which writes the rows, deletes a row left with no edit, and adds one `course.migrate` event per course. `backend/tests/test_migrate_override_paths.py` converts saved edits of 26 Psychology numbers against production's rows (`backend/tests/data/production_psychology_rows.json`) and checks that only the admin's change is left: the 24 numbers whose rows differ between production's catalog and the `cleanup` catalog of November 9, 2026 (`174e856`), and 85-482 and 85-798, which only the latter has.
 
 ---
 
@@ -1381,7 +1390,7 @@ The old to new paths are in `backend/data/requirement_path_renames.json`. The pi
 
 CountsFor's new home is an Ubuntu 24.04 server at CMU-Q, `https://countsfor.qatar.cmu.edu`. Apache serves the static frontend over HTTPS and proxies `/api` to the Flask API, which runs under Gunicorn on `127.0.0.1:8000`. The database is a local PostgreSQL. A system cron job runs the scraper once a day.
 
-> **Status on November 8, 2026: not deployed yet.** Everything below is written from the files in `deploy/` and checked against the code, but nobody has run it on the real server yet. The live site still runs on GitHub Pages and Render from `main` (15.20) and keeps running there until the cutover (15.15). When you do the first deploy, correct this section wherever reality differs, and record the date.
+> **Status on November 11, 2026: not deployed yet.** Everything below is written from the files in `deploy/` and checked against the code, but nobody has run it on the real server yet. Production is still the old site from `main` (15.20) until the cutover (15.15), but that day its API on Render answered 503 "This service has been suspended by its owner": read the note at the top of 15.8 before you plan the import. The `cleanup` frontend can be tried as a guest on the GitHub Pages test copy (15.21), which has no API. When you do the first deploy, correct this section wherever reality differs, and record the date.
 
 The first deploy goes through 15.2 to 15.14 in order. Later deploys only need 15.16.
 
@@ -1455,7 +1464,7 @@ git checkout main
 git status --short         # must print nothing
 ```
 
-**Before the merge (the rehearsal, 15.15 step 1)** `main` still has the old layout, and on November 8, 2026 the `cleanup` branch existed only in the checkout it was made in (17.2): it is on neither GitHub repo. Push it first to a repo the server can clone, then clone that repo and check out `cleanup` instead of `main`. For example, if it was pushed to Hind's working repo (17.1):
+**Before the merge (the rehearsal, 15.15 step 1)** `main` still has the old layout. The `cleanup` branch is on Hind's working repo, `Hindjendara/CMUQ-CountsFor` (public, 17.1), and on no branch of the main repo. It was pushed there on November 10, 2026 (`5106dd7`), and the checkout it was made in had newer commits on November 11: push them first, with `git push origin cleanup` in that checkout (`git status` there shows how far the branch is ahead of `origin/cleanup`). Then clone that repo and check out `cleanup` instead of `main`:
 
 ```bash
 git clone https://github.com/Hindjendara/CMUQ-CountsFor.git ~/countsfor-src
@@ -1464,7 +1473,7 @@ git checkout cleanup
 git status --short         # must print nothing
 ```
 
-After the merge, replace that checkout with a fresh clone of the main repo on `main`, as above (`rm -rf ~/countsfor-src` first). Which repo to push `cleanup` to for the rehearsal is the owner's choice; the server must be able to clone it (a private repo needs a deploy key or token).
+After the merge, replace that checkout with a fresh clone of the main repo on `main`, as above (`rm -rf ~/countsfor-src` first). Whichever repo you use, the server must be able to clone it (a private repo needs a deploy key or token).
 
 First deploy:
 
@@ -1536,9 +1545,11 @@ The OS user `countsfor` connects as the database role `countsfor` by peer authen
 
 Accounts, directory entries, flags, saved courses, shared plans, admin course edits, the audit log and the analytics live in Render's Postgres database `CountsFor_Summer_2026`. Move them with `pg_dump` and `pg_restore`.
 
+> **Render on November 11, 2026:** the web service `countsfor-summer-26` answered 503 "This service has been suspended by its owner" (who suspended it, and when, is not recorded). While it is suspended nothing writes to the database, which is what the final copy needs (15.15 step 4). The import needs the database itself, which that answer says nothing about: before you plan the cutover, check in the Render dashboard that `CountsFor_Summer_2026` still exists and is available, and run steps 1 to 3 as soon as you can. Keep that dump off the server like the final one (step 10): if the database is deleted before the cutover, it is the only copy. If the database is already gone, there is nothing to import: start from an empty database and skip this section (15.7).
+
 **Restore before the first bootstrap or service start.** `python -m backend.bootstrap_db`, and the service's `ExecStartPre` that runs it, create every missing table, empty. `pg_restore` then stops at "relation ... already exists", and because the restore runs as one transaction, nothing is imported.
 
-Do it twice: a **rehearsal** while the old site still runs (into a scratch database, below), and the **final copy** during the cutover (15.15), after writes have stopped.
+Do it twice: a **rehearsal** (below) and the **final copy** during the cutover (15.15), after writes have stopped.
 
 1. **Get the External Database URL:** Render dashboard, database `CountsFor_Summer_2026`, **Connect**, **External Database URL**. It has the form `postgresql://USER:PASSWORD@HOST/DBNAME` and contains the password. Keep the password out of your shell history and off every command line (other users on the server can read a running command's arguments with `ps`): put the parts in a connection service file that only you can read, and name the service in the commands below.
 
@@ -1694,7 +1705,7 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
      '85-483','85-484');
    ```
 
-   The last query lists admin course edits saved under an old number. An edit there no longer applies to anything, and a row with `is_new` true would bring the old number back as an added course. No rows: nothing to do. Otherwise an admin redoes each change on the current number in the course editor, and then you delete the old rows:
+   The last query lists admin course edits saved under an old number. An edit there no longer applies to anything, and a row with `is_new` true would bring the old number back as an added course. No rows: nothing to do. Otherwise keep them until the conversion below has shown what each one changed (it compares a saved list with production's rows of the old number). Once the site runs (15.9), an admin redoes each change on the current number in the course editor, and then you delete the old rows:
 
    ```sql
    DELETE FROM course_overrides
@@ -1711,16 +1722,17 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    SELECT course_code, updated_by_email, updated_at FROM course_overrides WHERE requirements IS NOT NULL;
    ```
 
-   No rows: nothing to do. Otherwise convert them with `backend/migrate_override_paths.py` (12.7), against the catalog from before the renames, as a dry run first:
+   No rows: nothing to do. Otherwise leave `psql` (`\q`) and convert them with `backend/migrate_override_paths.py` (12.7), as a dry run first. Its baseline is the catalog those edits were saved against: `main`'s `data/courses.json` at `79e29ec`, the merge-base of `main` and `cleanup`, so both repos have it and it stays in history after the merge. Not a catalog of `cleanup`: its Psychology rows differ (14.6), and the script refuses it. Your shell still has `umask 077` from step 1, so the first command writes a file only you can read; the second hands `countsfor` a readable copy, as step 4 does with the dump:
 
    ```bash
-   git -C ~/countsfor-src show 174e856:frontend/data/courses.json > /tmp/courses-2026-11-09.json
-   sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.migrate_override_paths --baseline /tmp/courses-2026-11-09.json'
+   git -C ~/countsfor-src show 79e29ec:data/courses.json > ~/courses-main.json
+   sudo install -m 644 -o countsfor -g countsfor ~/courses-main.json /var/tmp/countsfor-courses-main.json
+   sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.migrate_override_paths --baseline /var/tmp/countsfor-courses-main.json'
    ```
 
-   Read the report and run the same command again with `--apply`. Then an admin checks the courses it lists under "not in today's catalog" in the course editor's **Check these** filter. The script runs `create_app(bootstrap_db=False)`, so it works before step 9.
+   The report starts with `Database target: postgresql:/countsfor` and `Baseline: /var/tmp/countsfor-courses-main.json (6704 courses)`. Read it and run the same command again with `--apply`. For a course under an old Psychology number (the list above), the report shows the change its admin made: that is what to redo on the new number. An edit on a reused number or on 85-426 (14.6) was saved while the number still had its old course's rows: check in the course editor that the change fits the course that has the number now. Then an admin checks the courses the report lists under "not in today's catalog" in the course editor's **Check these** filter. The script runs `create_app(bootstrap_db=False)`, so it works before step 9. If it stops with `ERROR: cannot read ...`, `countsfor` cannot read the baseline file: copy it again with the `install` line.
 
-   Then the minors a BA major may not declare (`business`, `business_analytics`, `finance`, `product`). The app already ignores them, but a saved one makes every later profile save of that student fail ("That minor is not open to students in your major."). List them, then remove them:
+   Then the minors a BA major may not declare (`business`, `business_analytics`, `finance`, `product`). The app already ignores them, but a saved one makes every later profile save of that student fail ("That minor is not open to students in your major."). Back in `sudo -u countsfor psql -d countsfor`, list them, then remove them:
 
    ```sql
    SELECT u.email, u.primary_program, m.minor_code FROM user_minors m JOIN users u ON u.id = m.user_id
@@ -1751,19 +1763,56 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
 
    (`postgresql:/countsfor` is how the redaction helper prints a socket URL.) Lines such as `Added users.department` before them mean a migration ran because the Render database lacked a column; a second run prints none. A line starting with `FATAL` means it failed: read it, fix the cause, run it again. The Render database has no `minor_overrides` table; `create_all()` adds it here without printing a line.
 
-10. **Clean up:** `sudo rm /var/tmp/countsfor-render.dump` and `rm ~/.pg_service.conf` (it holds the Render password). Keep the final dump file off the server as the last backup of the Render database.
+10. **Clean up:** `sudo rm -f /var/tmp/countsfor-render.dump /var/tmp/countsfor-courses-main.json` and `rm -f ~/.pg_service.conf ~/courses-main.json` (`.pg_service.conf` holds the Render password). Keep the final dump file off the server as the last backup of the Render database.
 
-**Rehearsal:** for the full rehearsal (15.15 step 1), run steps 1 to 9 as written, into `countsfor`, while Render keeps running (the dump is simply a little older than the final one). Then 15.9 starts the service on the imported accounts, and every check in 15.13 can pass. At the cutover the database is recreated and imported again (15.15 step 5).
+**Rehearsal:** for the full rehearsal (15.15 step 1), run steps 1 to 9 as written, into `countsfor` (its dump is simply older than the final one). Then 15.9 starts the service on the imported accounts, and every check in 15.13 can pass. At the cutover the database is recreated and imported again (15.15 step 5).
 
-To try only the import, without touching `countsfor` (for example after the service already created empty tables in it), use a scratch database:
+To try only the import, without touching `countsfor` (for example after the service already created empty tables in it), use a scratch database, `countsfor_rehearsal`, after steps 1 to 4. Do not use the commands of steps 5 to 9 as printed above for this: they name `countsfor`, and the two Python commands read `DATABASE_URL=postgresql:///countsfor` from the environment file. Every command below names the scratch database instead.
 
-```bash
-sudo -u postgres createdb -O countsfor countsfor_rehearsal
-sudo -u countsfor pg_restore --no-owner --no-acl --single-transaction -n public -d countsfor_rehearsal /var/tmp/countsfor-render.dump
-# steps 6 to 8 with -d countsfor_rehearsal, then step 9 with the other database:
-sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; export DATABASE_URL=postgresql:///countsfor_rehearsal; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.bootstrap_db'
-sudo -u postgres dropdb countsfor_rehearsal
-```
+- **Restore** (step 5):
+
+  ```bash
+  sudo -u postgres createdb -O countsfor countsfor_rehearsal
+  sudo -u countsfor pg_restore --no-owner --no-acl --single-transaction -n public -d countsfor_rehearsal /var/tmp/countsfor-render.dump
+  ```
+
+- **Row counts** (step 6):
+
+  ```bash
+  for t in users directory_entries flags wishlist_items schedule_plans course_overrides admin_audit_events sign_in_events; do
+    printf '%-20s render %-7s rehearsal %s\n' "$t" \
+      "$(psql service=render -Atc "select count(*) from $t")" \
+      "$(sudo -u countsfor psql -d countsfor_rehearsal -Atc "select count(*) from $t")"
+  done
+  ```
+
+- **The SQL of steps 7 and 8:** open a session on the scratch database, paste the sequence check of step 7 and the SQL blocks of step 8 (the `DELETE` of edits under old numbers waits for an admin in the real import, so leave it out here), then leave with `\q`:
+
+  ```bash
+  sudo -u countsfor psql -d countsfor_rehearsal
+  ```
+
+- **Old course edits** (step 8): the baseline file, then the conversion as a dry run. Add `--apply` to try the writes.
+
+  ```bash
+  git -C ~/countsfor-src show 79e29ec:data/courses.json > ~/courses-main.json
+  sudo install -m 644 -o countsfor -g countsfor ~/courses-main.json /var/tmp/countsfor-courses-main.json
+  sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; export DATABASE_URL=postgresql:///countsfor_rehearsal; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.migrate_override_paths --baseline /var/tmp/countsfor-courses-main.json'
+  ```
+
+- **Bootstrap** (step 9):
+
+  ```bash
+  sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; export DATABASE_URL=postgresql:///countsfor_rehearsal; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.bootstrap_db'
+  ```
+
+- **Drop it**, then clean up as in step 10:
+
+  ```bash
+  sudo -u postgres dropdb countsfor_rehearsal
+  ```
+
+Both Python commands print the database they use: the conversion on its first line, before it reads the database, and the bootstrap after any migration lines (step 9). Here both must say `Database target: postgresql:/countsfor_rehearsal`; the `export` comes after the environment file is read, so it wins. Check the conversion's line before you add `--apply`.
 
 ### 15.9 Start the API with systemd
 
@@ -1776,7 +1825,7 @@ systemctl status countsfor-api --no-pager
 curl -s http://127.0.0.1:8000/health
 ```
 
-`active (running)` only means the Gunicorn master is up (it reports ready to systemd before its workers import the app); the `curl` is the real check. Expected: `{"database":"connected","db_host":"","status":"ok","tables":14}` (`tables` counts every table in the database, so 15 with the legacy table; `db_host` is empty for a socket connection). On every start systemd first runs `python -m backend.bootstrap_db` (`ExecStartPre`); if it fails the API does not start, and `journalctl -u countsfor-api -n 50` shows why. The workers skip the bootstrap because the env file sets `SKIP_DB_BOOTSTRAP=1`. Gunicorn logs requests and errors to the journal (`journalctl -u countsfor-api -f`). systemd restarts the API if it crashes; `sudo systemctl restart countsfor-api` loads new code.
+`active (running)` only means the Gunicorn master is up (it reports ready to systemd before its workers import the app); the `curl` is the real check. Expected: `{"database":"connected","db_host":"","status":"ok","tables":15}`. `tables` counts every table in the database: the 15 of `backend/models.py`, or 16 on an imported Render database that still has the legacy `staff_directory_entries` table (15.8 step 3; the import gets `minor_overrides` from the bootstrap, step 9). `db_host` is empty for a socket connection. On every start systemd first runs `python -m backend.bootstrap_db` (`ExecStartPre`); if it fails the API does not start, and `journalctl -u countsfor-api -n 50` shows why. The workers skip the bootstrap because the env file sets `SKIP_DB_BOOTSTRAP=1`. Gunicorn logs requests and errors to the journal (`journalctl -u countsfor-api -f`). systemd restarts the API if it crashes; `sudo systemctl restart countsfor-api` loads new code.
 
 The unit is hardened: the whole file system is read-only for the API (it writes no files; its data is in PostgreSQL), it gets a private `/tmp` and no capabilities. The daily update runs from cron, outside the unit, so these limits do not apply to it. If the API ever needs to write a file, list the folder in `ReadWritePaths=`.
 
@@ -1809,6 +1858,7 @@ This runs the parser tests, rebuilds the catalog from the deployed `soc.json`, c
 ... Gates passed (last_scrape 2026-11-07T22:10:04.404911+00:00, 6795 courses)
 ... courses.json: unchanged, not rewritten
 ... courses.json.gz: written
+... requirement_buckets.json: unchanged
 ... soc.json: unchanged
 ... Update done in 0.2 min (exit 0)
 ```
@@ -1852,7 +1902,7 @@ On the server:
 
 ```bash
 curl -s http://127.0.0.1:8000/health
-# {"database":"connected","db_host":"","status":"ok","tables":14}
+# {"database":"connected","db_host":"","status":"ok","tables":15}   (16 with the legacy table, 15.9)
 curl -s -o /dev/null -w '%{http_code}\n' https://countsfor.qatar.cmu.edu/api/me
 # 401: the API answers through Apache (you are not signed in)
 curl -s 'https://countsfor.qatar.cmu.edu/api/search-analytics/popular?program=CS&semester=F26&limit=3'
@@ -1883,9 +1933,9 @@ In the Google Cloud Console, **APIs & Services**, **Credentials**, the OAuth 2.0
 
 ### 15.15 Cutover from GitHub Pages and Render
 
-As of November 8, 2026 the live site is still the old one: GitHub Pages serves the frontend from `main`, Render runs the API and the database, and the GitHub Actions scrape still commits data to `main`. Nothing has been deployed to the CMU-Q server, and `cleanup` is not merged. The cutover, in order:
+As of November 11, 2026 production is still the old site: GitHub Pages serves the frontend from `main`, and the GitHub Actions scrape still commits data to `main`. Render holds the API and the database, but that day its web service answered 503 "This service has been suspended by its owner", so the old site could not sign anyone in or reach anything else on the server. Nothing has been deployed to the CMU-Q server, and `cleanup` is not merged; a guest-only test copy of its frontend runs on GitHub Pages (15.21). The cutover, in order:
 
-1. **Rehearse** 15.2 to 15.14 on the server, deploying the `cleanup` branch (push it first, 15.4) and importing a current dump into `countsfor` (15.8, "Rehearsal"), while the old site keeps running. The server can be fully tested, sign-in with existing accounts included, before anyone uses it.
+1. **Rehearse** 15.2 to 15.14 on the server, deploying the `cleanup` branch (push it first, 15.4) and importing a current dump into `countsfor` (15.8, "Rehearsal"; read the note at the top of 15.8 first). The server can be fully tested, sign-in with existing accounts included, before anyone uses it.
 2. **Freeze `main`:** in the Render dashboard, turn off **Auto-Deploy** for the web service `countsfor-summer-26`; in the GitHub Actions tab, **disable** the "Scrape SOC" workflow. Render auto-deploys `main`, and its build command installed the root `requirements.txt`, which `cleanup` deletes, so a Render deploy of the merged `main` would most likely fail and keep the old version running (not tested). Turning it off removes the question.
 3. **Merge `cleanup` into `main`** and push. If `main` has not moved since `cleanup` was last updated (`git merge-base --is-ancestor main cleanup` succeeds), the merge is a fast-forward with no conflicts. Otherwise every bot commit on `main` changed `app.html` (the `?v=` tags), `data/courses.json`, `data/soc.json` and `data_all_courses.json`, which `cleanup` moved or deleted. A test merge of a simulated bot commit (November 8, 2026) gave modify/delete conflicts on `app.html` and `data_all_courses.json` and merged the bot's data changes into `backend/data/soc.json` and `frontend/data/courses.json`; real changes to the data can also conflict there. Take the `cleanup` side of every one of these files (its data comes from the fixed parser; the server rebuilds the data anyway):
 
@@ -1899,12 +1949,12 @@ As of November 8, 2026 the live site is still the old one: GitHub Pages serves t
    ```
 
    After the merge, GitHub Pages keeps serving its last build (its workflow is gone) and Render keeps the old API.
-4. **Stop writes:** announce a short downtime, then in the Render dashboard **Suspend** the web service. The old site now shows "Could not reach the server".
+4. **Stop writes:** on November 11, 2026 the Render web service was already suspended (`curl -s -o /dev/null -w '%{http_code}\n' https://countsfor-summer-26.onrender.com/health` printed 503). If it runs again by now, announce a short downtime, then in the Render dashboard **Suspend** the web service. While it is suspended, the old site shows "Could not reach the server" and nothing writes to the database.
 5. **Final database copy:** `sudo systemctl stop countsfor-api`, then drop and recreate the `countsfor` database, which holds the rehearsal import (the two commands at the end of 15.8 step 5), and run 15.8 steps 3 to 10 (recreate `~/.pg_service.conf` first, step 1, if you already removed it).
 6. **Deploy the merged `main`** (15.16) and start the API: `sudo systemctl start countsfor-api`. Run the checks in 15.13.
 7. **DNS and Google:** make sure IT points `countsfor.qatar.cmu.edu` at the server, and that the Google origin is in place (15.14).
 8. **Tell users:** everyone signs in again (sign-in tokens are kept per site). Accounts, saved courses, flags and shared plans moved with the database. Schedule plans that were never shared live only in the browser's storage for the old address and do not move; a student can carry one over by creating a share link on the old site before step 4 and opening it on the new site with the host changed (the link token is in the database).
-9. **Retire the old hosting**, once the new site has worked for a few days: unpublish GitHub Pages (repo **Settings**, **Pages**) or replace it with a page that links to the new address; keep the final dump in two places; then delete the Render web service and database (they are paid plans). Update the top of this README, section 15.20 and 23.1.
+9. **Retire the old hosting**, once the new site has worked for a few days: unpublish GitHub Pages (repo **Settings**, **Pages**) or replace it with a page that links to the new address; keep the final dump in two places; then delete the Render web service and database (they are paid plans). Decide whether the GitHub Pages test copy (15.21) stays; if not, unpublish it in Hind's working repo (**Settings**, **Pages**). Update the top of this README, sections 15.20 and 15.21, and 23.1.
 
 ### 15.16 Updating the code later
 
@@ -1998,15 +2048,40 @@ To restore for real: `sudo systemctl stop countsfor-api`, drop and recreate `cou
 
 ### 15.20 Old hosting: GitHub Pages and Render (historical)
 
-This is how CountsFor was hosted until the cutover. **It is still the live site on November 8, 2026.** Its configuration files were removed on the `cleanup` branch (they are in git history: `git show 49d22b2:render.yaml`, `git show 49d22b2:.github/workflows/pages.yml`).
+This is how CountsFor was hosted until the cutover. **It is still production on November 11, 2026, but without its API:** that day the Render web service answered 503 "This service has been suspended by its owner", while the GitHub Pages frontend still loaded. Its configuration files were removed on the `cleanup` branch (they are in git history: `git show 49d22b2:render.yaml`, `git show 49d22b2:.github/workflows/pages.yml`).
 
-**Frontend: GitHub Pages.** Repo settings: build type "workflow" (GitHub Actions), public, URL `https://adicmu.github.io/Countsfor-Summer-26/`, HTTPS enforced, no custom domain. `pages.yml` deployed on every push to `main`, copying only what the browser loads (`index.html`, `app.html`, `reset.html`, `js/`, `css/`, `assets/`, `landing/`, `data/courses.json`, `data/minor_courses.json`). The `gh-pages` branch (last commit August 9, 2026) is a leftover from an experiment and is not served.
+**Frontend: GitHub Pages.** Repo settings: build type "workflow" (GitHub Actions), public, URL `https://adicmu.github.io/Countsfor-Summer-26/`, HTTPS enforced, no custom domain. `pages.yml` deployed on every push to `main`, copying only what the browser loads (`index.html`, `app.html`, `reset.html`, `js/`, `css/`, `assets/`, `landing/`, `data/courses.json`, `data/minor_courses.json`). The main repo's `gh-pages` branch (last commit August 9, 2026) is a leftover from an experiment and is not served. (Hind's working repo has its own `gh-pages` branch: the test copy, 15.21.)
 
 **Backend: Render.** Web service `countsfor-summer-26` (`https://countsfor-summer-26.onrender.com`; the blueprint called it `countsfor-backend`), Python, plan `starter`, region Ohio, auto-deploying from `main` (confirmed November 3, 2026). Build `pip install -r requirements.txt`, pre-deploy `python -m backend.bootstrap_db`, start `SKIP_DB_BOOTSTRAP=1 gunicorn --workers=1 --bind 0.0.0.0:$PORT --timeout 120 --access-logfile - 'backend.app:create_app()'`, health check `/health`. Database `CountsFor_Summer_2026` (Postgres, plan `starter`, Ohio, host `dpg-d9osve67...`; an older host `dpg-d8nqt2...` was used earlier in 2026, so it was recreated at least once after a free trial expired and the data was lost). Environment: `FLASK_ENV=production`, `DATABASE_URL` from the database, a generated `SECRET_KEY`, `ALLOWED_EMAIL_DOMAIN`, `FRONTEND_ORIGIN`, `SEED_USERS_PATH`, `FRONTEND_RESET_BASE`, and dashboard-only values (`GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `MAIL_FROM`, `SMTP_*`). `keepalive.yml` pinged `/health` every 10 minutes during the day. Older notes mention a second service `countsfor-backend.onrender.com` and an Oregon database `countsfor-db`; check the dashboard and delete them if they still exist. Who pays for the Render account is not recorded.
 
 **Supabase** was once considered instead of Render Postgres. Nothing in the code is Supabase specific and there is no sign it was ever used.
 
 **`countsfor.qatar.cmu.edu` before this move:** older docs called it "the CMU-Q deployment" of the original open-cmuq CountsFor app. It is not known what it serves today; ask CMU-Q IT before you point it at the new server.
+
+### 15.21 Test copy on GitHub Pages
+
+Until the server runs, the `cleanup` frontend can be tried at **[hindjendara.github.io/CMUQ-CountsFor](https://hindjendara.github.io/CMUQ-CountsFor/)**. It is a test copy, not production and not a home for CountsFor: the CMU-Q server is (this section), and nothing on the test copy is backed up or monitored. GitHub Pages serves it from the `gh-pages` branch of Hind's working repo, `Hindjendara/CMUQ-CountsFor` (public; `origin` in the checkout where `cleanup` was made, 17.1). The main repo's `gh-pages` branch is a different, unused branch (15.20).
+
+- **What the branch holds:** only the site, `frontend/` of one commit without `tests/`, plus an empty `.nojekyll`, so GitHub serves the files as they are (no Jekyll). Each publish adds one commit on top of the last.
+- **No backend.** Every `/api` request answers 404 there (checked November 11, 2026), so the app runs as a guest: search, course cards, the requirement trees, the minors and the planner work, with plans and saved courses kept in the browser. Signing in, flags, shared plans and the admin pages need the server, and admin course edits and minor settings are not applied (the app shows the catalog and `minors.json` as they are).
+- **What it serves:** on November 11, 2026, `gh-pages` was `a116b27` ("Deploy cleanup 8b599b2 to GitHub Pages"), with the `cf-build` tag `release-2026-11-10b`. To see what it serves now, compare `curl -s https://hindjendara.github.io/CMUQ-CountsFor/app.html | grep cf-build` with `frontend/app.html`.
+
+To publish a commit (usually the tip of `cleanup`), use `scripts/publish_test_site.sh` with bash (Git Bash on Windows), from a checkout whose `origin` is Hind's working repo. After a frontend change, first give the pages a new cache tag and commit it: `python scripts/bump_cf_build.py release-$(date +%F)` (add a letter for a second release on the same day, as in `release-2026-11-10b`). Then:
+
+```bash
+git status --short             # must print nothing: the script refuses otherwise
+git push origin cleanup        # so the commit the test copy names is on GitHub too
+scripts/publish_test_site.sh   # publishes HEAD; or: scripts/publish_test_site.sh [--no-wait] COMMIT
+```
+
+The script:
+
+1. Refuses a working tree with uncommitted or untracked files, and refuses the main repo (a remote named `adi`, or any fetch or push URL of the `Adicmu` account), whose Pages site was production.
+2. Builds the site from the commit itself, so nothing uncommitted can reach it: `frontend/` without `tests/`, plus `.nojekyll`.
+3. Commits that tree on top of the `gh-pages` it has just fetched and pushes it as a fast-forward. It never forces: if `gh-pages` moved in the meantime, the push is refused, nothing changes, and you run it again. If the copy already matches the commit, it publishes nothing.
+4. Waits up to 5 minutes until the live `app.html` shows the commit's `cf-build` tag (`--no-wait` skips this). GitHub's "pages build and deployment" run usually takes a minute or two; if the wait runs out, look at that run in the repo's **Actions** tab.
+
+GitHub Pages lets browsers keep each file for 10 minutes (`Cache-Control: max-age=600`), so after a frontend change a returning visitor can get old files mixed with new ones unless the `?v=` tags changed: bump them, as above, before you publish. The script warns when the published copy already had the same `cf-build` tag, and notes when the commit is on no branch of `origin`. Never publish to the main repo, and never force-push `gh-pages`.
 
 ---
 
@@ -2062,7 +2137,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
-- `backend/tests/test_admin.py`, `test_course_overrides.py` (the change per program and minor, the path and minor checks, the merge per key, `stale_page`, the batch route, the audit details), `test_minor_overrides.py` (minor settings and the `/health` table list) and `test_migrate_override_paths.py` (12.7) cover the admin page.
+- `backend/tests/test_admin.py`, `test_course_overrides.py` (the change per program and minor, the path and minor checks, the merge per key, `stale_page`, the batch route, the audit details), `test_minor_overrides.py` (minor settings and the `/health` table list) and `test_migrate_override_paths.py` (12.7) cover the admin page. `test_request_bodies.py` sends the admin write routes and `/api/auth/login` JSON bodies that are not objects (a number, a list, a string, true) and expects 400 `invalid_body` (9.1).
 - `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, the SMTP relay check end to end, and that production never returns a reset token or reads `backend/.env`.
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
@@ -2089,19 +2164,19 @@ There is no CI that runs the tests. On the server, the daily update runs the two
 |---|---|---|
 | Main repo | `https://github.com/Adicmu/Countsfor-Summer-26.git` | Public, not a fork. GitHub Pages and Render are attached to its `main` until the cutover (15.15). A fresh clone calls it `origin`. |
 | Partner fork | `https://github.com/Hindjendara/Countsfor-Summer-26.git` | Hind's public fork (remote `hind` in 5.2). Its own scrape workflow commits data there. |
-| Hind's working repo | `https://github.com/Hindjendara/CMUQ-CountsFor.git` | The checkout where the `cleanup` branch was made uses this as `origin` and the main repo as `adi`, with pushing to `adi` disabled. Check `git remote -v` in any checkout before you push. |
+| Hind's working repo | `https://github.com/Hindjendara/CMUQ-CountsFor.git` | Public. The checkout where the `cleanup` branch was made uses this as `origin` and the main repo as `adi`, with pushing to `adi` disabled. Its `gh-pages` branch is the GitHub Pages test copy (15.21). Check `git remote -v` in any checkout before you push. |
 
 ### 17.2 Branches (November 2026)
 
 | Branch | State |
 |---|---|
-| `main` | Production today (GitHub Pages and Render deploy it). Old layout (`js/`, `data/` at the root), Render and GitHub Actions files. Includes the admin page, course editor and sign-in analytics (November 3, 2026). The scrape bot still commits to it daily. |
-| `cleanup` | The work this README describes: dead code removal, the parser and data fixes, the Qatar overlay sections, the `frontend/` and `backend/` layout, environment-only configuration, the cron scraper, the `deploy/` files and the removal of the Render, GitHub Actions and Pages files. Not pushed yet and not merged. Merge it at the cutover (15.15 step 3), not before. |
+| `main` | Production today (GitHub Pages and Render deploy it; the Render web service answered 503 "suspended by its owner" on November 11, 2026). Old layout (`js/`, `data/` at the root), Render and GitHub Actions files. Includes the admin page, course editor and sign-in analytics (November 3, 2026). The scrape bot still commits to it daily. |
+| `cleanup` | The work this README describes: dead code removal, the parser and data fixes, the Qatar overlay sections, the `frontend/` and `backend/` layout, environment-only configuration, the cron scraper, the `deploy/` files and the removal of the Render, GitHub Actions and Pages files. On Hind's working repo since November 10, 2026 (`origin/cleanup` in the checkout where it was made; push newer commits before you rely on that copy, 15.4), on no branch of the main repo, and not merged. Merge it at the cutover (15.15 step 3), not before. |
 | `feat/admin-page` | Merged into `main` on November 3, 2026. Safe to delete. |
 | `feature/password-reset-email` | Merged (PR #13). Safe to delete. |
 | `feat/login-landing-guest-flags`, `feat/multiple-minors` | Old branches with open PRs #10 and #12 (June 2026). Each has one commit not on `main`, but guest mode, the landing page and multiple minors already exist on `main` in reworked form. Review, then close the PRs and delete the branches. |
 | `feat/ui-ux-overhaul`, `landing-copy-and-signin-fixes`, `roster-and-role-views-backup`, `worktree-role-aware-onboarding` | Local-only branches on the original laptop. |
-| `gh-pages` | Stale, unused (15.20). |
+| `gh-pages` | On the main repo: stale, unused (15.20). On Hind's working repo: the GitHub Pages test copy; publish to it only with `scripts/publish_test_site.sh` (15.21). |
 | `hind/main` | Fork main with its own SOC data commits. |
 | `hind/cursor/adicmu-pages-deploy` | Old experiment. |
 
@@ -2296,7 +2371,7 @@ Read the end of `/var/log/countsfor/scrape.log` on the server; 15.19 lists the u
 See the known failures in 16.2.
 
 **My page changes do not show on the live site.**
-Merging does not deploy anything: copy the code to the server (15.16). Apache makes browsers revalidate every file, so a normal reload shows the new version. (Before the cutover, GitHub Pages deploys `main` and Render auto-deploys it.)
+Merging does not deploy anything: copy the code to the server (15.16). Apache makes browsers revalidate every file, so a normal reload shows the new version. (Before the cutover, GitHub Pages deploys `main` and Render auto-deploys it.) The GitHub Pages test copy changes only when you publish it (15.21), and browsers may keep its old files for up to 10 minutes unless the `?v=` tags changed.
 
 ---
 
@@ -2310,7 +2385,7 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 ### 21.2 Operational and data issues
 
-1. **The move to the CMU-Q server is not done.** The live site still runs on GitHub Pages and Render from `main`, and the old scrape workflow still commits to `main` with the old parser. Follow 15.15.
+1. **The move to the CMU-Q server is not done.** Production is still the old site from `main` on GitHub Pages and Render, whose web service answered 503 "suspended by its owner" on November 11, 2026, and the old scrape workflow still commits to `main` with the old parser. Follow 15.15.
 2. **Saved data under the old Psychology numbers.** The catalog has no rows for the old Psychology numbers that the department's renumbering list retires (14.6), nor for 85-253 and 85-261; their mappings moved to the new numbers. Wishlist items, flags, schedule plan items, search counts and admin course edits saved under them in production must be moved with 15.8 step 8 when the database is imported.
 3. **6 backend tests fail** (16.2). The tests are stale, not the code. No CI runs any tests.
 4. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
@@ -2368,7 +2443,7 @@ No secret values belong in this file or in git. Hand secrets over in person or t
 - [ ] **CMU-Q server**: an account with `sudo` on the Ubuntu server, and the name of the IT contact who manages it, its DNS (`countsfor.qatar.cmu.edu`), its certificate (renewal date) and its backups.
 - [ ] **Server secrets**: the filled-in `/etc/countsfor/countsfor.env` (`SECRET_KEY`, email credentials) in a password manager.
 - [ ] **GitHub**: admin (or at least write) access to `Adicmu/Countsfor-Summer-26`. Consider transferring the repo to a CMU-Q organization so it does not depend on a personal account.
-- [ ] **GitHub fork and working repo**: decide what happens to `Hindjendara/Countsfor-Summer-26` and `Hindjendara/CMUQ-CountsFor`. Once the server's cron scrape runs, the fork's scrape is not needed.
+- [ ] **GitHub fork and working repo**: decide what happens to `Hindjendara/Countsfor-Summer-26` and `Hindjendara/CMUQ-CountsFor` (which holds the `cleanup` branch and serves the GitHub Pages test copy, 15.21). Once the server's cron scrape runs, the fork's scrape is not needed.
 - [ ] **Render (until it is retired)**: membership on the Render account or team that owns the `countsfor-summer-26` web service and the `CountsFor_Summer_2026` database, including billing (paid `starter` plans). Record who pays, and delete both after the cutover (15.15 step 9).
 - [ ] **Database**: `sudo -u countsfor psql -d countsfor` on the server, and the nightly dumps (15.17) copied somewhere off the server. Keep the final Render dump.
 - [ ] **Google Cloud**: owner or editor on the project that holds the OAuth client `378923997481-...` (to edit authorized origins and the consent screen).

@@ -23,13 +23,15 @@ folder that holds the backend package:
 """
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from sqlalchemy import inspect, text
 
 from .config import Config
 from .db import db
 from .db_schema import REQUIRED_TABLES, database_host, redact_database_url
+
+BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 def init_database(app: Flask) -> list[str]:
@@ -94,6 +96,18 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
     app.register_blueprint(admin_bp)
     app.register_blueprint(course_overrides_bp)
     app.register_blueprint(minor_overrides_bp)
+
+    # Every route reads its JSON body as an object (`request.get_json(silent=True) or {}`,
+    # then .get or set()). Any other JSON value (a list, a number, a string, true) is a
+    # client error, answered here instead of failing inside the route with a 500. No
+    # body, null and a body that is not JSON still reach the route, which reads them as {}.
+    @app.before_request
+    def refuse_non_object_body():
+        if request.method in BODY_METHODS and request.is_json:
+            body = request.get_json(silent=True)
+            if body is not None and not isinstance(body, dict):
+                return jsonify(error="invalid_body", message="The request body must be a JSON object."), 400
+        return None
 
     # Health check for monitoring (not under /api). 503 if a required table is missing.
     # A local SQLite database also lists its table names, to check a bootstrap by eye.

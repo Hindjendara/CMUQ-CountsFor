@@ -11,15 +11,12 @@ from typing import Iterable
 from flask import jsonify, request, session, g
 
 from .db import db
-from .models import User, FACULTY_ROLES
+from .models import User
 from .tokens import verify_auth_token
 
 ROLE_GROUP_STUDENT = "student"
 ROLE_GROUP_FACULTY = "faculty"
 ROLE_GROUP_ADMIN = "admin"
-
-# Exact role strings still used where a specific title matters (e.g. flag review).
-FACULTY_OR_ADMIN = FACULTY_ROLES | {ROLE_GROUP_ADMIN}
 
 
 def _load_user() -> User | None:
@@ -102,3 +99,8 @@ def require_role(*roles: str | Iterable[str]):
 
 def current_user() -> User | None:
     return _load_user()
+
+
+def is_admin(user: User | None) -> bool:
+    """True for a signed-in user in the admin role group (for public routes that show admins more)."""
+    return user is not None and user.role_group() == ROLE_GROUP_ADMIN

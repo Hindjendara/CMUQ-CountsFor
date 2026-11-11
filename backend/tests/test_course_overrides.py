@@ -3,6 +3,7 @@ import json
 
 from backend.db import db
 from backend.models import CourseOverride
+from backend.tokens import make_auth_token
 
 from .conftest import login
 
@@ -38,6 +39,45 @@ def test_list_is_public(client):
     r = client.get("/api/courses/overrides")
     assert r.status_code == 200
     assert r.get_json() == {"items": []}
+
+
+def test_list_shows_who_saved_an_edit_to_admins_only(app, client, admin, student, professor):
+    login(client, admin)
+    assert client.patch("/api/courses/overrides/15-122", json={"units": 10}).status_code == 200
+    [item] = _items(client)
+    assert item["updated_by_email"] == "admin@andrew.cmu.edu" and item["updated_at"]
+    # A guest, a student and a professor get the edit, but not who made it.
+    for user in (None, student, professor):
+        viewer = app.test_client()
+        if user:
+            login(viewer, user)
+        [item] = _items(viewer)
+        assert item["fields"] == {"units": 10} and item["updated_at"], user
+        assert "updated_by_email" not in item, user
+    # An admin signed in with the bearer token alone (how the pages call the API) sees it.
+    with app.app_context():
+        token = make_auth_token(admin.id)
+    r = app.test_client().get("/api/courses/overrides", headers={"Authorization": f"Bearer {token}"})
+    assert r.get_json()["items"][0]["updated_by_email"] == "admin@andrew.cmu.edu"
+
+
+def test_text_fields_refuse_long_dashes(client, admin):
+    """Students read these texts, so they follow the rule for category names: plain hyphens only."""
+    login(client, admin)
+    for field in ("course_name", "description", "prerequisites"):
+        for dash in "‒–—―":
+            r = client.patch("/api/courses/overrides/15-122", json={field: f"Data {dash} Structures"})
+            assert r.status_code == 400, (field, dash)
+            assert r.get_json() == {
+                "error": "invalid_field",
+                "message": f"Use plain hyphens in the {field.replace('_', ' ')}, not long dashes.",
+            }
+    r = client.post("/api/courses/overrides", json={"course_code": "15-998", "course_name": "Topics — AI"})
+    assert r.status_code == 400
+    assert r.get_json()["message"] == "Use plain hyphens in the course name, not long dashes."
+    assert _items(client) == []
+    r = client.patch("/api/courses/overrides/15-122", json={"course_name": "Data Structures - Principles"})
+    assert r.status_code == 200 and r.get_json()["fields"] == {"course_name": "Data Structures - Principles"}
 
 
 def test_edit_catalog_course_and_counts_for(client, admin):
