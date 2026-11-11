@@ -1,0 +1,536 @@
+{
+ "_meta": {
+  "source": "git show 79e29ec:data/courses.json (main, the catalog the old course editor saved against)",
+  "codes": "the 24 Psychology numbers whose requirement rows differ between that catalog and 174e856:frontend/data/courses.json (2026-11-09); the review listed 26, but 85-482 and 85-798 are only in 174e856 (with no rows), not in this catalog",
+  "fields": "course_code, course_name and requirements, copied as they are"
+ },
+ "courses": [
+  {
+   "course_code": "85-104",
+   "course_name": "Psychopathology",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)",
+      "type": true,
+      "major": "CS"
+     },
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [
+     {
+      "requirement": "GenEd---GenEd---Disciplinary Perspectives---Social Sciences",
+      "type": true,
+      "major": "IS"
+     }
+    ],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-110",
+   "course_name": "Cognitive Psychology",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-130",
+   "course_name": "Developmental Psychology",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-150",
+   "course_name": "Social Psychology",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-170",
+   "course_name": "Foundations of Brain and Behavior",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-190",
+   "course_name": "Psychopathology",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-211",
+   "course_name": "Cognitive Psychology",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)",
+      "type": true,
+      "major": "CS"
+     },
+     {
+      "requirement": "GenEd---Category 1: Cognition---Cognitive Studies (AI)",
+      "type": true,
+      "major": "CS"
+     },
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [
+     {
+      "requirement": "GenEd---GenEd---Disciplinary Perspectives---Social Sciences",
+      "type": true,
+      "major": "IS"
+     }
+    ],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-219",
+   "course_name": "Foundations of Brain and Behavior",
+   "requirements": {
+    "CS": [],
+    "IS": [
+     {
+      "requirement": "GenEd---GenEd---Foundations---Scientific Inquiry",
+      "type": true,
+      "major": "IS"
+     }
+    ],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "BS in Biological Sciences---Biological Sciences---Biological Sciences Electives---Biological Sciences Electives---Interdisciplinary Electives Group",
+      "type": false,
+      "major": "BS"
+     },
+     {
+      "requirement": "BS in Biological Sciences---Options---Neuroscience---Any ONE of the following courses",
+      "type": false,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-221",
+   "course_name": "Principles of Child Development",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)",
+      "type": true,
+      "major": "CS"
+     },
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [
+     {
+      "requirement": "GenEd---GenEd---Foundations---Contextual Thinking",
+      "type": true,
+      "major": "IS"
+     }
+    ],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-241",
+   "course_name": "Social Psychology",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)",
+      "type": true,
+      "major": "CS"
+     },
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [
+     {
+      "requirement": "GenEd---GenEd---Foundations---Contextual Thinking",
+      "type": true,
+      "major": "IS"
+     }
+    ],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-253",
+   "course_name": "Psychopathology",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-261",
+   "course_name": "Psychopathology",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Category 1: Cognition---Cognition, Choice, and Behavior (CS, CB, & HCI)",
+      "type": true,
+      "major": "CS"
+     },
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-300",
+   "course_name": "Introduction to Research Methods",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-340",
+   "course_name": "Research Methods in Social Psychology",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-359",
+   "course_name": "Introduction to Music Cognition Research",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [
+     {
+      "requirement": "GenEd---GenEd---Foundations---Scientific Inquiry",
+      "type": true,
+      "major": "IS"
+     }
+    ],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-377",
+   "course_name": "Attitudes and Persuasion",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-411",
+   "course_name": "Introduction to Music Cognition Research",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-413",
+   "course_name": "Perception",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-414",
+   "course_name": "Cognition in the Age of AI",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-426",
+   "course_name": "Learning in Humans and Machines",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-442",
+   "course_name": "Health Psychology",
+   "requirements": {
+    "CS": [
+     {
+      "requirement": "GenEd---Humanities/Arts Electives",
+      "type": true,
+      "major": "CS"
+     }
+    ],
+    "IS": [],
+    "BA": [
+     {
+      "requirement": "EY2022 Qatar Business Administration - University Core Requirements---Scientific Reasoning",
+      "type": true,
+      "major": "BA"
+     }
+    ],
+    "BS": [
+     {
+      "requirement": "GenEd---Non-Technical Breadth Electives",
+      "type": true,
+      "major": "BS"
+     }
+    ]
+   }
+  },
+  {
+   "course_code": "85-450",
+   "course_name": "Psychology of Prejudice",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-452",
+   "course_name": "Attitudes and Persuasion",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  },
+  {
+   "course_code": "85-454",
+   "course_name": "Health Psychology",
+   "requirements": {
+    "CS": [],
+    "IS": [],
+    "BA": [],
+    "BS": []
+   }
+  }
+ ]
+}

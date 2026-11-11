@@ -1051,7 +1051,11 @@ A successful Add course or Save changes opens a confirmation screen (`_renderCou
 
 ### 12.7 Edits saved before the 2026-27 names
 
-Before November 10, 2026 the editor saved the whole "counts for" list of every program of a course, in the bucket names of the time. `python -m backend.migrate_override_paths` updates them (15.8 step 8). With `--baseline FILE` (the `courses.json` from before the renames) it renames both the saved list and that course's baseline rows with `backend/data/requirement_path_renames.json` (its `per_course` exceptions first) and keeps only their difference, as a change; a program the old editor saved without a change goes back to the catalog. Without `--baseline` it renames the paths in place and keeps the list for a look in the editor. It prints every course, each program before and after, and every path that is still not in today's catalog. It is a dry run unless `--apply`, which writes the rows, deletes a row left with no edit, and adds one `course.migrate` event per course.
+Before November 10, 2026 the editor saved the whole "counts for" list of every program of a course, in the bucket names of the time. `python -m backend.migrate_override_paths` updates them (15.8 step 8). With `--baseline FILE` it renames both the saved list and that course's baseline rows with `backend/data/requirement_path_renames.json` (its `per_course` exceptions first) and keeps only their difference, as a change; a program the old editor saved without a change goes back to the catalog. Without `--baseline` it renames the paths in place and keeps the list for a look in the editor.
+
+The baseline must be the catalog those edits were saved against: `main`'s `data/courses.json` at `79e29ec` (`git show 79e29ec:data/courses.json > FILE`). Production served the same requirement rows from November 3, 2026, when the editor shipped, and still did on November 11. A catalog of the `cleanup` branch is the wrong baseline: its Psychology rows moved to the department's new numbers (14.6), so an edit saved on a new number (85-150 had no rows in production) would turn into removals of the rows that moved onto it. The script refuses a baseline without rows for the old numbers in `PRODUCTION_ONLY_CODES` (85-211, 85-219, 85-221, 85-241, 85-253, 85-261, 85-340, 85-359, 85-377 and 85-442: production's catalog has rows for them, and no catalog from November 9, 2026 on does), before it reads the database.
+
+It prints the database it reads, the baseline, every course, each program before and after, and every path that is still not in today's catalog. It is a dry run unless `--apply`, which writes the rows, deletes a row left with no edit, and adds one `course.migrate` event per course. `backend/tests/test_migrate_override_paths.py` converts saved edits of the 26 Psychology numbers the review listed against production's rows (`backend/tests/data/production_psychology_rows.json`; 24 of them have other rows in the cleanup catalog, and 85-482 and 85-798 exist only there) and checks that only the admin's change is left.
 
 ---
 
@@ -1690,7 +1694,7 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
      '85-483','85-484');
    ```
 
-   The last query lists admin course edits saved under an old number. An edit there no longer applies to anything, and a row with `is_new` true would bring the old number back as an added course. No rows: nothing to do. Otherwise an admin redoes each change on the current number in the course editor, and then you delete the old rows:
+   The last query lists admin course edits saved under an old number. An edit there no longer applies to anything, and a row with `is_new` true would bring the old number back as an added course. No rows: nothing to do. Otherwise keep them until the conversion below has shown what each one changed (it compares a saved list with production's rows of the old number). Once the site runs (15.9), an admin redoes each change on the current number in the course editor, and then you delete the old rows:
 
    ```sql
    DELETE FROM course_overrides
@@ -1707,16 +1711,17 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
    SELECT course_code, updated_by_email, updated_at FROM course_overrides WHERE requirements IS NOT NULL;
    ```
 
-   No rows: nothing to do. Otherwise convert them with `backend/migrate_override_paths.py` (12.7), against the catalog from before the renames, as a dry run first:
+   No rows: nothing to do. Otherwise leave `psql` (`\q`) and convert them with `backend/migrate_override_paths.py` (12.7), as a dry run first. Its baseline is the catalog those edits were saved against: `main`'s `data/courses.json` at `79e29ec`, the merge-base of `main` and `cleanup`, so both repos have it and it stays in history after the merge. Not a catalog of `cleanup`: its Psychology rows differ (14.6), and the script refuses it. Your shell still has `umask 077` from step 1, so the first command writes a file only you can read; the second hands `countsfor` a readable copy, as step 4 does with the dump:
 
    ```bash
-   git -C ~/countsfor-src show 174e856:frontend/data/courses.json > /tmp/courses-2026-11-09.json
-   sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.migrate_override_paths --baseline /tmp/courses-2026-11-09.json'
+   git -C ~/countsfor-src show 79e29ec:data/courses.json > ~/courses-main.json
+   sudo install -m 644 -o countsfor -g countsfor ~/courses-main.json /var/tmp/countsfor-courses-main.json
+   sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.migrate_override_paths --baseline /var/tmp/countsfor-courses-main.json'
    ```
 
-   Read the report and run the same command again with `--apply`. Then an admin checks the courses it lists under "not in today's catalog" in the course editor's **Check these** filter. The script runs `create_app(bootstrap_db=False)`, so it works before step 9.
+   The report starts with `Database target: postgresql:/countsfor` and `Baseline: /var/tmp/countsfor-courses-main.json (6704 courses)`. Read it and run the same command again with `--apply`. For a course under an old Psychology number (the list above), the report shows the change its admin made: that is what to redo on the new number. An edit on a reused number or on 85-426 (14.6) was saved while the number still had its old course's rows: check in the course editor that the change fits the course that has the number now. Then an admin checks the courses the report lists under "not in today's catalog" in the course editor's **Check these** filter. The script runs `create_app(bootstrap_db=False)`, so it works before step 9. If it stops with `ERROR: cannot read ...`, `countsfor` cannot read the baseline file: copy it again with the `install` line.
 
-   Then the minors a BA major may not declare (`business`, `business_analytics`, `finance`, `product`). The app already ignores them, but a saved one makes every later profile save of that student fail ("That minor is not open to students in your major."). List them, then remove them:
+   Then the minors a BA major may not declare (`business`, `business_analytics`, `finance`, `product`). The app already ignores them, but a saved one makes every later profile save of that student fail ("That minor is not open to students in your major."). Back in `sudo -u countsfor psql -d countsfor`, list them, then remove them:
 
    ```sql
    SELECT u.email, u.primary_program, m.minor_code FROM user_minors m JOIN users u ON u.id = m.user_id
@@ -1747,19 +1752,56 @@ Do it twice: a **rehearsal** while the old site still runs (into a scratch datab
 
    (`postgresql:/countsfor` is how the redaction helper prints a socket URL.) Lines such as `Added users.department` before them mean a migration ran because the Render database lacked a column; a second run prints none. A line starting with `FATAL` means it failed: read it, fix the cause, run it again. The Render database has no `minor_overrides` table; `create_all()` adds it here without printing a line.
 
-10. **Clean up:** `sudo rm /var/tmp/countsfor-render.dump` and `rm ~/.pg_service.conf` (it holds the Render password). Keep the final dump file off the server as the last backup of the Render database.
+10. **Clean up:** `sudo rm -f /var/tmp/countsfor-render.dump /var/tmp/countsfor-courses-main.json` and `rm -f ~/.pg_service.conf ~/courses-main.json` (`.pg_service.conf` holds the Render password). Keep the final dump file off the server as the last backup of the Render database.
 
 **Rehearsal:** for the full rehearsal (15.15 step 1), run steps 1 to 9 as written, into `countsfor`, while Render keeps running (the dump is simply a little older than the final one). Then 15.9 starts the service on the imported accounts, and every check in 15.13 can pass. At the cutover the database is recreated and imported again (15.15 step 5).
 
-To try only the import, without touching `countsfor` (for example after the service already created empty tables in it), use a scratch database:
+To try only the import, without touching `countsfor` (for example after the service already created empty tables in it), use a scratch database, `countsfor_rehearsal`, after steps 1 to 4. Do not use the commands of steps 5 to 9 as printed above for this: they name `countsfor`, and the two Python commands read `DATABASE_URL=postgresql:///countsfor` from the environment file. Every command below names the scratch database instead.
 
-```bash
-sudo -u postgres createdb -O countsfor countsfor_rehearsal
-sudo -u countsfor pg_restore --no-owner --no-acl --single-transaction -n public -d countsfor_rehearsal /var/tmp/countsfor-render.dump
-# steps 6 to 8 with -d countsfor_rehearsal, then step 9 with the other database:
-sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; export DATABASE_URL=postgresql:///countsfor_rehearsal; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.bootstrap_db'
-sudo -u postgres dropdb countsfor_rehearsal
-```
+- **Restore** (step 5):
+
+  ```bash
+  sudo -u postgres createdb -O countsfor countsfor_rehearsal
+  sudo -u countsfor pg_restore --no-owner --no-acl --single-transaction -n public -d countsfor_rehearsal /var/tmp/countsfor-render.dump
+  ```
+
+- **Row counts** (step 6):
+
+  ```bash
+  for t in users directory_entries flags wishlist_items schedule_plans course_overrides admin_audit_events sign_in_events; do
+    printf '%-20s render %-7s rehearsal %s\n' "$t" \
+      "$(psql service=render -Atc "select count(*) from $t")" \
+      "$(sudo -u countsfor psql -d countsfor_rehearsal -Atc "select count(*) from $t")"
+  done
+  ```
+
+- **The SQL of steps 7 and 8:** open a session on the scratch database, paste the sequence check of step 7 and the SQL blocks of step 8 (the `DELETE` of edits under old numbers waits for an admin in the real import, so leave it out here), then leave with `\q`:
+
+  ```bash
+  sudo -u countsfor psql -d countsfor_rehearsal
+  ```
+
+- **Old course edits** (step 8): the baseline file, then the conversion as a dry run. Add `--apply` to try the writes.
+
+  ```bash
+  git -C ~/countsfor-src show 79e29ec:data/courses.json > ~/courses-main.json
+  sudo install -m 644 -o countsfor -g countsfor ~/courses-main.json /var/tmp/countsfor-courses-main.json
+  sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; export DATABASE_URL=postgresql:///countsfor_rehearsal; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.migrate_override_paths --baseline /var/tmp/countsfor-courses-main.json'
+  ```
+
+- **Bootstrap** (step 9):
+
+  ```bash
+  sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; export DATABASE_URL=postgresql:///countsfor_rehearsal; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.bootstrap_db'
+  ```
+
+- **Drop it**, then clean up as in step 10:
+
+  ```bash
+  sudo -u postgres dropdb countsfor_rehearsal
+  ```
+
+Both Python commands print the database they use: the conversion on its first line, before it reads the database, and the bootstrap after any migration lines (step 9). Here both must say `Database target: postgresql:/countsfor_rehearsal`; the `export` comes after the environment file is read, so it wins. Check the conversion's line before you add `--apply`.
 
 ### 15.9 Start the API with systemd
 
