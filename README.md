@@ -824,7 +824,8 @@ On the server systemd runs `gunicorn --workers 3 --bind 127.0.0.1:8000 --timeout
 - `@require_login`: 401 unless signed in. Sets `g.user`.
 - `@require_role_group("faculty", "admin")`: 403 unless the user's role group is listed. **Use this for permissions.**
 - `@require_role("student")`: exact role match. Used for student-only routes (wishlist, search event).
-- Constants: `ROLE_GROUP_STUDENT`, `ROLE_GROUP_FACULTY`, `ROLE_GROUP_ADMIN`, `FACULTY_OR_ADMIN`.
+- `current_user()` and `is_admin(user)`: for a public route that shows admins more, such as the editor's email in the course and minor edit lists (12.2).
+- Constants: `ROLE_GROUP_STUDENT`, `ROLE_GROUP_FACULTY`, `ROLE_GROUP_ADMIN`.
 
 Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 
@@ -850,7 +851,7 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 
 ### 9.5 Users (`backend/users.py`)
 
-Admin only (`MANAGER_ROLES = (ROLE_GROUP_ADMIN,)`). List with `search`, `role_group`, `incomplete`, `limit` (max 1000). Patch validates like `PATCH /api/me`, writes a `user.update` audit row with before and after values. Remember 7.1: the role part is overwritten on next sign-in unless the directory agrees. Some code comments still mention area heads managing users; that is no longer allowed.
+Admin only: both routes have `@require_role_group(ROLE_GROUP_ADMIN)`. List with `search`, `role_group`, `incomplete`, `limit` (max 1000). Patch validates like `PATCH /api/me`, writes a `user.update` audit row with before and after values. Remember 7.1: the role part is overwritten on next sign-in unless the directory agrees. Some code comments still mention area heads managing users; that is no longer allowed.
 
 ### 9.6 Flags (`backend/flags.py`)
 

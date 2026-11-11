@@ -7,7 +7,7 @@ from flask import Blueprint, current_app, g, jsonify, request
 
 from .db import db
 from .models import CourseSearchCount, _utcnow
-from .permissions import require_login, require_role
+from .permissions import require_role
 from .semesters import default_semester, normalize_semester
 
 bp = Blueprint("search_analytics", __name__, url_prefix="/api/search-analytics")

@@ -3,7 +3,6 @@
 normalize_cmu_email is the one backend check of "is this a CMU address";
 frontend/js/utils.js normalizeCmuEmail is its frontend twin and follows the same rules.
 """
-import json
 import re
 from pathlib import Path
 

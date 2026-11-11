@@ -11,15 +11,12 @@ from typing import Iterable
 from flask import jsonify, request, session, g
 
 from .db import db
-from .models import User, FACULTY_ROLES
+from .models import User
 from .tokens import verify_auth_token
 
 ROLE_GROUP_STUDENT = "student"
 ROLE_GROUP_FACULTY = "faculty"
 ROLE_GROUP_ADMIN = "admin"
-
-# Exact role strings still used where a specific title matters (e.g. flag review).
-FACULTY_OR_ADMIN = FACULTY_ROLES | {ROLE_GROUP_ADMIN}
 
 
 def _load_user() -> User | None:

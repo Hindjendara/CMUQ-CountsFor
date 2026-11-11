@@ -24,8 +24,6 @@ log = logging.getLogger(__name__)
 
 LOCAL_TZ = timezone(timedelta(hours=3), name="AST")  # Asia/Qatar, no daylight saving
 
-SIGN_IN_METHODS = ("google", "password", "email_link", "register", "before_tracking")
-
 
 def local_day(dt: datetime | None = None) -> str:
     dt = dt or datetime.now(timezone.utc)

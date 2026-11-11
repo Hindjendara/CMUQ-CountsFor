@@ -29,9 +29,6 @@ VALID_ROLES = (
 # Faculty job titles (permission group "faculty"). Admin is separate.
 FACULTY_ROLES = frozenset({"professor", "area_head", "associate_area_head", "advisor"})
 
-# UI bucket for faculty-style app chrome (flags, directory tab). Includes admin.
-FACULTY_UI_ROLES = FACULTY_ROLES | {"admin"}
-
 FLAG_STATUSES = ("pending", "reviewed", "resolved", "dismissed")
 
 VALID_DEPARTMENTS = (

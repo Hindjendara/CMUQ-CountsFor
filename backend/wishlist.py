@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .db import db
 from .models import User, WishlistItem
-from .permissions import require_role_group, require_role, ROLE_GROUP_STUDENT, ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN
+from .permissions import require_role_group, require_role, ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN
 
 
 bp = Blueprint("wishlist", __name__, url_prefix="/api/wishlist")

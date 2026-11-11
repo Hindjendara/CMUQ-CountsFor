@@ -581,7 +581,6 @@ VALID_MINORS_FOR_PATCH = {
     "economics", "finance", "history", "math", "neuroscience", "product",
     "writing", "psychology", "sociology", "self_defined", "tech_entre",
 }
-VALID_ADVISOR_SCOPES = {"major", "minor", "arts_sciences", "all_programs"}
 
 
 def _validate_consistent_profile(role, primary_program, minor_codes, advisor_scope, department):
