@@ -58,7 +58,9 @@ MINOR_PREFIX = "MINOR:"
 MINOR_CODE_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 # Used only when minors.json cannot be read: the shape of a category path.
 MINOR_PATH_RE = re.compile(r"^[a-z0-9_]+(---[a-z0-9_]+)*$")
-DASH_RE = re.compile(r"[\u2012-\u2015]")  # figure dash to horizontal bar, as the dash guard test
+# Long dashes: figure dash to horizontal bar, as the dash guard test. Refused in category
+# paths, in the course texts admins type and in minor notes (minor_overrides.py).
+DASH_RE = re.compile(r"[\u2012-\u2015]")
 PATH_MAX = 400
 EDIT_ROWS_MAX = 200
 BATCH_MAX = 200
@@ -101,6 +103,8 @@ def _clean_fields(data: dict) -> tuple[dict, str | None]:
                 return {}, "Course name cannot be empty."
             if len(value) > max_len:
                 return {}, f"{label.capitalize()} is too long (max {max_len} characters)."
+            if DASH_RE.search(value):
+                return {}, f"Use plain hyphens in the {label}, not long dashes."
             out[field] = value
     if "department" in data:
         dept = str(data["department"] or "").strip().lstrip("0") or None

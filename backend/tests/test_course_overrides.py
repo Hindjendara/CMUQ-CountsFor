@@ -61,6 +61,25 @@ def test_list_shows_who_saved_an_edit_to_admins_only(app, client, admin, student
     assert r.get_json()["items"][0]["updated_by_email"] == "admin@andrew.cmu.edu"
 
 
+def test_text_fields_refuse_long_dashes(client, admin):
+    """Students read these texts, so they follow the rule for category names: plain hyphens only."""
+    login(client, admin)
+    for field in ("course_name", "description", "prerequisites"):
+        for dash in "‒–—―":
+            r = client.patch("/api/courses/overrides/15-122", json={field: f"Data {dash} Structures"})
+            assert r.status_code == 400, (field, dash)
+            assert r.get_json() == {
+                "error": "invalid_field",
+                "message": f"Use plain hyphens in the {field.replace('_', ' ')}, not long dashes.",
+            }
+    r = client.post("/api/courses/overrides", json={"course_code": "15-998", "course_name": "Topics — AI"})
+    assert r.status_code == 400
+    assert r.get_json()["message"] == "Use plain hyphens in the course name, not long dashes."
+    assert _items(client) == []
+    r = client.patch("/api/courses/overrides/15-122", json={"course_name": "Data Structures - Principles"})
+    assert r.status_code == 200 and r.get_json()["fields"] == {"course_name": "Data Structures - Principles"}
+
+
 def test_edit_catalog_course_and_counts_for(client, admin):
     login(client, admin)
     r = client.patch("/api/courses/overrides/15-122", json={

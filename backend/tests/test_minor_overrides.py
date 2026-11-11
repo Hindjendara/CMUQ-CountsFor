@@ -46,6 +46,18 @@ def test_list_shows_who_saved_to_admins_only(app, client, admin, student, profes
     assert r.get_json()["items"][0]["updated_by_email"] == "admin@andrew.cmu.edu"
 
 
+def test_note_refuses_long_dashes(client, admin):
+    """Students read the note in the minor header, so it follows the minor file's rule: plain hyphens only."""
+    login(client, admin)
+    for dash in "‒–—―":
+        r = client.patch("/api/minors/overrides/psychology", json={"admin_note": f"Ask the advisor {dash} early."})
+        assert r.status_code == 400, dash
+        assert r.get_json() == {"error": "invalid_field", "message": "Use plain hyphens in the note, not long dashes."}
+    assert _items(client) == []
+    r = client.patch("/api/minors/overrides/psychology", json={"admin_note": "Ask the advisor - early."})
+    assert r.status_code == 200 and r.get_json()["fields"] == {"admin_note": "Ask the advisor - early."}
+
+
 def test_edit_merge_and_undo(client, admin):
     login(client, admin)
     # Psychology in minors.json: 72 units, no double counting limit.

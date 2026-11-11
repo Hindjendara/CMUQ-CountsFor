@@ -1018,7 +1018,7 @@ One row per course code:
 
 ### 12.3 Validation rules (`course_overrides.py`)
 
-Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000; each must be text (null empties the description or the prerequisites). Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`.
+Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000; each must be text (null empties the description or the prerequisites). Students read these texts, so like category paths they may not contain long dashes (U+2012 to U+2015, the characters the dash guard tests look for); the message names the field, for example "Use plain hyphens in the course name, not long dashes." The editor sends only the fields an admin changed, so a save is refused only for text the admin typed. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`.
 
 What a course counts for:
 
@@ -1049,7 +1049,7 @@ A successful Add course or Save changes opens a confirmation screen (`_renderCou
 
 ### 12.6 Minor settings
 
-`frontend/data/minors.json` is built by hand (4.4) and some of its numbers are open questions (double counting limits, unit totals). The **Minor settings** view of the Courses tab (also opened with **Edit minor settings** in the Minors tab) corrects them for everyone without editing the file: `total_units` (a whole number, or empty when the minor states none), `max_with_major` and `max_with_other_minors` (0 to 10, or No limit) and `admin_note` (up to 1000 characters, shown to students in the minor's header as a note from CMU-Q). They are stored in the `minor_overrides` table (`backend/minor_overrides.py`, `/api/minors/overrides`: read by everyone, with who saved them for admins only, and written by admins), one row per minor with only the values that differ from the file; a value set back to the file's is removed, and **Undo all edits** deletes the row. The browser applies them with `applyMinorOverrides()` (8.10). Which courses fill a category is a course edit instead (12.2).
+`frontend/data/minors.json` is built by hand (4.4) and some of its numbers are open questions (double counting limits, unit totals). The **Minor settings** view of the Courses tab (also opened with **Edit minor settings** in the Minors tab) corrects them for everyone without editing the file: `total_units` (a whole number, or empty when the minor states none), `max_with_major` and `max_with_other_minors` (0 to 10, or No limit) and `admin_note` (up to 1000 characters, shown to students in the minor's header as a note from CMU-Q; long dashes are refused with "Use plain hyphens in the note, not long dashes.", the rule the minor file's own text follows). They are stored in the `minor_overrides` table (`backend/minor_overrides.py`, `/api/minors/overrides`: read by everyone, with who saved them for admins only, and written by admins), one row per minor with only the values that differ from the file; a value set back to the file's is removed, and **Undo all edits** deletes the row. The browser applies them with `applyMinorOverrides()` (8.10). Which courses fill a category is a course edit instead (12.2).
 
 ### 12.7 Edits saved before the 2026-27 names
 

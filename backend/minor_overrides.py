@@ -11,7 +11,8 @@ Fields, each optional:
   total_units            integer 0 to 400, or null when the minor states no total
   max_with_major         integer 0 to 10, or null for no limit (as in minors.json)
   max_with_other_minors  integer 0 to 10, or null for no limit
-  admin_note             up to 1000 characters, shown to students as a note from CMU-Q
+  admin_note             up to 1000 characters with no long dashes, shown to students
+                         as a note from CMU-Q
 A value equal to the file's is not stored, so setting a field back to the file
 value removes it, and a row with nothing left is deleted.
 """
@@ -22,6 +23,7 @@ import json
 from flask import Blueprint, g, jsonify, request
 
 from .admin import record_event
+from .course_overrides import DASH_RE
 from .db import db
 from .minors_file import known_minor_codes, load_minors
 from .models import MinorOverride
@@ -74,6 +76,9 @@ def _clean(data: dict) -> dict:
         note = (note or "").strip()
         if len(note) > NOTE_MAX:
             raise SettingError(f"The note is too long (max {NOTE_MAX} characters).")
+        if DASH_RE.search(note):
+            # Students read the note, so it follows the minor file's rule (no long dashes).
+            raise SettingError("Use plain hyphens in the note, not long dashes.")
         out["admin_note"] = note
     return out
 
