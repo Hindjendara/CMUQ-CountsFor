@@ -1,4 +1,11 @@
 {
+  "soc_semesters": [
+    "S27",
+    "F26",
+    "M26",
+    "S26",
+    "F25"
+  ],
   "courses": [
     {
       "course_code": "02-201",

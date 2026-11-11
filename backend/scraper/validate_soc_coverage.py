@@ -6,9 +6,12 @@ A SOC course under an old Psychology number that the renumbering list retires
 number has a row: the overlay step moves such a row to the new number and
 deletes it.
 
-Also warns (without failing) about possible renumberings: two rows of the same
-department with the same cleaned title, one in the SOC and one not. Nothing is
-changed automatically; a person decides what to do with the older row.
+Also fails when the catalog's semester list ("soc_semesters", the app's
+semester picker) is not the list of the SOC search form in soc.json
+(metadata.semesters_on_form), and warns (without failing) about possible
+renumberings: two rows of the same department with the same cleaned title, one
+in the SOC and one not. Nothing is changed automatically; a person decides what
+to do with the older row.
 """
 from __future__ import annotations
 
@@ -28,6 +31,7 @@ from soc_parse import (  # noqa: E402
     is_ignored_course,
     malformed_counts,
     normalize_title,
+    soc_form_semesters,
 )
 
 SOC_PATH = os.environ.get("SOC_JSON_PATH", str(SOC_JSON))
@@ -68,6 +72,21 @@ def fresh_malformed(soc: dict) -> dict[str, dict[str, int]]:
     fresh = {s for s, d in (soc.get("semesters") or {}).items() if d.get("scraped_at") == last}
     return {s: n for s, n in malformed_counts(soc).items()
             if s in fresh and (n["courses"] or n["sections"])}
+
+
+def semester_list_problem(catalog, soc: dict) -> str | None:
+    """Why the catalog's "soc_semesters" is not the SOC form's semester list, or None.
+
+    reconcile_offerings.py copies the list; a soc.json without one (only
+    hand-made test files) has nothing to compare.
+    """
+    form = soc_form_semesters(soc)
+    if form is None:
+        return None
+    listed = catalog.get("soc_semesters") if isinstance(catalog, dict) else None
+    if listed != form:
+        return f"courses.json soc_semesters is {listed}, but the SOC form lists {form}"
+    return None
 
 
 def catalog_codes(courses: list[dict]) -> set[str]:
@@ -141,9 +160,12 @@ def main() -> int:
     known |= set(renumbered)
 
     fresh_bad = fresh_malformed(soc)
+    semesters_bad = semester_list_problem(data, soc)
     all_missing: set[str] = set()
     print("SOC coverage check (PIT + Qatar)")
     print("=" * 50)
+    if not semesters_bad and isinstance(data, dict) and data.get("soc_semesters"):
+        print(f"  Semester picker (soc_semesters): {', '.join(data['soc_semesters'])}, as on the SOC form")
     if renumbered:
         print(f"  {len(renumbered)} SOC course(s) under an old Psychology number count as their new number: "
               + ", ".join(f"{old} ({new})" for old, new in renumbered.items()))
@@ -170,6 +192,9 @@ def main() -> int:
         for sem, n in sorted(fresh_bad.items()):
             print(f"  - {sem}: {n['courses']} course(s), {n['sections']} section(s)")
 
+    if semesters_bad:
+        print(f"\nFAIL: {semesters_bad}. Run reconcile_offerings.py.")
+
     if all_missing:
         print(f"\nFAIL: {len(all_missing)} SOC course(s) not in CountsFor catalog:")
         for code in sorted(all_missing)[:30]:
@@ -177,7 +202,7 @@ def main() -> int:
         if len(all_missing) > 30:
             print(f"  ... and {len(all_missing) - 30} more")
         return 1
-    if fresh_bad:
+    if fresh_bad or semesters_bad:
         return 1
 
     print("\nOK: every SOC course is present in courses.json.")

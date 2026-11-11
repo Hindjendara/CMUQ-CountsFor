@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Merge SOC scrape output into frontend/data/courses.json offerings and campus flags."""
+"""Merge SOC scrape output into frontend/data/courses.json offerings and campus flags.
+
+Also writes the SOC's current semesters (soc.json metadata.semesters_on_form)
+to courses.json as "soc_semesters", the app's semester picker.
+"""
 from __future__ import annotations
 
 import os
@@ -21,6 +25,7 @@ from soc_parse import (  # noqa: E402
     normalize_course_code,
     parse_soc_units,
     semester_rank,
+    soc_form_semesters,
     titles_match,
     usable_sections,
 )
@@ -238,6 +243,19 @@ def stub_course_from_soc(code: str, offerings: list[dict], meta: dict | None = N
     return course
 
 
+def with_soc_semesters(catalog: dict, semesters: list[str] | None) -> dict:
+    """The catalog with "soc_semesters" first: the SOC's current semesters, newest first.
+
+    The app's semester picker lists exactly these (soc_parse.soc_form_semesters);
+    sections of a semester that left the SOC stay in the offerings as history.
+    Without a list in soc.json the key is left out and the app falls back to
+    the semesters its offerings have.
+    """
+    out = {"soc_semesters": semesters} if semesters else {}
+    out.update((key, value) for key, value in catalog.items() if key != "soc_semesters")
+    return out
+
+
 def reconcile_file(courses_path: str, soc_path: str) -> dict:
     soc = load_json(soc_path)
     data = load_json(courses_path)
@@ -295,9 +313,13 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
         existing_codes.add(code)
         added += 1
 
+    semesters = soc_form_semesters(soc)
+    if wrapper is not None:
+        wrapper = with_soc_semesters(wrapper, semesters)
     save_json(courses_path, wrapper if wrapper is not None else courses)
     ignored = {sem: n for sem, n in malformed_counts(soc).items() if n["courses"] or n["sections"]}
     return {
+        "soc_semesters": semesters,
         "malformed_ignored": ignored,
         "courses_updated": updated,
         "courses_added": added,
@@ -318,7 +340,13 @@ def main():
     stats = reconcile_file(COURSES_PATH, SOC_PATH)
     reused = stats.pop("reused_numbers")
     ignored = stats.pop("malformed_ignored")
+    semesters = stats.pop("soc_semesters")
     print(f"Reconciled {COURSES_PATH}: {stats}")
+    if semesters:
+        print(f"Semesters on the SOC form (soc_semesters): {', '.join(semesters)}")
+    else:
+        print(f"WARNING: {SOC_PATH} has no metadata.semesters_on_form; courses.json has no soc_semesters "
+              "and the app lists the semesters its offerings have.")
     for sem, n in sorted(ignored.items()):
         print(f"IGNORED malformed SOC data in {sem}: {n['courses']} course(s), {n['sections']} section(s)")
     if reused:

@@ -22,8 +22,9 @@ SOC_DEPARTMENT_CODES = [
     "STU",
 ]
 
-# Fallback semester codes when the form cannot be fetched.
-SOC_SEMESTER_CODES = ["F26", "M26", "S26", "F25", "M25"]
+# No list of semesters is kept in code: the semesters are the ones the SOC
+# search form lists (soc.json metadata.semesters_on_form, the app's semester
+# picker). A scrape that cannot read them stops (scrape_soc.main).
 
 # Pittsburgh + Qatar — must match PRG_LOCATION values on the SOC search form.
 SOC_LOCATION_CODES = [
@@ -74,10 +75,6 @@ def fallback_department_list() -> list[tuple[str, str]]:
     return [(code, code) for code in SOC_DEPARTMENT_CODES]
 
 
-def fallback_semester_list() -> list[tuple[str, str]]:
-    return [(code, code) for code in SOC_SEMESTER_CODES]
-
-
 def get_department_list(fetch_get, search_url: str, form_html: str | None = None) -> list[tuple[str, str]]:
     """Fetch department list from SOC, falling back to hardcoded codes."""
     try:
@@ -91,23 +88,31 @@ def get_department_list(fetch_get, search_url: str, form_html: str | None = None
 
 
 def get_semester_list(fetch_get, search_url: str, form_html: str | None = None) -> list[tuple[str, str]]:
-    """Fetch current semester codes from the SOC search form."""
-    override = os.environ.get("SEMESTERS_TO_TRY", "").strip()
-    if override:
-        return [(code.strip().upper(), code.strip().upper()) for code in override.split(",") if code.strip()]
+    """The semesters on the SOC search form, [(code, label), ...] in SOC order.
 
+    [] when the form cannot be fetched or its semester dropdown cannot be
+    parsed: there is no fallback list.
+    """
     try:
         form_html = form_html or fetch_get(search_url)
-        sem_list = parse_semester_list(form_html)
-        if sem_list:
-            return sem_list
+        return parse_semester_list(form_html)
     except Exception as e:
         print(f"  WARN: couldn't fetch semester list dynamically: {e}")
-    return fallback_semester_list()
+    return []
+
+
+def semesters_to_scrape(form_semesters: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """The semesters to scrape: SEMESTERS_TO_TRY (a comma list) when set, else the form's."""
+    override = os.environ.get("SEMESTERS_TO_TRY", "").strip()
+    if not override:
+        return list(form_semesters)
+    labels = dict(form_semesters)
+    codes = [code.strip().upper() for code in override.split(",") if code.strip()]
+    return [(code, labels.get(code, code)) for code in codes]
 
 
 def load_soc_form(fetch_get, search_url: str) -> tuple[str, list[tuple[str, str]], list[tuple[str, str]]]:
-    """One GET to SOC search; return form HTML, semesters, departments."""
+    """One GET to SOC search; return form HTML, the form's semesters, departments."""
     form_html = fetch_get(search_url)
     semesters = get_semester_list(fetch_get, search_url, form_html=form_html)
     departments = get_department_list(fetch_get, search_url, form_html=form_html)

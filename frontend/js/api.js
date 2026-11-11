@@ -35,9 +35,11 @@ async function _get(url) {
 }
 
 // ── Main exported function ───────────────────────────────────
-// Throws when the catalog cannot be loaded; App.loadData() catches it and
-// shows the "Failed to load data" message.
-async function fetchAllCourses() {
+// The catalog: { courses, socSemesters }. socSemesters is the Schedule of
+// Classes' semester list ("soc_semesters", written by the daily update), or
+// null in a catalog without one. Throws when the catalog cannot be loaded;
+// App.loadData() catches it and shows the "Failed to load data" message.
+async function fetchCatalog() {
   let data;
   try {
     data = await _get(_bundledDataUrl(LOCAL_DATA));
@@ -46,7 +48,7 @@ async function fetchAllCourses() {
   }
   const courses = (data && data.courses) || [];
   if (courses.length === 0) throw new Error(`${LOCAL_DATA} has no courses.`);
-  return courses;
+  return { courses, socSemesters: Array.isArray(data.soc_semesters) ? data.soc_semesters : null };
 }
 
 // The minor requirements (data/minors.json). Throws when the file cannot be

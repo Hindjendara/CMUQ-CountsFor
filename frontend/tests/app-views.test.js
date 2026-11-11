@@ -592,9 +592,12 @@ test('minors: without minors.json the tree still renders and the minor says why'
 
 
 // ── Semester picker ──────────────────────────────────────────
-// The real loadData() with the network stubbed: the picker lists the catalog's
-// semesters and opens on the newest fall or spring with Qatar sections; the
-// semester picked last is kept on this device (cf_semester).
+// The real loadData() with the network stubbed: the picker lists the SOC's
+// semesters (courses.json "soc_semesters") and opens on the newest fall or
+// spring with Qatar sections; the semester picked last is kept on this device
+// (cf_semester).
+const SOC_SEMESTERS = ['S27', 'F26', 'M26', 'S26', 'F25'];
+
 function semesterCatalog(...extra) {
   const off = (semester_code, campus) => ({ semester_code, campus, modality: 'In Person', section: 'A', days_times: 'MW 10:00AM-11:20AM' });
   const course = (code, name, path, offerings) => {
@@ -609,11 +612,11 @@ function semesterCatalog(...extra) {
   ];
 }
 
-async function loadSemesterApp(catalog, saved) {
+async function loadSemesterApp(catalog, saved, socSemesters = SOC_SEMESTERS) {
   const env = loadApp();
   const { App, ctx } = env;
-  if (saved !== undefined) ctx.localStorage.setItem('cf_semester', JSON.stringify(saved));
-  ctx.fetchAllCourses = async () => JSON.parse(JSON.stringify(catalog));
+  if (saved !== undefined && saved !== null) ctx.localStorage.setItem('cf_semester', JSON.stringify(saved));
+  ctx.fetchCatalog = async () => ({ courses: JSON.parse(JSON.stringify(catalog)), socSemesters });
   ctx.fetchMinors = async () => MINORS_JSON;
   ctx.apiGetCourseOverrides = async () => ({ ok: true, data: { items: [] } });
   await App.loadData();
@@ -627,7 +630,7 @@ const semesterOptionsShown = document => {
   return [...html.matchAll(/<option value="([^"]*)"\s*(selected)?\s*>([^<]*)</g)].map(m => (m[2] ? '*' : '') + m[3]);
 };
 
-test('semesters: the picker lists the catalog semesters and opens on Spring 2027', async () => {
+test('semesters: the picker lists the SOC semesters and opens on Spring 2027', async () => {
   const env = loadApp();
   assertTrue(env.document.getElementById('app').innerHTML.includes('Loading semesters'), 'a placeholder until the catalog loads');
   const { App, document } = await loadSemesterApp(semesterCatalog());
@@ -662,27 +665,62 @@ test('semesters: a picked semester is kept on this device while the catalog has 
   assertEqual(gone.App.activeSemester, 'S27', 'a semester the catalog no longer has');
 });
 
-test('semesters: a new semester in the catalog (F27) is listed with no code change and opens once Qatar has sections', async () => {
+test('semesters: a new SOC semester (F27) is listed with no code change and opens once Qatar has sections', async () => {
   const off = campus => ({ semester_code: 'F27', campus, modality: 'In Person', section: 'A' });
   const pitt = { course_code: '15-213', course_name: 'Introduction to Computer Systems', units: 12, requirements: {}, offerings: [off('Pittsburgh')] };
   const saved = { code: 'F26', defaultCode: 'S27' };
+  const withF27 = ['F27', ...SOC_SEMESTERS];
 
-  const pittOnly = await loadSemesterApp(semesterCatalog(pitt));
+  const pittOnly = await loadSemesterApp(semesterCatalog(pitt), undefined, withF27);
   assertEqual(pittOnly.App.activeSemester, 'S27', 'Pittsburgh sections alone do not move the default');
   assertEqual(semesterOptionsShown(pittOnly.document).slice(0, 3), ['All semesters', 'Fall 2027', '*Spring 2027']);
 
   const qatar = { ...pitt, course_code: '15-214', offerings: [off('Qatar')] };
-  const fresh = await loadSemesterApp(semesterCatalog(pitt, qatar));
+  const fresh = await loadSemesterApp(semesterCatalog(pitt, qatar), undefined, withF27);
   assertEqual(fresh.App.activeSemester, 'F27');
   assertEqual(semesterOptionsShown(fresh.document)[1], '*Fall 2027');
-  const returning = await loadSemesterApp(semesterCatalog(pitt, qatar), saved);
+  const returning = await loadSemesterApp(semesterCatalog(pitt, qatar), saved, withF27);
   assertEqual(returning.App.activeSemester, 'F27', 'a choice made before Fall 2027 came out gives way to it');
+});
+
+test('semesters: a semester that left the SOC is history: not in the picker or under All semesters, still on the card', async () => {
+  const off = (semester_code, campus) => ({ semester_code, campus, modality: 'In Person', section: 'W', days_times: 'UT 10:00AM-11:15AM' });
+  // soc.json still holds Fall 2024 and Summer 2025, so their sections stay in the catalog.
+  const old = { course_code: '85-213', course_name: 'Human Memory', units: 9, offered: ['F22'], offered_qatar: true, offered_pitts: false,
+    requirements: { CS: [{ requirement: 'Computer Science---Intro Programming', type: false, major: 'CS' }], IS: [], BA: [], BS: [] },
+    offerings: [off('M25', 'Qatar'), off('F24', 'Qatar')] };
+  const { App, document } = await loadSemesterApp(semesterCatalog(old), { code: 'F24', defaultCode: 'F24' });
+  assertEqual(App.activeSemester, 'S27', 'a saved semester that left the SOC gives way to the default');
+  assertEqual(semesterOptionsShown(document), ['All semesters', '*Spring 2027', 'Fall 2026', 'Summer 2026', 'Spring 2026', 'Fall 2025']);
+  App.setSemester('all');
+  assertEqual(App._visibleOfferingGroups(lookupCourseIn(App, '85-213')), [], 'no section of a semester that left the SOC');
+  App.locationFilter = 'qatar';
+  assertTrue(App.coursePassesTreeFilter(lookupCourseIn(App, '85-213')), 'judged like a course without sections');
+  App.locationFilter = 'all';
+
+  const card = loadApp({ realCard: true });
+  card.ctx.fetchCatalog = async () => ({ courses: semesterCatalog(old), socSemesters: SOC_SEMESTERS });
+  card.ctx.fetchMinors = async () => MINORS_JSON;
+  card.ctx.apiGetCourseOverrides = async () => ({ ok: true, data: { items: [] } });
+  await card.App.loadData();
+  card.App.setSemester('all');
+  card.App._selectCourse(lookupCourseIn(card.App, '85-213'));
+  const html = leftBodyHtml(card.document);
+  assertTrue(html.includes('Summer 2025 · Fall 2024 · Fall 2022'), 'the offering history lists them');
+  assertFalse(html.includes('cc-sched-block'), 'no section block under All semesters');
+  assertTrue(html.includes('No matching sections for All semesters'));
+});
+
+test('semesters: a catalog without the SOC list falls back to the semesters with sections', async () => {
+  const { App, document } = await loadSemesterApp(semesterCatalog(), undefined, null);
+  assertEqual(App.activeSemester, 'S27');
+  assertEqual(semesterOptionsShown(document), ['All semesters', '*Spring 2027', 'Fall 2026', 'Summer 2026', 'Spring 2026', 'Fall 2025']);
 });
 
 test('semesters: when the catalog cannot be loaded the picker stops saying it is loading', async () => {
   const { App, ctx, document } = loadApp();
   ctx.console = { log() {}, warn() {}, error() {} };
-  ctx.fetchAllCourses = async () => { throw new Error('offline'); };
+  ctx.fetchCatalog = async () => { throw new Error('offline'); };
   ctx.fetchMinors = async () => MINORS_JSON;
   ctx.apiGetCourseOverrides = async () => ({ ok: true, data: { items: [] } });
   await App.loadData();

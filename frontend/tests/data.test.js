@@ -323,27 +323,18 @@ test('splitTreeSections: the GenEd root is gen ed, the degree root is not', () =
   assertEqual(gened.map(n => n.rawLabel), ['GenEd']);
 });
 
-test('availableSemesterOptions: includes summer when catalog has M26 offerings', () => {
-  const courses = [{
-    course_code: '15-122',
-    offerings: [{ semester_code: 'F26', campus: 'Qatar', modality: 'In Person' }],
-  }, {
-    course_code: '21-127',
-    offerings: [{ semester: 'Summer 2026', semester_code: 'M26', campus: 'Pittsburgh', modality: 'In Person' }],
-  }];
-  const opts = availableSemesterOptions(courses, 'F26');
-  assertTrue(opts.some(s => s.code === 'M26'));
-  assertTrue(opts.some(s => s.code === 'F26'));
-});
-
 test('normalizeSemesterCode: accepts label or code', () => {
   assertEqual(normalizeSemesterCode('M26'), 'M26');
   assertEqual(normalizeSemesterCode('Summer 2026'), 'M26');
 });
 
 // ── Semesters from the Schedule of Classes ──────────────────
-// The picker lists the semesters the catalog has sections for. No semester is
-// named in js/, so a new one in the daily scrape needs no code change.
+// The picker lists exactly the semesters the SOC search form lists (courses.json
+// "soc_semesters", written by the daily update). No semester is named in js/,
+// so a new one in the daily scrape needs no code change, and the sections of a
+// semester that left the SOC stay in the catalog as history only.
+
+const SOC_LIST = ['S27', 'F26', 'M26', 'S26', 'F25'];
 
 function socCatalog(...extra) {
   const off = (semester_code, campus) => ({ semester_code, campus, modality: 'In Person', section: 'A' });
@@ -354,47 +345,79 @@ function socCatalog(...extra) {
   ];
 }
 
-test('catalogSemesters: the catalog semesters newest first; the default is the newest fall or spring in Qatar', () => {
-  const s = catalogSemesters(socCatalog());
+test('catalogSemesters: the SOC semesters newest first; the default is the newest fall or spring in Qatar', () => {
+  const s = catalogSemesters(socCatalog(), ['F25', 'S27', 'm26', 'F26', 'S26', 'S27', 'bad']);
   assertEqual(s.codes, ['S27', 'F26', 'M26', 'S26', 'F25']);
   assertEqual(s.defaultCode, 'S27');
-  assertEqual(availableSemesterOptions(socCatalog()).map(o => o.label),
+  assertEqual(semesterOptions(s.codes).map(o => o.label),
     ['All semesters', 'Spring 2027', 'Fall 2026', 'Summer 2026', 'Spring 2026', 'Fall 2025']);
 });
 
-test('catalogSemesters: a new semester (F27) in the catalog is offered, and is the default once Qatar has sections', () => {
-  const pitt = { course_code: '36-200', offerings: [{ semester_code: 'F27', campus: 'Pittsburgh' }] };
-  const opts = availableSemesterOptions(socCatalog(pitt));
-  assertEqual(opts[1], { code: 'F27', label: 'Fall 2027' });
-  assertEqual(catalogSemesters(socCatalog(pitt)).defaultCode, 'S27', 'Pittsburgh sections alone do not move the default');
-  const qatar = { course_code: '67-250', offerings: [{ semester_code: 'F27', campus: 'Qatar' }] };
-  assertEqual(catalogSemesters(socCatalog(pitt, qatar)).defaultCode, 'F27');
+test('catalogSemesters: a semester that left the SOC is not listed, though its sections stay as history', () => {
+  // F24 and M25 sections are still in the catalog (soc.json keeps them), but the SOC no longer lists them.
+  const old = { course_code: '85-211', offerings: [{ semester_code: 'F24', campus: 'Qatar' }, { semester_code: 'M25', campus: 'Qatar' }] };
+  const s = catalogSemesters(socCatalog(old), SOC_LIST);
+  assertEqual(s.codes, SOC_LIST);
+  assertEqual(s.defaultCode, 'S27');
+  // Without the SOC list (an old catalog file) the picker falls back to the semesters with sections.
+  assertEqual(catalogSemesters(socCatalog(old)).codes, ['S27', 'F26', 'M26', 'S26', 'F25', 'M25', 'F24']);
 });
 
-test('catalogSemesters: summer is offered but never the default; cancelled sections do not count', () => {
+test('catalogSemesters: a new SOC semester (F27) is listed, also before it has sections, and is the default once Qatar has sections', () => {
+  const list = ['F27', ...SOC_LIST];
+  const early = catalogSemesters(socCatalog(), list);
+  assertEqual(semesterOptions(early.codes)[1], { code: 'F27', label: 'Fall 2027' }, 'listed as the SOC lists it');
+  assertEqual(early.defaultCode, 'S27', 'no sections yet');
+  const pitt = { course_code: '36-200', offerings: [{ semester_code: 'F27', campus: 'Pittsburgh' }] };
+  assertEqual(catalogSemesters(socCatalog(pitt), list).defaultCode, 'S27', 'Pittsburgh sections alone do not move the default');
+  const qatar = { course_code: '67-250', offerings: [{ semester_code: 'F27', campus: 'Qatar' }] };
+  assertEqual(catalogSemesters(socCatalog(pitt, qatar), list).defaultCode, 'F27');
+  assertEqual(catalogSemesters(socCatalog(pitt, qatar)).defaultCode, 'F27', 'the same without a list');
+});
+
+test('catalogSemesters: summer is listed but never the default; cancelled sections do not count', () => {
   const summer = { course_code: '15-112', offerings: [{ semester_code: 'M27', campus: 'Qatar' }] };
   const cancelled = { course_code: '15-213', offerings: [{ semester_code: 'F27', campus: 'Qatar', cancelled: true }] };
-  const s = catalogSemesters(socCatalog(summer, cancelled));
-  assertEqual(s.codes.slice(0, 2), ['M27', 'S27']);
+  const s = catalogSemesters(socCatalog(summer, cancelled), ['F27', 'M27', ...SOC_LIST]);
+  assertEqual(s.codes.slice(0, 3), ['F27', 'M27', 'S27']);
   assertEqual(s.defaultCode, 'S27');
-  assertEqual(catalogSemesters([{ course_code: '15-112', offerings: [{ semester_code: 'M27', campus: 'Qatar' }] }]).defaultCode, 'M27',
-    'a catalog with only a summer opens on it');
+  assertEqual(catalogSemesters([summer], ['M27']).defaultCode, 'M27', 'a list with only a summer opens on it');
   assertEqual(catalogSemesters([]), { codes: [], defaultCode: null });
+  assertEqual(catalogSemesters([], []), { codes: [], defaultCode: null });
 });
 
-test('semesterOptions: the semester on screen stays listed even when the catalog lacks it', () => {
-  assertEqual(semesterOptions(['S27'], 'F24').map(o => o.code), ['all', 'S27', 'F24']);
-  assertEqual(semesterOptions(['S27'], 'all').map(o => o.code), ['all', 'S27']);
-  assertEqual(semesterOptions([], null), [{ code: 'all', label: 'All semesters' }]);
+test('semesterOptions: "All semesters", then the codes newest first', () => {
+  assertEqual(semesterOptions(['F26', 'S27']).map(o => o.code), ['all', 'S27', 'F26']);
+  assertEqual(semesterOptions([]), [{ code: 'all', label: 'All semesters' }]);
+  assertEqual(semesterOptions(null), [{ code: 'all', label: 'All semesters' }]);
+});
+
+test('filters: "All semesters" means the SOC semesters; a section of a semester that left the SOC is history', () => {
+  const off = (semester_code, campus) => ({ semester_code, campus, modality: 'In Person', section: 'A' });
+  const left = { course_code: '85-213', offered: ['F24', 'M25'], offered_qatar: true, offered_pitts: false,
+    offerings: [off('M25', 'Qatar'), off('F24', 'Qatar')] };
+  const both = { course_code: '85-211', offered: [], offerings: [off('S27', 'Pittsburgh'), off('F24', 'Qatar')] };
+  const all = { semesterCode: 'all', semesters: SOC_LIST, locationFilter: 'all', modalityFilter: 'all' };
+  assertEqual(filterOfferings(both.offerings, all).map(o => o.semester_code), ['S27']);
+  assertEqual(filterOfferings(both.offerings, { ...all, semesters: null }).length, 2, 'without a list: every semester');
+  assertEqual(filterOfferingGroups(linkOfferingGroups(both.offerings), all).map(g => g.semester_code), ['S27']);
+  assertFalse(courseHasMatchingOffering(both, { ...all, locationFilter: 'qatar' }), 'its only Qatar section is history');
+  assertTrue(courseHasMatchingOffering(both, all));
+  // A course whose sections are all history counts as one without sections: shown under
+  // All semesters, judged by its history for a semester and by its campus flags for a campus.
+  assertTrue(courseHasMatchingOffering(left, all));
+  assertFalse(courseHasMatchingOffering(left, { ...all, semesterCode: 'S27' }));
+  assertTrue(courseHasMatchingOffering(left, { ...all, locationFilter: 'qatar' }));
+  assertFalse(courseHasMatchingOffering(left, { ...all, locationFilter: 'pittsburgh' }));
 });
 
 test('resolveSemesterChoice: the saved choice while offered; else the default, also once a newer default is out', () => {
-  const s = catalogSemesters(socCatalog());
+  const s = catalogSemesters(socCatalog(), SOC_LIST);
   assertEqual(resolveSemesterChoice(s, null), 'S27');
   assertEqual(resolveSemesterChoice(s, { code: 'F26', defaultCode: 'S27' }), 'F26');
   assertEqual(resolveSemesterChoice(s, 'M26'), 'M26', 'a bare code');
   assertEqual(resolveSemesterChoice(s, { code: 'all', defaultCode: 'F26' }), 'all');
-  assertEqual(resolveSemesterChoice(s, { code: 'F24', defaultCode: 'S27' }), 'S27', 'no longer in the catalog');
+  assertEqual(resolveSemesterChoice(s, { code: 'F24', defaultCode: 'S27' }), 'S27', 'no longer on the SOC');
   assertEqual(resolveSemesterChoice(s, { code: 'F26', defaultCode: 'F26' }), 'S27', 'picked before Spring 2027 came out');
   assertEqual(resolveSemesterChoice({ codes: [], defaultCode: null }, { code: 'F26' }), 'all');
 });

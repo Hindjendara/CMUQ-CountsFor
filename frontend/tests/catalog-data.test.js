@@ -4,7 +4,8 @@
 // and every row has the same plain shape (no earlier requirement flag). Also
 // checks data/requirement_buckets.json, the admin course editor's bucket list:
 // it lists every row path, in the tree's catalog order. And the planner: no
-// offering of the catalog conflicts with itself when it is planned.
+// offering of the catalog conflicts with itself when it is planned. And the
+// semester picker: the catalog lists the SOC's semesters (soc_semesters).
 //
 // Node only: it reads the 30 MB catalog with fs, so scripts/run-data-tests.js
 // loads it with require() and tests/test.html does not include it. It runs
@@ -23,9 +24,12 @@ function bucketList() {
   if (!buckets) buckets = JSON.parse(fs.readFileSync(BUCKETS, 'utf8'));
   return buckets;
 }
-function courses() {
-  if (!catalog) catalog = JSON.parse(fs.readFileSync(CATALOG, 'utf8')).courses;
+function catalogFile() {
+  if (!catalog) catalog = JSON.parse(fs.readFileSync(CATALOG, 'utf8'));
   return catalog;
+}
+function courses() {
+  return catalogFile().courses;
 }
 function rows() {
   const out = [];
@@ -208,4 +212,14 @@ test('planner: no offering of the catalog conflicts with itself, though the SOC 
   const other = { id: 'x', course_code: '15-112', semester_code: 'F26', section: 'A', campus: 'Pittsburgh', days_times: 'TR 01:30PM-02:20PM' };
   assertEqual(countPlanConflictPairs(items.concat(other), keyOf), 2);
   assertEqual([...findPlanConflicts(items.concat(other), keyOf)].sort(), items.map(i => i.id).concat('x').sort());
+});
+
+test('semester picker: the catalog lists the SOC semesters, newest first, and opens on a fall or spring of them', () => {
+  const listed = catalogFile().soc_semesters;
+  assertTrue(Array.isArray(listed) && listed.length > 0, 'courses.json has soc_semesters');
+  assertTrue(listed.every(isSemesterCode), listed.join());
+  assertEqual(listed, sortSemesters(listed));
+  const s = catalogSemesters(courses(), listed);
+  assertEqual(s.codes, listed);
+  assertTrue('FS'.includes(s.defaultCode[0]), s.defaultCode);
 });

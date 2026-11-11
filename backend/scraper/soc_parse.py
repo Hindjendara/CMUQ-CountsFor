@@ -33,6 +33,25 @@ def semester_rank(code) -> int:
     return int(text[1:]) * 10 + SEASON_ORDER[text[0]]
 
 
+def soc_form_semesters(soc) -> list[str] | None:
+    """The semesters the SOC search form listed at the last scrape, newest first.
+
+    scrape_soc.py records them in metadata.semesters_on_form. soc.json also
+    keeps semesters that have left the form, and their sections are history;
+    these are the semesters the SOC lists now. reconcile_offerings.py writes
+    them to courses.json as "soc_semesters", the list of the app's semester
+    picker. None when soc.json has no such list.
+    """
+    entries = ((soc or {}).get("metadata") or {}).get("semesters_on_form")
+    codes: list[str] = []
+    for entry in entries if isinstance(entries, list) else []:
+        raw = entry.get("code") if isinstance(entry, dict) else entry
+        code = raw.strip().upper() if isinstance(raw, str) else ""
+        if SEMESTER_CODE_RE.match(code) and code not in codes:
+            codes.append(code)
+    return sorted(codes, key=semester_rank, reverse=True) or None
+
+
 def semester_code_to_label(code: str) -> str:
     """F26 -> Fall 2026"""
     if not code or len(code) < 3:

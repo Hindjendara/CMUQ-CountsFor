@@ -71,6 +71,7 @@ from soc_parse import (  # noqa: E402
 from soc_departments import (  # noqa: E402
     SOC_LOCATION_CODES,
     load_soc_form,
+    semesters_to_scrape,
 )
 from pipeline_paths import SOC_JSON  # noqa: E402
 
@@ -458,13 +459,20 @@ def main():
     print("=" * 60)
 
     try:
-        form_html, semester_list, dept_list = load_soc_form(fetch_get, SEARCH)
+        form_html, form_semesters, dept_list = load_soc_form(fetch_get, SEARCH)
     except Exception as e:
         print(f"ERROR: could not load SOC search form: {e}")
         sys.exit(1)
+    if not form_semesters:
+        # The form's semesters are the app's semester list; without them the
+        # scrape cannot tell which semesters are current, so nothing is written.
+        print("ERROR: could not read the semester list of the SOC search form. Aborting write.")
+        sys.exit(1)
 
-    sem_codes = [code for code, _ in semester_list]
-    print(f"Semesters from SOC form: {', '.join(f'{c} ({label})' for c, label in semester_list)}")
+    semester_list = semesters_to_scrape(form_semesters)
+    print(f"Semesters from SOC form: {', '.join(f'{c} ({label})' for c, label in form_semesters)}")
+    if semester_list != form_semesters:
+        print(f"Scraping SEMESTERS_TO_TRY: {', '.join(c for c, _ in semester_list)}")
     print(f"Departments: {len(dept_list)}")
 
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -510,7 +518,9 @@ def main():
         'source': 'Carnegie Mellon University -- Schedule of Classes',
         'url': SEARCH,
         'last_scrape': timestamp,
-        'semesters_on_form': [{'code': c, 'label': l} for c, l in semester_list],
+        # The SOC's current semesters (also with SEMESTERS_TO_TRY), which
+        # reconcile_offerings.py writes to courses.json for the semester picker.
+        'semesters_on_form': [{'code': c, 'label': l} for c, l in form_semesters],
         'semesters_available': sorted(scraped_semesters.keys()),
         'campuses': [name for _, name in LOCATIONS_TO_SCRAPE],
         'note': 'Scraped every semester listed on the SOC form for Pittsburgh (PIT) and Qatar (DOH).',

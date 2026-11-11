@@ -29,6 +29,7 @@ const App = {
   treeSearchQuery: '',
   locationFilter: 'all', // 'all' | 'qatar' | 'pittsburgh'
   activeSemester: null,  // a semester code or 'all'; null until the catalog loads (_resolveSemesters)
+  _socSemesters: null,   // courses.json "soc_semesters": the Schedule of Classes' semesters
   _semesters: { codes: [], defaultCode: null }, // catalogSemesters() of the loaded catalog
   modalityFilter: 'all', // 'all' | 'in_person' | 'remote' | 'hybrid'
   theme: loadStore('cf_theme', 'light'),
@@ -242,8 +243,8 @@ const App = {
    * when minors.json cannot be loaded; the minor sections then say so.
    */
   async _prepareCatalog() {
-    const [courses, minorsData] = await Promise.all([
-      fetchAllCourses(),
+    const [catalog, minorsData] = await Promise.all([
+      fetchCatalog(),
       fetchMinors().catch(err => {
         console.warn('[CountsFor] Minor requirements unavailable.', err.message);
         this._minorsLoadError = err.message;
@@ -258,7 +259,8 @@ const App = {
     else console.warn('[CountsFor] Course edits unavailable; showing the scraped catalog.', r.error);
     if (mr.ok && mr.data) minorOverrides = mr.data.items || [];
     else if (minorsData) console.warn('[CountsFor] Minor settings unavailable; showing the minor file as it is.', mr.error);
-    this._buildCatalog(courses, overrides, minorsData, minorOverrides);
+    this._socSemesters = catalog.socSemesters;
+    this._buildCatalog(catalog.courses, overrides, minorsData, minorOverrides);
   },
 
   /** The synchronous half of _prepareCatalog: edits, index, annotations, trees. */
@@ -1212,6 +1214,7 @@ const App = {
   _filterParams() {
     return {
       semesterCode: this.activeSemester,
+      semesters: this._semesters.codes,  // what "All semesters" covers
       locationFilter: this.locationFilter,
       modalityFilter: this.modalityFilter,
     };
@@ -1219,12 +1222,12 @@ const App = {
 
   /**
    * Take the semester list from the loaded catalog (catalogSemesters in
-   * js/data.js) and settle the semester on screen: the one already shown if
-   * the catalog still has it, else the saved choice or the default
-   * (resolveSemesterChoice).
+   * js/data.js: the Schedule of Classes' semesters) and settle the semester on
+   * screen: the one already shown if the list still has it, else the saved
+   * choice or the default (resolveSemesterChoice).
    */
   _resolveSemesters() {
-    this._semesters = catalogSemesters(this.courses);
+    this._semesters = catalogSemesters(this.courses, this._socSemesters);
     const current = this.activeSemester;
     if (current === 'all' || this._semesters.codes.includes(current)) return;
     this.activeSemester = resolveSemesterChoice(this._semesters, loadStore(SEMESTER_STORE_KEY, null));
@@ -1233,7 +1236,7 @@ const App = {
   /** The semester picker's options; a placeholder until the catalog has loaded. */
   _semesterOptionsHtml() {
     if (!this.activeSemester) return '<option value="" selected disabled>Loading semesters…</option>';
-    return semesterOptions(this._semesters.codes, this.activeSemester)
+    return semesterOptions(this._semesters.codes)
       .map(s => `<option value="${esc(s.code)}" ${this.activeSemester === s.code ? 'selected' : ''}>${esc(s.label)}</option>`)
       .join('');
   },
@@ -6331,12 +6334,8 @@ const App = {
     const el = document.getElementById('admContent');
     if (!el || this._adminConsole.tab !== 'insights') return;
     const d = r.data;
-    const semLabel = code => {
-      const opt = (availableSemesterOptions(this.courses || [], code) || []).find(s => s.code === code);
-      return opt ? opt.label : code;
-    };
     const semOpts = ['<option value="">All semesters</option>']
-      .concat((d.semesters || []).map(s => `<option value="${esc(s)}" ${this._adminConsole.semester === s ? 'selected' : ''}>${esc(semLabel(s))}</option>`))
+      .concat((d.semesters || []).map(s => `<option value="${esc(s)}" ${this._adminConsole.semester === s ? 'selected' : ''}>${esc(semesterLabel(s))}</option>`))
       .join('');
 
     const bars = (rows, labelFn, valueKey = 'count', empty = 'No data yet.') => {
