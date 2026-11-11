@@ -812,8 +812,9 @@ Tests: the planner part of `tests/data.test.js` (linking, filters, choices, grou
 3. Unless `SKIP_DB_BOOTSTRAP` is truthy, runs `init_database(app)`: imports models, `db.create_all()`, then `run_migrations()`.
 4. Enables CORS for `/api/*` only, for `FRONTEND_ORIGINS`, with credentials and the `Content-Type` and `Authorization` headers.
 5. Registers blueprints: `auth`, `flags`, `wishlist`, `users`, `directory`, `search_analytics`, `plans`, `admin`, `course_overrides`, `minor_overrides`.
-6. Adds `GET /health` (no `/api` prefix, so no CORS). It runs `SELECT 1` and checks `REQUIRED_TABLES`, and returns 503 if tables are missing or the DB errors. With SQLite it also lists the table names (`table_names`), so a local bootstrap can be checked by eye; with Postgres it reports only their count (`tables`).
-7. JSON 404 handler: `{"error":"not_found","message":"Route not found."}`.
+6. Adds a `before_request` hook: a POST, PUT, PATCH or DELETE whose JSON body is not an object (a list, a number, a string, true or false) gets 400 `{"error": "invalid_body", "message": "The request body must be a JSON object."}`. Every route reads its body as an object, so such a body used to end in a 500 inside the route. No body, `null` and a body that is not JSON still reach the route, which reads them as `{}`.
+7. Adds `GET /health` (no `/api` prefix, so no CORS). It runs `SELECT 1` and checks `REQUIRED_TABLES`, and returns 503 if tables are missing or the DB errors. With SQLite it also lists the table names (`table_names`), so a local bootstrap can be checked by eye; with Postgres it reports only their count (`tables`).
+8. JSON 404 handler: `{"error":"not_found","message":"Route not found."}`.
 
 On the server systemd runs `gunicorn --workers 3 --bind 127.0.0.1:8000 --timeout 120 --forwarded-allow-ips 127.0.0.1 ... 'backend.app:create_app()'` from `/var/www/html/countsfor`, with `SKIP_DB_BOOTSTRAP=1` and `TRUST_PROXY=1` from `/etc/countsfor/countsfor.env` (15.9).
 
@@ -890,7 +891,7 @@ When a signed-in **student** opens a course, the frontend posts `/api/search-ana
 
 ## 10. API reference (every route)
 
-All `/api/*` routes return JSON. "Login" means any signed-in user. Files are under `backend/`.
+All `/api/*` routes return JSON. "Login" means any signed-in user. Files are under `backend/`. A write whose JSON body is not an object gets 400 `invalid_body` (9.1).
 
 | Method | Path | Who | File | Purpose |
 |---|---|---|---|---|
@@ -1016,7 +1017,7 @@ One row per course code:
 
 ### 12.3 Validation rules (`course_overrides.py`)
 
-Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000. Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`.
+Code must match `NN-NNN`. Name 1 to 200 chars, description up to 5000, prerequisites up to 1000; each must be text (null empties the description or the prerequisites). Department is the numeric department code (for example `15`). Units 0 to 48. Offered semesters must match `^[FSMN]\d{2}$`.
 
 What a course counts for:
 

@@ -92,11 +92,14 @@ def _clean_fields(data: dict) -> tuple[dict, str | None]:
         out["course_code"] = code
     for field, max_len in TEXT_FIELDS.items():
         if field in data:
+            label = field.replace("_", " ")
+            if data[field] is not None and not isinstance(data[field], str):
+                return {}, f"{label.capitalize()} must be text."
             value = (data[field] or "").strip()
             if field == "course_name" and not value:
                 return {}, "Course name cannot be empty."
             if len(value) > max_len:
-                return {}, f"{field.replace('_', ' ').capitalize()} is too long (max {max_len} characters)."
+                return {}, f"{label.capitalize()} is too long (max {max_len} characters)."
             out[field] = value
     if "department" in data:
         dept = str(data["department"] or "").strip().lstrip("0") or None
@@ -369,7 +372,10 @@ def add_course():
     code = _normalize_code(data.get("course_code"))
     if not code:
         return jsonify(error="invalid_code", message="Course number must look like 15-122."), 400
-    if not (data.get("course_name") or "").strip():
+    name = data.get("course_name")
+    if name is not None and not isinstance(name, str):
+        return jsonify(error="invalid_field", message="Course name must be text."), 400
+    if not (name or "").strip():
         return jsonify(error="missing_name", message="Course name is required."), 400
     if db.session.query(CourseOverride).filter_by(course_code=code).one_or_none():
         return jsonify(error="exists", message=f"{code} already has an entry here. Edit it instead."), 409
