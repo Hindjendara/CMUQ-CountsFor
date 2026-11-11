@@ -341,7 +341,7 @@ The served catalog (`courses.json`, `minors.json`) is in `frontend/data/`. The p
 | `backend/scraper/migrate_psychology_numbers.py` | The one-time migration that applied the renumbering list to `courses.json` by course on 2026-11-10 (14.6). Dry run by default, `--apply` writes; a second run changes nothing. |
 | `backend/scraper/validate_soc_coverage.py` | Fails if a SOC course is missing from `courses.json` (a course under a retired old Psychology number counts as its new number). Warns about same-title pairs that may be renumberings. |
 | `backend/scraper/scrape_faculty_directory.py` | Builds `faculty_directory.json` or `backend/seed_users.json` from the CMU-Q People page (Algolia search). Run by hand (14.8). |
-| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py`, `scripts/bump_cf_build.py` and `frontend/data/minors.json` (270 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
+| `backend/scraper/tests/` | Pytest tests for the pipeline, the daily update, `scripts/dev_server.py`, `scripts/bump_cf_build.py` and `frontend/data/minors.json` (295 tests). `tests/fixtures/` holds real, untrimmed SOC result pages for Psychology (F26, S27, M26 Pittsburgh and S26 Qatar) and `soc_malformed_summer.json` (two malformed summer courses copied from `soc.json`). |
 
 ---
 
@@ -526,7 +526,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to the data files (`data/courses.json`, `data/minors.json`, and `data/requirement_buckets.json` for the admin course editor). Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-10b`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-10c`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
@@ -1133,7 +1133,7 @@ The catalog the app loads, `frontend/data/courses.json`, is built from three thi
 Cron (`/etc/cron.d/countsfor`, from `deploy/countsfor.cron`) runs `backend/scraper/run_scrape.sh` as the `countsfor` user every day at 15:00 server time. The script refuses to run as any other user (it compares `id -un` with the owner of `backend/data/`; `CF_ALLOW_ANY_USER=1` skips the check), because a run as root would leave root-owned files in `backend/var/` and the data folders that make every later cron run fail. It then sources `/etc/countsfor/scraper.env` (template: `deploy/scraper.env.example`; every setting is optional), changes to the deploy root and runs `backend/scraper/update_data.py` with the virtual environment's Python. `update_data.py`:
 
 1. Takes an exclusive lock on `backend/var/update.lock` (flock). If another update holds it, it exits 75. If the lock file cannot be opened at all (for example it belongs to root after a run as root), it logs why and how to fix the ownership, and exits 1. Cron also wraps the run in `flock -n /run/lock/countsfor-scrape.lock` and `timeout 3h`.
-2. Runs the SOC parser tests, as the old workflow did: `python -m pytest backend/scraper/tests/test_scrape_soc.py backend/scraper/tests/test_soc_parse.py` (43 tests). `--skip-tests` skips them.
+2. Runs the SOC parser tests, as the old workflow did: `python -m pytest backend/scraper/tests/test_scrape_soc.py backend/scraper/tests/test_soc_parse.py` (44 tests). `--skip-tests` skips them.
 3. Copies the live `backend/data/soc.json` and `frontend/data/courses.json` into `backend/var/staging/` (`CF_STAGING_DIR`). `scrape_soc.py` carries old semesters forward from the file it overwrites, so it must start from a copy of the live file. `apply_mapping_overlays.py` writes `requirement_buckets.json` next to the staged catalog.
 4. Runs the four pipeline steps of 14.3 on the staged copies, stopping at the first failure: `scrape_soc.py`, `reconcile_offerings.py`, `apply_mapping_overlays.py`, `validate_soc_coverage.py`. `--no-scrape` skips the scrape and rebuilds the catalog from the live `soc.json` (after a deploy, or after you change `mapping_overlays.json`).
 5. Checks the result. It publishes only if both files parse; `metadata.last_scrape` is set (and changed, when this run scraped); every semester and campus present in both the live and the new `soc.json` keeps at least `CF_MIN_SECTION_RATIO` (0.98) of its live section count; and the catalog keeps at least `CF_MIN_CATALOG_RATIO` (0.95) of its rows and loses no course code; `requirement_buckets.json` must parse as `{program: [paths]}`.
@@ -1159,7 +1159,7 @@ Locally, from the repo root:
 
 ```bash
 source .venv/bin/activate
-python -m pytest backend/scraper/tests -q            # 270 tests
+python -m pytest backend/scraper/tests -q            # 295 tests
 python backend/scraper/update_data.py --no-scrape    # rebuild frontend/data/courses.json from backend/data/soc.json
 python backend/scraper/update_data.py                # full run: scrape, rebuild, check, publish (30 to 90 minutes)
 git diff --stat
@@ -1844,7 +1844,7 @@ sudo apachectl configtest && sudo systemctl restart apache2
 
 In the editor, replace the two placeholders with the real names: `SSLCertificateFile /etc/apache2/CHANGE_ME_countsfor_cert.pem` and `SSLCertificateKeyFile /etc/apache2/CHANGE_ME_countsfor_key.pem`. Uncomment `SSLCertificateChainFile` only if the certificate file does not already contain the intermediate chain. Apache does not start until both files exist. Later changes to the site file only need `sudo apachectl configtest && sudo systemctl reload apache2`.
 
-What the site does: port 80 answers with a permanent redirect to the same path on HTTPS (password reset links keep their `?token=`); port 443 serves `frontend/`, proxies `/api/` to `http://127.0.0.1:8000/api/` (the prefix stays, because every Flask route starts with `/api`), and sends `Cache-Control: no-store` on API answers (it removes the backend's own `Cache-Control` first, so there is only one). `/health` is not proxied, because it reveals the database host and errors; check it on the server, or uncomment the `<Location /health>` block and limit it to a monitoring address range. Server wide, `/var/www/html/countsfor` and its `backend/` are denied, so even a re-enabled `000-default` cannot serve them; on the site, `/tests/`, dotfiles and source, notes, env and backup files (the daily update's `.prev` copies included) are denied. Browsers that accept gzip get `data/courses.json.gz` with `Content-Encoding: gzip` (about 1.2 MB). HTML, JS, CSS and JSON are sent with `no-cache`, so browsers revalidate them on every load and get a 304 when unchanged; images are cached for 30 days. Security headers: HSTS (one year, this host only), `nosniff`, `Referrer-Policy`, `X-Frame-Options`, `frame-ancestors 'self'` and `Permissions-Policy`. The file also suggests `ServerTokens Prod`, `ServerSignature Off` and `TraceEnable Off` in `/etc/apache2/conf-available/security.conf`.
+What the site does: port 80 answers with a permanent redirect to the same path on HTTPS (password reset links keep their `?token=`); port 443 serves `frontend/`, proxies `/api/` to `http://127.0.0.1:8000/api/` (the prefix stays, because every Flask route starts with `/api`), and sends `Cache-Control: no-store` on API answers (it removes the backend's own `Cache-Control` first, so there is only one). `/health` is not proxied, because it reveals the database host and errors; check it on the server, or uncomment the `<Location /health>` block and limit it to a monitoring address range. Server wide, `/var/www/html/countsfor` and its `backend/` are denied, so even a re-enabled `000-default` cannot serve them; on the site, `/tests/`, dotfiles and source, notes, env and backup files (the daily update's `.prev` copies included) are denied. Browsers that accept gzip get `data/courses.json.gz` with `Content-Encoding: gzip` (about 1 MB). HTML, JS, CSS and JSON are sent with `no-cache`, so browsers revalidate them on every load and get a 304 when unchanged; images are cached for 30 days. Security headers: HSTS (one year, this host only), `nosniff`, `Referrer-Policy`, `X-Frame-Options`, `frame-ancestors 'self'` and `Permissions-Policy`. The file also suggests `ServerTokens Prod`, `ServerSignature Off` and `TraceEnable Off` in `/etc/apache2/conf-available/security.conf`.
 
 ### 15.11 First data build
 
@@ -1925,7 +1925,7 @@ In a browser, in a private window, open `https://countsfor.qatar.cmu.edu/`. Item
 2. Sign in with an existing account (the password from the old site works, the accounts came with the database) and with Google (needs 15.14).
 3. The app loads the catalog: search `15-122`, open it, see its requirements and sections.
 4. As an admin, **Admin**, **Overview**: the last scrape date matches the server's `soc.json`, and the user counts match the old site.
-5. In the developer tools Network tab, `courses.json` transfers about 1.2 MB, and a reload answers 304.
+5. In the developer tools Network tab, `courses.json` transfers about 1 MB, and a reload answers 304.
 
 ### 15.14 Google OAuth
 
@@ -2112,13 +2112,13 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 10, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration and the review fixes)
+### 16.2 Results on November 11, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration, the review fixes and the merge of the backend and frontend fixes of November 11)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **222 passed, 6 failed** (the known failures below) |
-| `python -m pytest backend/scraper/tests` | 270 passed |
-| `node scripts/run-data-tests.js` | 232 passed (profile 51/51, data 83/83, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 37/37, admin editor 13/13, catalog data 9/9) |
+| `python -m pytest backend/tests` | **240 passed, 6 failed** (the known failures below) |
+| `python -m pytest backend/scraper/tests` | 295 passed |
+| `node scripts/run-data-tests.js` | 245 passed (profile 51/51, data 86/86, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 45/45, admin editor 13/13, catalog data 11/11) |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
