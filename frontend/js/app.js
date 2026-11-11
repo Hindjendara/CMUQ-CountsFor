@@ -675,7 +675,7 @@ const App = {
     this.renderTree();
     showToast(kind === 'faculty'
       ? 'Faculty view. You can flag course issues (saved locally in guest mode).'
-      : 'Student view. Save courses, add minors and mark the courses you took.');
+      : 'Student view. Save courses, add minors and plan your schedule.');
   },
 
   async signOut() {

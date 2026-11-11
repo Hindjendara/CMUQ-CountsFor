@@ -182,6 +182,18 @@ test('app views: guest view switch with a course open shows home in both directi
   assertEqual(leftBodyHtml(document), HOME_MARKER, 'faculty to student');
 });
 
+test('app views: the guest Student toast describes the app as it is (no marking of courses taken)', () => {
+  const { App, ctx } = loadApp();
+  App.isGuest = true;
+  App._refreshSemesterOptions = () => {};
+  const toasts = [];
+  ctx.showToast = msg => toasts.push(msg);
+  App.setGuestRole('faculty');
+  App.setGuestRole('student');
+  assertEqual(toasts.pop(), 'Student view. Save courses, add minors and plan your schedule.');
+  assertFalse(toasts.concat(App.setGuestRole.toString()).some(s => /mark the courses|you took/i.test(s)));
+});
+
 // Admin course editor.
 function loadCourseAdmin() {
   const env = loadApp();
