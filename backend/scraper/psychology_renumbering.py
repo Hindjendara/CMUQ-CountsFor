@@ -49,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from json_io import load_json  # noqa: E402
 from pipeline_paths import PSYCHOLOGY_RENUMBERING_JSON  # noqa: E402
 from reconcile_offerings import reconcile_course  # noqa: E402
-from soc_parse import normalize_course_code, normalize_title  # noqa: E402
+from soc_parse import normalize_course_code, normalize_title, semester_rank  # noqa: E402
 
 CODE_RE = re.compile(r"^\d{2}-\d{3}$")
 FIELDS = ("Old Course #", "New Course #", "Long Title", "Units")
@@ -139,21 +139,11 @@ def catalog_units(units) -> int:
     return units if isinstance(units, int) and not isinstance(units, bool) else 0
 
 
-def _semester_key(code: str) -> tuple[int, int]:
-    # Same order as reconcile_offerings._semester_sort_key and sortSemesters in
-    # js/data.js: within a year spring, then summer, then fall.
-    try:
-        year = 2000 + int(code[1:3])
-    except (TypeError, ValueError):
-        return (0, 0)
-    return (year, {"S": 1, "M": 2, "F": 3, "N": 0}.get(code[:1].upper(), 0))
-
-
 def history_before(offered: Iterable[str], cutoff: str = HISTORY_BEFORE) -> list[str]:
     """The semesters of an offered list before cutoff, oldest first, each once."""
-    limit = _semester_key(cutoff)
-    codes = {s for s in offered or [] if isinstance(s, str) and s and _semester_key(s) < limit}
-    return sorted(codes, key=_semester_key)
+    limit = semester_rank(cutoff)
+    codes = {s for s in offered or [] if isinstance(s, str) and s and semester_rank(s) < limit}
+    return sorted(codes, key=semester_rank)
 
 
 def new_course_row(code: str, ren: Renumbering, old_row: dict | None = None,
@@ -286,7 +276,7 @@ def merge_offerings(target: dict, old_row: dict) -> int:
             if scope not in mine and scope not in theirs:
                 scopes.append(scope)
             bucket.setdefault(scope, []).append(o)
-    scopes.sort(key=lambda s: _semester_key(s[0]), reverse=True)  # stable: campus order kept
+    scopes.sort(key=lambda s: semester_rank(s[0]), reverse=True)  # stable: campus order kept
     reconcile_course(target, [o for s in scopes for o in _merge_scope(mine.get(s, []), theirs.get(s, []))])
     return len(new)
 
@@ -294,9 +284,9 @@ def merge_offerings(target: dict, old_row: dict) -> int:
 def merge_offered(target: dict, old_row: dict) -> list[str]:
     """Add old_row's offered semesters that target lacks (oldest first, each once); returns them."""
     have = set(target.get("offered") or [])
-    add = sorted({s for s in old_row.get("offered") or [] if isinstance(s, str) and s} - have, key=_semester_key)
+    add = sorted({s for s in old_row.get("offered") or [] if isinstance(s, str) and s} - have, key=semester_rank)
     if add:
-        target["offered"] = sorted(have | set(add), key=_semester_key)
+        target["offered"] = sorted(have | set(add), key=semester_rank)
     return add
 
 
@@ -367,7 +357,7 @@ def retired_codes_named(doc: dict, ren: Renumbering) -> list[str]:
     for overlay in doc.get("overlays") or []:
         named += [(overlay.get("id"), c) for c in overlay.get("course_codes") or []]
         named += [(overlay.get("id"), c) for c in overlay.get("ensure_course_defaults_codes") or []]
-    for section in ("remove_mappings", "qatar_visibility"):
+    for section in ("remove_mappings", "qatar_visibility", "campus_overrides"):
         named += [(section, e.get("course_code")) for e in doc.get(section) or []]
     out = []
     for where, raw in named:

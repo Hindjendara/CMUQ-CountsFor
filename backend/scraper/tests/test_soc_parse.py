@@ -4,17 +4,38 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/scraper
 
+import soc_parse  # noqa: E402
 from soc_parse import (  # noqa: E402
-    apply_campus_fix,
+    build_offering,
     normalize_modality,
     parse_campus_from_location,
-    expected_campus_for_course,
+    semester_rank,
 )
 
 
-def test_82289_fixture_is_qatar():
-    assert expected_campus_for_course("82289") == "Qatar"
-    assert apply_campus_fix("82289", "Tutoring for Community Outreach - CMUQ", "Pittsburgh") == "Qatar"
+def test_the_soc_campus_wins_and_no_campus_is_hard_coded():
+    # The one campus correction (82-289 in Qatar) is in mapping_overlays.json
+    # ("campus_overrides"); the parser keeps the campus the SOC lists, whatever the title says.
+    section = {"section": "W", "campus": "Pittsburgh", "location": "Doha, Qatar"}
+    assert build_offering(semester_code="S27", section=section)["campus"] == "Pittsburgh"
+    assert not hasattr(soc_parse, "CAMPUS_FIXTURES")
+    assert not hasattr(soc_parse, "apply_campus_fix")
+
+
+def test_semester_rank_is_the_order_of_backend_semesters():
+    # spring, summer, fall mini, fall within a year: semester_rank in backend/semesters.py
+    # and semesterRank in frontend/js/data.js use the same order.
+    codes = ["F25", "S27", "N26", "M26", "F26", "S26", "x", None]
+    assert sorted(codes, key=semester_rank, reverse=True) == ["S27", "F26", "N26", "M26", "S26", "F25", "x", None]
+    assert semester_rank(" s27 ") == semester_rank("S27") == 271
+    repo = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(repo))
+    try:
+        from backend.semesters import semester_rank as backend_rank
+    finally:
+        sys.path.remove(str(repo))
+    for code in ["S20", "M20", "N20", "F20", "S27", "F99", "Q27", "F2026", ""]:
+        assert semester_rank(code) == backend_rank(code), code
 
 
 def test_doha_location_is_qatar():

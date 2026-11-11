@@ -26,6 +26,10 @@ running it again changes nothing:
    so nothing re-adds them; steps 1 and 2 also skip those programs.
 4. "qatar_visibility": set "qatar_only" on courses the frontend shows only
    when their SOC offerings include the Qatar campus.
+5. "campus_overrides": the campus a listed course's SOC offerings run at,
+   where the SOC is known to list it wrongly, and the campus flags that
+   follow (offered_qatar, offered_pitts). Only listed codes change: the
+   scraper and reconcile keep the SOC's campus and never read a title as one.
 
 "qatar_only" belongs to this step: a row not listed in the file loses it.
 
@@ -63,6 +67,8 @@ PROGRAMS = ("CS", "IS", "BA", "BS", "AI")
 BASE_PROGRAM_KEYS = ("CS", "IS", "BA", "BS")
 # qatar_visibility rule -> course flag the frontend reads
 VISIBILITY_RULES = {"show_only_if_offered_qatar": "qatar_only"}
+# campus_overrides campus -> the campus flag that is true (the other is false)
+CAMPUS_FLAGS = {"Qatar": "offered_qatar", "Pittsburgh": "offered_pitts"}
 DEFAULT_CATALOGS = [
     COURSES_JSON,
 ]
@@ -723,6 +729,42 @@ def apply_qatar_visibility(courses: list[dict], by_code: dict[str, dict], entrie
     return stats
 
 
+def _campus_overrides(entries: list[dict]) -> dict[str, str]:
+    """Validate the "campus_overrides" section: {course_code: campus}."""
+    wanted: dict[str, str] = {}
+    for entry in entries:
+        code = normalize_course_code(entry.get("course_code")) if isinstance(entry, dict) else None
+        campus = entry.get("campus") if isinstance(entry, dict) else None
+        if not code or campus not in CAMPUS_FLAGS:
+            raise OverlayError(
+                f"campus_overrides entry needs course_code and a campus from {sorted(CAMPUS_FLAGS)}: {entry}"
+            )
+        if code in wanted:
+            raise OverlayError(f"campus_overrides: {code} is listed twice")
+        wanted[code] = campus
+    return wanted
+
+
+def apply_campus_overrides(by_code: dict[str, dict], entries: list[dict]) -> dict:
+    """Section 5: every SOC offering of a listed course runs at the listed
+    campus, and the course's campus flags say so (offered_qatar for Qatar,
+    offered_pitts for Pittsburgh, the other false), as the SOC would give them."""
+    wanted = _campus_overrides(entries)
+    stats = {"campus_overrides": 0, "campus_codes_missing": []}
+    for code, campus in sorted(wanted.items()):
+        course = by_code.get(code)
+        if course is None:
+            stats["campus_codes_missing"].append(code)
+            continue
+        for row in (course.get("offerings") or []) + (course.get("soc_sections") or []):
+            if isinstance(row, dict):
+                row["campus"] = campus
+        for name, flag in CAMPUS_FLAGS.items():
+            course[flag] = name == campus
+        stats["campus_overrides"] += 1
+    return stats
+
+
 def validate_rule_buckets(rules: list[_RuleBucket], doc: dict) -> None:
     """Checks across sections: a rule id is not also an overlay id, and every
     rule bucket is a bucket of catalog_buckets (when the file has that section)."""
@@ -749,6 +791,7 @@ def apply_overlay_document(courses: list[dict], doc: dict, renumbering: Renumber
     """
     removed = removed_programs_by_code(doc.get("remove_mappings") or [])
     _visibility_flags(doc.get("qatar_visibility") or [])
+    _campus_overrides(doc.get("campus_overrides") or [])
     rules = compile_rule_buckets(doc.get("rule_buckets"))
     validate_rule_buckets(rules, doc)
     if renumbering is not None:
@@ -765,6 +808,7 @@ def apply_overlay_document(courses: list[dict], doc: dict, renumbering: Renumber
     stats.update(apply_rule_buckets(courses, rules, removed))
     stats.update(apply_remove_mappings(by_code, removed))
     stats.update(apply_qatar_visibility(courses, by_code, doc.get("qatar_visibility") or []))
+    stats.update(apply_campus_overrides(by_code, doc.get("campus_overrides") or []))
     return stats
 
 
@@ -901,7 +945,7 @@ def main() -> int:
             f"created={stats['courses_created']} reqs_added={stats['requirements_added']} "
             f"rule_rows_added={stats['rule_rows_added']} rule_rows_removed={stats['rule_rows_removed']} "
             f"mappings_removed={stats['mappings_removed']} visibility_flags={stats['visibility_flags']} "
-            f"bucket_paths={stats['bucket_paths']}"
+            f"campus_overrides={stats['campus_overrides']} bucket_paths={stats['bucket_paths']}"
         )
         for rule_id, counts in stats["rule_buckets"].items():
             print(f"  rule {rule_id}: matched={counts['matched']} added={counts['added']}")
@@ -913,6 +957,8 @@ def main() -> int:
             print(f"  WARNING remove_mappings: course not in the catalog: {code}")
         for code in stats["visibility_codes_missing"]:
             print(f"  WARNING qatar_visibility: course not in the catalog: {code}")
+        for code in stats["campus_codes_missing"]:
+            print(f"  WARNING campus_overrides: course not in the catalog: {code}")
 
     for path in catalogs:
         if not path.exists():

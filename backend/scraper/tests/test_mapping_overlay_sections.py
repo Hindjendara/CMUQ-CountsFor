@@ -1,4 +1,5 @@
-"""Sections of backend/data/mapping_overlays.json: overlays, remove_mappings, qatar_visibility.
+"""Sections of backend/data/mapping_overlays.json: overlays, remove_mappings, qatar_visibility,
+campus_overrides.
 
 Small synthetic catalogs check each section, the order they run in and that a
 second run changes nothing. The last tests check the real overlay file against
@@ -160,6 +161,64 @@ def test_qatar_visibility_rejects_unknown_rule():
         apply_overlay_document(catalog(), {"qatar_visibility": [{"course_code": "85-100", "rule": "hide"}]})
 
 
+# ── campus_overrides ─────────────────────────────────────────
+
+def soc_offering(sem, campus, section="A"):
+    return {"semester": "", "semester_code": sem, "campus": campus, "section": section,
+            "modality": "In Person", "units": "9", "days_times": "MW 11:30AM-12:45PM",
+            "instructor": "", "location": "", "delivery_mode_raw": ""}
+
+
+def test_campus_override_sets_every_offering_and_both_flags():
+    courses = [
+        course("82-289", offerings=[soc_offering("S27", "Pittsburgh", "W"), soc_offering("S26", "Qatar", "W")],
+               offered_qatar=True, offered_pitts=True),
+        course("82-101", offerings=[soc_offering("S27", "Pittsburgh")], offered_qatar=False, offered_pitts=True),
+    ]
+    doc = {"campus_overrides": [{"course_code": "82289", "campus": "Qatar", "note": "why"}]}
+    stats = apply_overlay_document(courses, doc)
+    rows = by_code(courses)
+    assert [o["campus"] for o in rows["82-289"]["offerings"]] == ["Qatar", "Qatar"]
+    assert (rows["82-289"]["offered_qatar"], rows["82-289"]["offered_pitts"]) == (True, False)
+    # Only listed codes change, and nothing reads a campus from a title.
+    assert rows["82-101"]["offerings"][0]["campus"] == "Pittsburgh"
+    assert (rows["82-101"]["offered_qatar"], rows["82-101"]["offered_pitts"]) == (False, True)
+    assert stats["campus_overrides"] == 1 and stats["campus_codes_missing"] == []
+    once = copy.deepcopy(courses)
+    apply_overlay_document(courses, doc)
+    assert courses == once
+    # As the scraper's old fixed list did: the flags follow the listed campus, offerings or not.
+    bare = [course("82-289", offered_qatar=False, offered_pitts=True)]
+    apply_overlay_document(bare, doc)
+    assert (bare[0]["offered_qatar"], bare[0]["offered_pitts"]) == (True, False)
+    assert apply_overlay_document(catalog(), doc)["campus_codes_missing"] == ["82-289"]
+
+
+@pytest.mark.parametrize("entries", [
+    [{"course_code": "82-289", "campus": "Doha"}],
+    [{"course_code": "82-289"}],
+    [{"campus": "Qatar"}],
+    ["82-289"],
+    [{"course_code": "82-289", "campus": "Qatar"}, {"course_code": "82289", "campus": "Pittsburgh"}],
+])
+def test_bad_campus_overrides_are_refused_before_any_change(entries):
+    courses = catalog() + [course("82-289", offerings=[soc_offering("S27", "Pittsburgh")])]
+    before = copy.deepcopy(courses)
+    with pytest.raises(OverlayError):
+        apply_overlay_document(courses, {
+            "campus_overrides": entries,
+            "qatar_visibility": [{"course_code": "85-100", "rule": "show_only_if_offered_qatar"}],
+        })
+    assert courses == before
+
+
+def test_a_campus_override_may_not_name_a_retired_psychology_number():
+    courses = catalog()
+    with pytest.raises(OverlayError, match="campus_overrides: 85-251"):
+        apply_overlay_document(courses, {"campus_overrides": [{"course_code": "85-251", "campus": "Qatar"}]},
+                               load_renumbering())
+
+
 # ── additive overlay options ─────────────────────────────────
 
 def test_create_missing_false_does_not_create_course():
@@ -248,7 +307,7 @@ def test_overlay_paths_exist_in_catalog(real_courses):
 
 def test_overlay_file_lists_only_settled_entries():
     assert set(OVERLAY_DOC) == {"description", "overlays", "rule_buckets", "remove_mappings",
-                                "qatar_visibility", "catalog_buckets"}
+                                "qatar_visibility", "campus_overrides", "catalog_buckets"}
     assert set(OVERLAY_DOC["catalog_buckets"]) == {"CS", "IS", "BA", "BS", "AI"}
     removals = {e["course_code"]: e["programs"] for e in OVERLAY_DOC["remove_mappings"]}
     # 85-414 needs no entry since the renumbering migration: its old course's rows are 85-472's.
@@ -258,6 +317,8 @@ def test_overlay_file_lists_only_settled_entries():
     assert [(e["course_code"], e["rule"]) for e in OVERLAY_DOC["qatar_visibility"]] == [
         ("85-100", "show_only_if_offered_qatar"),
     ]
+    # The one campus correction, moved here from the scraper code (CAMPUS_FIXTURES).
+    assert [(e["course_code"], e["campus"]) for e in OVERLAY_DOC["campus_overrides"]] == [("82-289", "Qatar")]
     sheet = [o for o in OVERLAY_DOC["overlays"] if o["id"].startswith("hss-sheet-")]
     codes = [c for o in sheet for c in o["course_codes"]]
     # The sheet lists Personality as 85-251, which the renumbering list makes 85-151.
@@ -268,6 +329,12 @@ def test_overlay_file_lists_only_settled_entries():
     assert all(o["id"] == f"hss-sheet-{o['course_codes'][0]}" for o in sheet)
     assert all(o["create_missing"] is False for o in sheet)
     assert all(o["note"] == "H&SS Course Offerings sheet (Qatar), approved 2026-11-07" for o in sheet)
+
+
+def test_the_served_catalog_has_the_campus_override(real_courses):
+    row = by_code(real_courses)["82-289"]
+    assert row["offerings"] and {o["campus"] for o in row["offerings"]} == {"Qatar"}
+    assert (row["offered_qatar"], row["offered_pitts"]) == (True, False)
 
 
 def test_real_overlay_merge_result(real_courses):

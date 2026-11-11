@@ -1,6 +1,8 @@
 """Shared SOC parsing: campus attribution, modality, offering records.
 
-Used by scrape_soc.py, reconcile_offerings.py, and unit tests.
+Used by scrape_soc.py, reconcile_offerings.py, and unit tests. The campus of
+an offering is the one the SOC gives; a confirmed correction belongs in
+backend/data/mapping_overlays.json ("campus_overrides"), never here.
 """
 from __future__ import annotations
 
@@ -12,14 +14,23 @@ SEMESTER_LABELS = {
     "F": "Fall",
     "N": "Fall mini",
 }
+SEMESTER_CODE_RE = re.compile(r"^[FSMN]\d{2}$")
+# Order within a year: spring, summer, fall mini, fall. The same order as
+# semester_rank in backend/semesters.py and semesterRank in frontend/js/data.js.
+SEASON_ORDER = {"S": 1, "M": 2, "N": 3, "F": 4}
 
 VALID_CAMPUSES = frozenset({"Qatar", "Pittsburgh"})
-VALID_MODALITIES = frozenset({"In Person", "Remote", "Hybrid"})
 
-# Known campus attribution fixtures (T6). Keys are 5-digit course numbers.
-CAMPUS_FIXTURES = {
-    "82289": "Qatar",  # 82-289 Tutoring for Community Outreach - CMUQ
-}
+
+def semester_rank(code) -> int:
+    """A number that grows with time ("F26" < "S27"); -1 for anything that is not a semester code.
+
+    The one semester order of the pipeline scripts (sort with key=semester_rank).
+    """
+    text = code.strip().upper() if isinstance(code, str) else ""
+    if not SEMESTER_CODE_RE.match(text):
+        return -1
+    return int(text[1:]) * 10 + SEASON_ORDER[text[0]]
 
 
 def semester_code_to_label(code: str) -> str:
@@ -106,11 +117,6 @@ def course_number_to_code(num: str) -> str:
     """15122 -> 15-122"""
     normalized = normalize_course_code(num)
     return normalized if normalized else (num or "")
-
-
-def code_to_course_number(code: str) -> str:
-    normalized = normalize_course_code(code)
-    return (normalized or code or "").replace("-", "")
 
 
 def parse_soc_units(raw) -> int | None:
@@ -313,24 +319,6 @@ def is_placeholder_title(title: str | None) -> bool:
     show is chosen. Such a title is used only when no semester has another.
     """
     return bool(title) and bool(_TBA_TOKEN_RE.search(title))
-
-
-def expected_campus_for_course(course_number: str, title: str | None = None) -> str | None:
-    """Return forced campus for known mis-tagged courses."""
-    num = code_to_course_number(course_number)
-    if num in CAMPUS_FIXTURES:
-        return CAMPUS_FIXTURES[num]
-    t = (title or "").lower()
-    if "cmuq" in t or "qatar only" in t:
-        return "Qatar"
-    return None
-
-
-def apply_campus_fix(course_number: str, title: str | None, campus: str | None) -> str | None:
-    forced = expected_campus_for_course(course_number, title)
-    if forced:
-        return forced
-    return campus
 
 
 def normalize_title(title: str | None) -> str:

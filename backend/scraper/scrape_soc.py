@@ -64,16 +64,12 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from soc_parse import (  # noqa: E402
     active_sections,
-    apply_campus_fix,
     build_offering,
-    course_number_to_code,
     is_cancelled_course,
     semester_code_to_label,
 )
 from soc_departments import (  # noqa: E402
     SOC_LOCATION_CODES,
-    get_department_list,
-    get_semester_list,
     load_soc_form,
 )
 from pipeline_paths import SOC_JSON  # noqa: E402
@@ -338,14 +334,6 @@ def parse_courses(html, dept_code, dept_name):
     return courses
 
 
-def get_department_list_for_scrape(form_html=None):
-    return get_department_list(fetch_get, SEARCH, form_html=form_html)
-
-
-def get_semester_list_for_scrape(form_html=None):
-    return get_semester_list(fetch_get, SEARCH, form_html=form_html)
-
-
 # ---------- Main scrape per semester ----------
 
 def attach_offerings(course, semester_code):
@@ -354,6 +342,7 @@ def attach_offerings(course, semester_code):
     Cancelled sections stay in `sections` (with `cancelled: True`) but are
     not offerings and do not put a campus in `campus`. A course whose
     sections are all cancelled gets `cancelled: True` and an empty `campus`.
+    Each offering keeps the campus the SOC lists it under.
     """
     offerings = []
     campuses = []
@@ -362,11 +351,6 @@ def attach_offerings(course, semester_code):
             semester_code=semester_code,
             section=section,
             units=course.get('units'),
-        )
-        off['campus'] = apply_campus_fix(
-            course.get('course_number', ''),
-            course.get('title'),
-            off.get('campus'),
         )
         offerings.append(off)
         if section.get('campus') and section['campus'] not in campuses:

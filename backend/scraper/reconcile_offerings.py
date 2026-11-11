@@ -11,10 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from json_io import load_json, save_json  # noqa: E402
 from pipeline_paths import COURSES_JSON, SOC_JSON  # noqa: E402
 from soc_parse import (  # noqa: E402
-    apply_campus_fix,
     build_offering,
     clean_soc_title,
-    code_to_course_number,
     course_number_to_code,
     is_cancelled_section,
     is_ignored_course,
@@ -22,26 +20,13 @@ from soc_parse import (  # noqa: E402
     malformed_counts,
     normalize_course_code,
     parse_soc_units,
+    semester_rank,
     titles_match,
     usable_sections,
 )
 
 SOC_PATH = os.environ.get("SOC_JSON_PATH", str(SOC_JSON))
 COURSES_PATH = os.environ.get("COURSES_JSON_PATH", str(COURSES_JSON))
-
-
-
-def _semester_sort_key(code: str) -> tuple[int, int]:
-    if not code or len(code) < 3:
-        return (0, 0)
-    # Within a year: spring (S), then summer (M), then fall (F), as in
-    # sortSemesters in js/data.js.
-    season_rank = {"S": 1, "M": 2, "F": 3, "N": 0}
-    try:
-        year = 2000 + int(code[1:3])
-    except ValueError:
-        year = 0
-    return (year, season_rank.get(code[0].upper(), 0))
 
 
 def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict]]:
@@ -51,7 +36,7 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
     placeholders: dict[str, str] = {}
     semesters = soc.get("semesters") or {}
 
-    for sem_code in sorted(semesters.keys(), key=_semester_sort_key, reverse=True):
+    for sem_code in sorted(semesters.keys(), key=semester_rank, reverse=True):
         sem_data = semesters[sem_code]
         for course in sem_data.get("courses") or []:
             if is_ignored_course(course):
@@ -90,7 +75,6 @@ def offerings_from_soc(soc: dict) -> tuple[dict[str, list[dict]], dict[str, dict
                     section=section,
                     units=units,
                 )
-                off["campus"] = apply_campus_fix(num, title, off.get("campus"))
                 if off["campus"]:
                     by_code.setdefault(code, []).append(off)
     for code, title in placeholders.items():
@@ -176,16 +160,12 @@ def resolve_catalog_soc_offerings(
 
 
 def reconcile_course(course: dict, offerings: list[dict], meta: dict | None = None) -> None:
+    """Attach the SOC offerings and set the campus flags and units they give.
+
+    The campus is the SOC's; a confirmed correction is the overlay step's
+    "campus_overrides" section (backend/data/mapping_overlays.json).
+    """
     qatar, pitts = campus_flags_from_offerings(offerings)
-    forced = apply_campus_fix(
-        code_to_course_number(course.get("course_code", "")),
-        course.get("course_name"),
-        None,
-    )
-    if forced == "Qatar":
-        qatar, pitts = True, False
-    elif forced == "Pittsburgh":
-        qatar, pitts = False, True
 
     if meta:
         parsed_units = parse_soc_units(meta.get("units"))
@@ -222,7 +202,7 @@ def offered_semesters(offerings: list[dict]) -> list[str]:
         for o in offerings
         if o.get("semester_code") and not is_cancelled_section(o)
     }
-    return sorted(codes, key=_semester_sort_key)
+    return sorted(codes, key=semester_rank)
 
 
 def stub_course_from_soc(code: str, offerings: list[dict], meta: dict | None = None) -> dict:
@@ -301,7 +281,7 @@ def reconcile_file(courses_path: str, soc_path: str) -> dict:
             kept = [s for s in course.get("offered") or []
                     if s not in soc_semesters or s in skip]
             course["offered"] = sorted(
-                set(offered_semesters(offs)) | set(kept), key=_semester_sort_key
+                set(offered_semesters(offs)) | set(kept), key=semester_rank
             )
         if before != (course.get("offerings"), course.get("offered_qatar"), course.get("offered_pitts")):
             updated += 1
