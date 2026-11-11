@@ -931,14 +931,14 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | GET | `/api/admin/insights` | admin | `admin.py` | Usage insights |
 | GET | `/api/admin/sign-ins` | admin | `admin.py` | Sign-in activity (section 13) |
 | GET | `/api/admin/activity` | admin | `admin.py` | Audit log |
-| GET | `/api/courses/overrides` | public | `course_overrides.py` | All catalog edits (`Cache-Control: no-cache`) |
+| GET | `/api/courses/overrides` | public | `course_overrides.py` | All catalog edits (`Cache-Control: no-cache`); who saved each one (`updated_by_email`) only for admins |
 | POST | `/api/courses/overrides` | admin | `course_overrides.py` | Add a new course |
 | PATCH | `/api/courses/overrides/<code>` | admin | `course_overrides.py` | Edit a course (creates the override); `requirements` changes only the keys it names (12.2) |
 | POST | `/api/courses/overrides/<code>/archive` | admin | `course_overrides.py` | Hide a course |
 | POST | `/api/courses/overrides/<code>/restore` | admin | `course_overrides.py` | Unhide |
 | DELETE | `/api/courses/overrides/<code>` | admin | `course_overrides.py` | Revert a scraped course to the scrape (added courses cannot be reverted, only archived) |
 | POST | `/api/courses/overrides/batch` | admin | `course_overrides.py` | Change what several courses count for at once (`{"items": [{"course_code", "requirements"}]}`, at most 200): one transaction, one `course.update` event per course |
-| GET | `/api/minors/overrides` | public | `minor_overrides.py` | All minor settings (`Cache-Control: no-cache`) |
+| GET | `/api/minors/overrides` | public | `minor_overrides.py` | All minor settings (`Cache-Control: no-cache`); who saved each one (`updated_by_email`) only for admins |
 | PATCH | `/api/minors/overrides/<code>` | admin | `minor_overrides.py` | Set a minor's `total_units`, `max_with_major`, `max_with_other_minors` or `admin_note` (12.6) |
 | DELETE | `/api/minors/overrides/<code>` | admin | `minor_overrides.py` | Back to what `minors.json` says |
 
@@ -1014,6 +1014,7 @@ One row per course code:
 - Course added by an admin: `is_new = true`, keyed by its own code; renumbering moves the key. Its `requirements` are changes against an empty catalog, so additions only.
 - `archived = true` hides the course from everyone; nothing is deleted.
 - If an edit leaves a scraped course identical to the scrape (no fields, no requirements, not archived) the row is deleted.
+- `updated_by_id`, `updated_by_email` and `updated_at` record the last save. Everyone reads the edits (`GET /api/courses/overrides`), but only an admin's request gets `updated_by_email`, for the editor's "Last edited ... by" line; other visitors, guests included, get the edits without it. `minor_overrides` works the same way.
 
 ### 12.3 Validation rules (`course_overrides.py`)
 
@@ -1048,7 +1049,7 @@ A successful Add course or Save changes opens a confirmation screen (`_renderCou
 
 ### 12.6 Minor settings
 
-`frontend/data/minors.json` is built by hand (4.4) and some of its numbers are open questions (double counting limits, unit totals). The **Minor settings** view of the Courses tab (also opened with **Edit minor settings** in the Minors tab) corrects them for everyone without editing the file: `total_units` (a whole number, or empty when the minor states none), `max_with_major` and `max_with_other_minors` (0 to 10, or No limit) and `admin_note` (up to 1000 characters, shown to students in the minor's header as a note from CMU-Q). They are stored in the `minor_overrides` table (`backend/minor_overrides.py`, `/api/minors/overrides`: read by everyone, written by admins), one row per minor with only the values that differ from the file; a value set back to the file's is removed, and **Undo all edits** deletes the row. The browser applies them with `applyMinorOverrides()` (8.10). Which courses fill a category is a course edit instead (12.2).
+`frontend/data/minors.json` is built by hand (4.4) and some of its numbers are open questions (double counting limits, unit totals). The **Minor settings** view of the Courses tab (also opened with **Edit minor settings** in the Minors tab) corrects them for everyone without editing the file: `total_units` (a whole number, or empty when the minor states none), `max_with_major` and `max_with_other_minors` (0 to 10, or No limit) and `admin_note` (up to 1000 characters, shown to students in the minor's header as a note from CMU-Q). They are stored in the `minor_overrides` table (`backend/minor_overrides.py`, `/api/minors/overrides`: read by everyone, with who saved them for admins only, and written by admins), one row per minor with only the values that differ from the file; a value set back to the file's is removed, and **Undo all edits** deletes the row. The browser applies them with `applyMinorOverrides()` (8.10). Which courses fill a category is a course edit instead (12.2).
 
 ### 12.7 Edits saved before the 2026-27 names
 

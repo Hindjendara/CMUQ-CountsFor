@@ -102,3 +102,8 @@ def require_role(*roles: str | Iterable[str]):
 
 def current_user() -> User | None:
     return _load_user()
+
+
+def is_admin(user: User | None) -> bool:
+    """True for a signed-in user in the admin role group (for public routes that show admins more)."""
+    return user is not None and user.role_group() == ROLE_GROUP_ADMIN

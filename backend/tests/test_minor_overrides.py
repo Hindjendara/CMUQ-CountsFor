@@ -3,6 +3,7 @@ from sqlalchemy import text
 
 from backend.db import db
 from backend.db_schema import REQUIRED_TABLES
+from backend.tokens import make_auth_token
 
 from .conftest import login
 
@@ -23,6 +24,26 @@ def test_reads_are_public_and_writes_admin_only(client, student, professor):
         login(client, user)
         assert client.patch("/api/minors/overrides/psychology", json={"total_units": 63}).status_code == 403
         assert client.delete("/api/minors/overrides/psychology").status_code == 403
+
+
+def test_list_shows_who_saved_to_admins_only(app, client, admin, student, professor):
+    login(client, admin)
+    assert client.patch("/api/minors/overrides/psychology", json={"max_with_major": 1}).status_code == 200
+    [item] = _items(client)
+    assert item["updated_by_email"] == "admin@andrew.cmu.edu" and item["updated_at"]
+    # A guest, a student and a professor get the settings, but not who saved them.
+    for user in (None, student, professor):
+        viewer = app.test_client()
+        if user:
+            login(viewer, user)
+        [item] = _items(viewer)
+        assert item["fields"] == {"max_with_major": 1} and item["updated_at"], user
+        assert "updated_by_email" not in item, user
+    # An admin signed in with the bearer token alone (how the pages call the API) sees it.
+    with app.app_context():
+        token = make_auth_token(admin.id)
+    r = app.test_client().get("/api/minors/overrides", headers={"Authorization": f"Bearer {token}"})
+    assert r.get_json()["items"][0]["updated_by_email"] == "admin@andrew.cmu.edu"
 
 
 def test_edit_merge_and_undo(client, admin):

@@ -3,6 +3,7 @@ import json
 
 from backend.db import db
 from backend.models import CourseOverride
+from backend.tokens import make_auth_token
 
 from .conftest import login
 
@@ -38,6 +39,26 @@ def test_list_is_public(client):
     r = client.get("/api/courses/overrides")
     assert r.status_code == 200
     assert r.get_json() == {"items": []}
+
+
+def test_list_shows_who_saved_an_edit_to_admins_only(app, client, admin, student, professor):
+    login(client, admin)
+    assert client.patch("/api/courses/overrides/15-122", json={"units": 10}).status_code == 200
+    [item] = _items(client)
+    assert item["updated_by_email"] == "admin@andrew.cmu.edu" and item["updated_at"]
+    # A guest, a student and a professor get the edit, but not who made it.
+    for user in (None, student, professor):
+        viewer = app.test_client()
+        if user:
+            login(viewer, user)
+        [item] = _items(viewer)
+        assert item["fields"] == {"units": 10} and item["updated_at"], user
+        assert "updated_by_email" not in item, user
+    # An admin signed in with the bearer token alone (how the pages call the API) sees it.
+    with app.app_context():
+        token = make_auth_token(admin.id)
+    r = app.test_client().get("/api/courses/overrides", headers={"Authorization": f"Bearer {token}"})
+    assert r.get_json()["items"][0]["updated_by_email"] == "admin@andrew.cmu.edu"
 
 
 def test_edit_catalog_course_and_counts_for(client, admin):

@@ -468,16 +468,19 @@ class CourseOverride(db.Model):
         DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
-    def to_dict(self) -> dict:
-        return {
+    def to_dict(self, *, include_editor: bool = True) -> dict:
+        """include_editor=False leaves out who saved the edit (the public list, for non-admins)."""
+        body = {
             "course_code": self.course_code,
             "is_new": self.is_new,
             "archived": self.archived,
             "fields": json.loads(self.fields) if self.fields else {},
             "requirements": json.loads(self.requirements) if self.requirements else None,
-            "updated_by_email": self.updated_by_email,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+        if include_editor:
+            body["updated_by_email"] = self.updated_by_email
+        return body
 
 
 class MinorOverride(db.Model):
@@ -503,17 +506,20 @@ class MinorOverride(db.Model):
         DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, include_editor: bool = True) -> dict:
+        """include_editor=False leaves out who saved the settings (the public list, for non-admins)."""
         try:
             fields = json.loads(self.fields) if self.fields else {}
         except ValueError:
             fields = {}
-        return {
+        body = {
             "minor_code": self.minor_code,
             "fields": fields if isinstance(fields, dict) else {},
-            "updated_by_email": self.updated_by_email,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+        if include_editor:
+            body["updated_by_email"] = self.updated_by_email
+        return body
 
 
 class SignInEvent(db.Model):

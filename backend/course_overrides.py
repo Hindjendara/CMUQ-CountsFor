@@ -1,6 +1,7 @@
 """Course catalog edits: admins add, edit, renumber and archive courses.
 
-Reads are public so every visitor sees the corrected catalog; writes are admin only.
+Reads are public so every visitor sees the corrected catalog (who saved an edit is
+shown to admins only); writes are admin only.
 Edits are stored as overrides because the daily SOC scrape regenerates
 frontend/data/courses.json and would otherwise erase them.
 
@@ -27,7 +28,7 @@ from .admin import record_event
 from .db import db
 from .minors_file import known_minor_codes, minor_leaf_paths, minor_name
 from .models import CourseOverride
-from .permissions import require_role_group, ROLE_GROUP_ADMIN
+from .permissions import current_user, is_admin, require_role_group, ROLE_GROUP_ADMIN
 
 bp = Blueprint("course_overrides", __name__, url_prefix="/api/courses/overrides")
 
@@ -358,8 +359,10 @@ def _apply_edit(key: str, data: dict) -> dict:
 
 @bp.route("", methods=["GET"])
 def list_overrides():
+    """Every edit, for every visitor. Who saved it (updated_by_email) only for admins."""
     rows = db.session.query(CourseOverride).order_by(CourseOverride.course_code).all()
-    resp = jsonify(items=[r.to_dict() for r in rows])
+    editor = is_admin(current_user())
+    resp = jsonify(items=[r.to_dict(include_editor=editor) for r in rows])
     resp.headers["Cache-Control"] = "no-cache"
     return resp
 

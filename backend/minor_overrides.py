@@ -3,9 +3,9 @@
 The minor file is built by hand from the official minor files (README 4.4), and a
 few of its numbers are open questions (double counting limits, unit totals). An
 override changes them for everyone without editing the file; the browser applies
-it after loading the file (applyMinorOverrides in js/data.js). Reads are public,
-writes admin only. Which courses fill a category is a course edit instead
-(MINOR:<code> keys in course_overrides.py).
+it after loading the file (applyMinorOverrides in js/data.js). Reads are public
+(who saved a minor's settings only for admins), writes admin only. Which courses
+fill a category is a course edit instead (MINOR:<code> keys in course_overrides.py).
 
 Fields, each optional:
   total_units            integer 0 to 400, or null when the minor states no total
@@ -25,7 +25,7 @@ from .admin import record_event
 from .db import db
 from .minors_file import known_minor_codes, load_minors
 from .models import MinorOverride
-from .permissions import require_role_group, ROLE_GROUP_ADMIN
+from .permissions import current_user, is_admin, require_role_group, ROLE_GROUP_ADMIN
 
 bp = Blueprint("minor_overrides", __name__, url_prefix="/api/minors/overrides")
 
@@ -110,8 +110,10 @@ def _minor_code(raw: str) -> str | None:
 
 @bp.route("", methods=["GET"])
 def list_minor_overrides():
+    """Every minor's settings, for every visitor. Who saved them (updated_by_email) only for admins."""
     rows = db.session.query(MinorOverride).order_by(MinorOverride.minor_code).all()
-    resp = jsonify(items=[r.to_dict() for r in rows])
+    editor = is_admin(current_user())
+    resp = jsonify(items=[r.to_dict(include_editor=editor) for r in rows])
     resp.headers["Cache-Control"] = "no-cache"
     return resp
 
