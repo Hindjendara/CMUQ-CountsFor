@@ -910,6 +910,29 @@ test('course card: a lecture with no sections keeps its own + Plan', () => {
   assertEqual(plannedRows(App), [['21-120', 'Lec 1', 'MWF 10:00AM-10:50AM']]);
 });
 
+test('typeahead + Plan with both campuses shown adds the Qatar offering, though the SOC lists Pittsburgh first', () => {
+  const { App } = loadPlanApp();
+  App.addFirstSectionToPlan('15-112');
+  assertEqual(plannedRows(App), [
+    ['15-112', 'Lec 3', 'UTR 11:30AM-12:45PM'],
+    ['15-112', 'W', 'W 11:30AM-12:45PM'],
+  ]);
+  App.addFirstSectionToPlan('21-120');  // Pittsburgh only
+  assertEqual(plannedRows(App)[2], ['21-120', 'Lec 1', 'MWF 10:00AM-10:50AM']);
+});
+
+test('plan view: meetings on different campuses are no time conflict (local times)', () => {
+  const { App, document } = loadPlanApp();
+  App.togglePlanSection('09-207', 'F26', 'A', 'Pittsburgh');  // MW 2:00 PM to 4:20 PM in Pittsburgh
+  App.togglePlanSection('03-151', 'F26', 'W', 'Qatar');       // M 2:30 PM to 4:20 PM in Doha
+  const plan = App._ensureActivePlan(false);
+  App.openPlanDetail(plan.id);
+  const html = leftBodyHtml(document);
+  assertFalse(html.includes('time conflict'), 'no conflict across campuses');
+  assertFalse(html.includes('is-conflict'));
+  assertEqual(App._planSummary(App._getPlanRecord(plan.id), 'F26').conflicts, 0);
+});
+
 test('typeahead + Plan adds the first matching lecture with its first section', () => {
   const { App, toasts } = loadPlanApp();
   App.locationFilter = 'qatar';

@@ -3621,13 +3621,14 @@ const App = {
     this._ensureActivePlan(true);
     const course = lookupCourse(this.courseIndex, courseCode);
     if (!course) return;
-    const group = this._visibleOfferingGroups(course)[0];
+    const group = quickPlanGroup(this._visibleOfferingGroups(course));
     if (!group) {
       showToast('No sections match your current filters.');
       return;
     }
-    // The first matching offering: its lecture with its first section (or with
-    // the section of it already in the plan), or a section that stands alone.
+    // The first matching offering (in Qatar when the filters show both
+    // campuses): its lecture with its first section (or with the section of
+    // it already in the plan), or a section that stands alone.
     const head = offeringGroupParts(group)[0];
     this.togglePlanSection(courseCode, group.semester_code || this.activeSemester, head.section, head.campus, { forceAdd: true });
     const ta = document.getElementById('typeahead');

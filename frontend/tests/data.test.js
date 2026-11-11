@@ -563,6 +563,28 @@ test('planEntriesOverlap: detects same-day time overlap in one semester', () => 
   assertEqual(planEntriesOverlap(a, c), false);
 });
 
+test('planEntriesOverlap: meetings on different campuses never conflict (Doha and Pittsburgh times are local)', () => {
+  const doha = { semester_code: 'S27', campus: 'Qatar', days_times: 'MW 08:30AM-09:45AM' };
+  const pitt = { semester_code: 'S27', campus: 'Pittsburgh', days_times: 'MWF 09:00AM-09:50AM' };
+  const doha2 = { semester_code: 'S27', campus: 'Qatar', days_times: 'M 09:00AM-09:50AM' };
+  assertFalse(planEntriesOverlap(doha, pitt));
+  assertTrue(planEntriesOverlap(doha, doha2));
+  assertTrue(planEntriesOverlap({ ...doha, campus: '' }, pitt), 'a meeting saved without a campus is compared by time');
+  assertEqual(countPlanConflictPairs([doha, pitt, doha2].map((m, i) => ({ ...m, id: String(i), course_code: '1' + i }))), 1);
+});
+
+test('quickPlanGroup: the first offering the filters show, in Qatar when they show both campuses', () => {
+  const g = (semester_code, campus) => ({ semester_code, campus, lecture: null, sections: [] });
+  const pitt27 = g('S27', 'Pittsburgh');
+  const qatar27 = g('S27', 'Qatar');
+  const qatar26 = g('F26', 'Qatar');
+  assertEqual(quickPlanGroup([pitt27, qatar27, qatar26]), qatar27);
+  assertEqual(quickPlanGroup([pitt27, qatar26]), pitt27, 'not a Qatar offering of another semester');
+  assertEqual(quickPlanGroup([pitt27]), pitt27);
+  assertEqual(quickPlanGroup([]), null);
+  assertEqual(quickPlanGroup(null), null);
+});
+
 test('countPlanConflictPairs: counts unique overlapping pairs', () => {
   const items = [
     { id: 'a', course_code: '15-112', semester_code: 'F26', section: 'W', campus: 'Qatar', days_times: 'UTR 08:30AM-09:45AM' },
@@ -843,12 +865,13 @@ test('conflicts: other courses and other offerings of one course still conflict 
   const other = { id: 'x', course_code: '15-112', semester_code: 'F26', section: 'A', campus: 'Pittsburgh', days_times: 'T 01:30PM-02:20PM' };
   assertEqual(countPlanConflictPairs(bio.concat(other), keyOf), 2);
   assertEqual([...findPlanConflicts(bio.concat(other), keyOf)].sort(), [bio[0].id, bio[1].id, 'x'].sort());
-  // 09-207 Pittsburgh A (MW from 2:00 PM) next to 09-207 Qatar W (MW from 2:30 PM): two offerings of one course.
+  // 09-207 Pittsburgh A (MW from 2:00 PM) next to 09-207 Qatar W (MW from 2:30 PM): two offerings of one
+  // course, but on two campuses, whose times are local: no conflict.
   const pitt = ROWS_09_207.filter(r => r.semester_code === 'F26' && r.campus === 'Pittsburgh' && r.section === 'A').map(r => planMeeting('09-207', r));
   const qatarW = ROWS_09_207.filter(r => r.semester_code === 'F26' && r.section === 'W').map(r => planMeeting('09-207', r));
   assertTrue(keyOf(pitt[0]) !== keyOf(qatarW[0]), 'two offerings');
-  assertEqual(countPlanConflictPairs(pitt.concat(qatarW), keyOf), 2, "each row of A overlaps W; A's own rows do not count");
-  // A meeting whose section the catalog no longer lists is an offering of its own.
+  assertEqual(countPlanConflictPairs(pitt.concat(qatarW), keyOf), 0, 'Doha and Pittsburgh times never conflict');
+  // A meeting whose section the catalog no longer lists is an offering of its own (same campus).
   const gone = planMeeting('03-117', socRow('F26', 'Pittsburgh', 'Z', 'TR 01:00PM-02:00PM'));
   assertEqual(countPlanConflictPairs(bio.concat(gone), keyOf), 2);
 });

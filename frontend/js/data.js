@@ -1262,6 +1262,19 @@ function findOfferingGroup(groups, semesterCode, section, campus) {
 }
 
 /**
+ * The offering group a quick "+ Plan" (search results, "Add to plan") adds,
+ * from the groups the filters show: the first one, or the first Qatar one of
+ * that semester when the filters show both campuses (the Schedule of Classes
+ * lists Pittsburgh first, and CMU-Q students take the Doha sections). null
+ * when no group shows.
+ */
+function quickPlanGroup(groups) {
+  const first = (groups || [])[0];
+  if (!first) return null;
+  return groups.find(g => g.campus === 'Qatar' && g.semester_code === first.semester_code) || first;
+}
+
+/**
  * What planning one section of an offering group means: { parts, others }.
  * parts is the group's lecture (if any) with the chosen section; others are
  * the lecture's other sections, which the choice replaces (a student takes
@@ -1337,9 +1350,15 @@ function groupPlanItemsByOffering(items, groupsFor) {
   return out;
 }
 
+/**
+ * True when two planned meetings of one semester meet at the same time on a
+ * shared day. Meetings on different campuses never conflict: Doha and
+ * Pittsburgh times are local times.
+ */
 function planEntriesOverlap(a, b) {
   if (!a || !b) return false;
   if (a.semester_code !== b.semester_code) return false;
+  if (a.campus && b.campus && a.campus !== b.campus) return false;
   const pa = parseDaysTimes(a.days_times);
   const pb = parseDaysTimes(b.days_times);
   if (!pa.parseable || !pb.parseable) return false;
