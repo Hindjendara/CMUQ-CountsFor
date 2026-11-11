@@ -1058,7 +1058,7 @@ Before November 10, 2026 the editor saved the whole "counts for" list of every p
 
 The baseline must be the catalog those edits were saved against: `main`'s `data/courses.json` at `79e29ec` (`git show 79e29ec:data/courses.json > FILE`). Production served the same requirement rows from November 3, 2026, when the editor shipped, and still did on November 11. A catalog of the `cleanup` branch is the wrong baseline: its Psychology rows moved to the department's new numbers (14.6), so an edit saved on a new number (85-150 had no rows in production) would turn into removals of the rows that moved onto it. The script refuses a baseline without rows for the old numbers in `PRODUCTION_ONLY_CODES` (85-211, 85-219, 85-221, 85-241, 85-253, 85-261, 85-340, 85-359, 85-377 and 85-442: production's catalog has rows for them, and no catalog from November 9, 2026 on does), before it reads the database.
 
-It prints the database it reads, the baseline, every course, each program before and after, and every path that is still not in today's catalog. It is a dry run unless `--apply`, which writes the rows, deletes a row left with no edit, and adds one `course.migrate` event per course. `backend/tests/test_migrate_override_paths.py` converts saved edits of the 26 Psychology numbers the review listed against production's rows (`backend/tests/data/production_psychology_rows.json`; 24 of them have other rows in the cleanup catalog, and 85-482 and 85-798 exist only there) and checks that only the admin's change is left.
+It prints the database it reads, the baseline, every course, each program before and after, and every path that is still not in today's catalog. It is a dry run unless `--apply`, which writes the rows, deletes a row left with no edit, and adds one `course.migrate` event per course. `backend/tests/test_migrate_override_paths.py` converts saved edits of 26 Psychology numbers against production's rows (`backend/tests/data/production_psychology_rows.json`) and checks that only the admin's change is left: the 24 numbers whose rows differ between production's catalog and the `cleanup` catalog of November 9, 2026 (`174e856`), and 85-482 and 85-798, which only the latter has.
 
 ---
 
@@ -1817,7 +1817,7 @@ systemctl status countsfor-api --no-pager
 curl -s http://127.0.0.1:8000/health
 ```
 
-`active (running)` only means the Gunicorn master is up (it reports ready to systemd before its workers import the app); the `curl` is the real check. Expected: `{"database":"connected","db_host":"","status":"ok","tables":14}` (`tables` counts every table in the database, so 15 with the legacy table; `db_host` is empty for a socket connection). On every start systemd first runs `python -m backend.bootstrap_db` (`ExecStartPre`); if it fails the API does not start, and `journalctl -u countsfor-api -n 50` shows why. The workers skip the bootstrap because the env file sets `SKIP_DB_BOOTSTRAP=1`. Gunicorn logs requests and errors to the journal (`journalctl -u countsfor-api -f`). systemd restarts the API if it crashes; `sudo systemctl restart countsfor-api` loads new code.
+`active (running)` only means the Gunicorn master is up (it reports ready to systemd before its workers import the app); the `curl` is the real check. Expected: `{"database":"connected","db_host":"","status":"ok","tables":15}`. `tables` counts every table in the database: the 15 of `backend/models.py`, or 16 on an imported Render database that still has the legacy `staff_directory_entries` table (15.8 step 3; the import gets `minor_overrides` from the bootstrap, step 9). `db_host` is empty for a socket connection. On every start systemd first runs `python -m backend.bootstrap_db` (`ExecStartPre`); if it fails the API does not start, and `journalctl -u countsfor-api -n 50` shows why. The workers skip the bootstrap because the env file sets `SKIP_DB_BOOTSTRAP=1`. Gunicorn logs requests and errors to the journal (`journalctl -u countsfor-api -f`). systemd restarts the API if it crashes; `sudo systemctl restart countsfor-api` loads new code.
 
 The unit is hardened: the whole file system is read-only for the API (it writes no files; its data is in PostgreSQL), it gets a private `/tmp` and no capabilities. The daily update runs from cron, outside the unit, so these limits do not apply to it. If the API ever needs to write a file, list the folder in `ReadWritePaths=`.
 
@@ -1850,6 +1850,7 @@ This runs the parser tests, rebuilds the catalog from the deployed `soc.json`, c
 ... Gates passed (last_scrape 2026-11-07T22:10:04.404911+00:00, 6795 courses)
 ... courses.json: unchanged, not rewritten
 ... courses.json.gz: written
+... requirement_buckets.json: unchanged
 ... soc.json: unchanged
 ... Update done in 0.2 min (exit 0)
 ```
@@ -1893,7 +1894,7 @@ On the server:
 
 ```bash
 curl -s http://127.0.0.1:8000/health
-# {"database":"connected","db_host":"","status":"ok","tables":14}
+# {"database":"connected","db_host":"","status":"ok","tables":15}   (16 with the legacy table, 15.9)
 curl -s -o /dev/null -w '%{http_code}\n' https://countsfor.qatar.cmu.edu/api/me
 # 401: the API answers through Apache (you are not signed in)
 curl -s 'https://countsfor.qatar.cmu.edu/api/search-analytics/popular?program=CS&semester=F26&limit=3'
@@ -2103,7 +2104,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
-- `backend/tests/test_admin.py`, `test_course_overrides.py` (the change per program and minor, the path and minor checks, the merge per key, `stale_page`, the batch route, the audit details), `test_minor_overrides.py` (minor settings and the `/health` table list) and `test_migrate_override_paths.py` (12.7) cover the admin page.
+- `backend/tests/test_admin.py`, `test_course_overrides.py` (the change per program and minor, the path and minor checks, the merge per key, `stale_page`, the batch route, the audit details), `test_minor_overrides.py` (minor settings and the `/health` table list) and `test_migrate_override_paths.py` (12.7) cover the admin page. `test_request_bodies.py` sends the admin write routes and `/api/auth/login` JSON bodies that are not objects (a number, a list, a string, true) and expects 400 `invalid_body` (9.1).
 - `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, the SMTP relay check end to end, and that production never returns a reset token or reads `backend/.env`.
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
 - `backend/tests/test_deploy_files.py`: the `deploy/` files agree with the repo (4.3).
