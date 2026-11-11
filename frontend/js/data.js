@@ -567,7 +567,6 @@ function applyCourseOverrides(courses, overrides) {
         offered_qatar: false,
         offered_pitts: false,
         requirements: _emptyRequirements(),
-        soc_sections: [],
         offerings: [],
         _added: true,
         _copied: true,
@@ -989,43 +988,9 @@ function resolveSemesterChoice(semesters, saved) {
   return choice.code;
 }
 
+/** A course's SOC sections (reconcile_offerings.py writes them, newest semester first). */
 function getCourseOfferings(course) {
-  if (!course) return [];
-  if (Array.isArray(course.offerings) && course.offerings.length) {
-    return course.offerings;
-  }
-  // Legacy soc_sections → normalized offering shape. A section without a
-  // semester code is listed under "All semesters" only.
-  return (course.soc_sections || []).map(s => ({
-    semester: s.semester || semesterLabel(s.semester_code),
-    semester_code: s.semester_code || '',
-    campus: s.campus || (s.location && s.location.includes('Qatar') ? 'Qatar'
-      : s.location && s.location.includes('Pittsburgh') ? 'Pittsburgh' : null),
-    section: s.section,
-    modality: s.modality || normalizeOfferingModality(s.delivery_mode),
-    units: course.units,
-    days_times: s.days_times || formatLegacyDaysTimes(s),
-    instructor: s.instructor || '',
-    location: s.location,
-    delivery_mode_raw: s.delivery_mode,
-  }));
-}
-
-function formatLegacyDaysTimes(s) {
-  const days = s.days || 'TBA';
-  if (s.begin_time && s.begin_time !== 'TBA' && s.end_time) {
-    return `${days} ${s.begin_time}-${s.end_time}`;
-  }
-  return days;
-}
-
-function normalizeOfferingModality(raw) {
-  const d = (raw || '').toLowerCase();
-  if (!d) return 'In Person';
-  if (d.includes('remote only') || d === 'remote') return 'Remote';
-  if (d.includes('hybrid') || (d.includes('remote') && d.includes('in-person'))) return 'Hybrid';
-  if (d.includes('remote')) return 'Remote';
-  return 'In Person';
+  return course && Array.isArray(course.offerings) ? course.offerings : [];
 }
 
 function modalityFilterMatches(offeringModality, filterId) {

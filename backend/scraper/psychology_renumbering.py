@@ -170,7 +170,6 @@ def new_course_row(code: str, ren: Renumbering, old_row: dict | None = None,
         "offered_qatar": False,
         "offered_pitts": False,
         "requirements": {k: [] for k in PROGRAM_KEYS},
-        "soc_sections": [],
         "offerings": [],
         "source": SOURCE_LABEL,
     }
@@ -260,8 +259,8 @@ def merge_offerings(target: dict, old_row: dict) -> int:
     A section counts once by offering_key: soc.json can list one section under
     both numbers (85-294 A and 85-501 A in F25 and F26). The merged list keeps
     the newest semester first, as reconcile writes it, and the lecture then
-    section order of each semester and campus; offered_qatar, offered_pitts and
-    soc_sections follow the merged list (reconcile_course).
+    section order of each semester and campus; offered_qatar and offered_pitts
+    follow the merged list (reconcile_course).
     """
     have = {offering_key(o) for o in target.get("offerings") or [] if isinstance(o, dict)}
     new = [o for o in old_row.get("offerings") or [] if isinstance(o, dict) and offering_key(o) not in have]

@@ -81,7 +81,7 @@ def row(code, name, reqs=(), **extra):
         "course_code": code, "course_name": name, "department": "85", "units": 9,
         "description": "", "prerequisites": "", "offered": [], "offered_qatar": False,
         "offered_pitts": False, "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
-        "soc_sections": [], "offerings": [],
+        "offerings": [],
     }
     for r in reqs:
         out["requirements"].setdefault(r["major"], []).append(dict(r))
@@ -225,7 +225,7 @@ def test_missing_new_number_rows_come_from_the_list(ren, catalog):
         "course_code": "85-501", "course_name": "Teaching Assistantship", "department": "85",
         "units": 0, "description": "", "prerequisites": "", "offered": ["S24", "F25"],
         "offered_qatar": False, "offered_pitts": False,
-        "requirements": {"CS": [], "IS": [], "BA": [], "BS": []}, "soc_sections": [],
+        "requirements": {"CS": [], "IS": [], "BA": [], "BS": []}, 
         "offerings": [], "source": SOURCE_LABEL,
     }
     # 85-294 had only an AI rule row: it is not moved, and 85-501 gets no empty AI list.
@@ -276,8 +276,7 @@ def test_a_retired_row_gives_its_sections_and_semesters_to_its_new_number(ren, c
         ("F25", "Qatar", "W", "MW 10:00AM-11:20AM"),
     ]
     assert got["offered_qatar"] is True and got["offered_pitts"] is True
-    assert [(s["semester_code"], s["section"]) for s in got["soc_sections"]] == [
-        (o["semester_code"], o["section"]) for o in got["offerings"]]
+    assert "soc_sections" not in got
     assert got["offered"] == ["S24", "F25", "S26", "F26"]
     once = copy.deepcopy(catalog)
     apply_renumbering(catalog, ren)

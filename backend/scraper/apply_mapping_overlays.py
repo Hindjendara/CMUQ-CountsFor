@@ -310,7 +310,6 @@ def _apply_additive_overlays(
                     "offered_qatar": bool(defaults.get("offered_qatar")),
                     "offered_pitts": False,
                     "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
-                    "soc_sections": [],
                     "offerings": [],
                     "manual_seed": True,
                 }
@@ -756,7 +755,7 @@ def apply_campus_overrides(by_code: dict[str, dict], entries: list[dict]) -> dic
         if course is None:
             stats["campus_codes_missing"].append(code)
             continue
-        for row in (course.get("offerings") or []) + (course.get("soc_sections") or []):
+        for row in course.get("offerings") or []:
             if isinstance(row, dict):
                 row["campus"] = campus
         for name, flag in CAMPUS_FLAGS.items():

@@ -261,7 +261,6 @@ def test_reconcile_file_with_cancelled_qatar_section(tmp_path):
             "offered_pitts": False,
             "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
             "offerings": [],
-            "soc_sections": [],
         }
     ]
     soc_path = tmp_path / "soc.json"

@@ -48,7 +48,7 @@ def _catalog_row(code, name, **extra):
     row = {"course_code": code, "course_name": name, "units": 9, "offered": [],
            "offered_qatar": False, "offered_pitts": False,
            "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
-           "offerings": [], "soc_sections": [], "description": "", "prerequisites": ""}
+           "offerings": [], "description": "", "prerequisites": ""}
     row.update(extra)
     return row
 

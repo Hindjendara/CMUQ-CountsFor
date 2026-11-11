@@ -25,7 +25,7 @@ def catalog_row(code, name, reqs=None, **extra):
         "course_code": code, "course_name": name, "units": 9, "offered": ["S20"],
         "offered_qatar": False, "offered_pitts": False,
         "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
-        "offerings": [], "soc_sections": [], "description": "", "prerequisites": "",
+        "offerings": [], "description": "", "prerequisites": "",
     }
     if reqs:
         row["requirements"].update(reqs)
@@ -111,6 +111,22 @@ def test_compact_catalog_code_is_not_added_twice(tmp_path):
     stats, rows, all_rows = run_reconcile(tmp_path, soc, [catalog_row("85110", "Cognitive Psychology")])
     assert [r["course_code"] for r in all_rows] == ["85-110"]
     assert stats["courses_added"] == 0
+
+
+def test_reconcile_writes_offerings_only_and_drops_the_legacy_soc_sections_copy(tmp_path):
+    soc = {"semesters": {"F26": {"courses": [soc_course("85110", "Cognitive Psychology", sections=[section("Qatar")])]},
+                         "S27": {"courses": [soc_course("85213", "Human Memory")]}}}
+    legacy = catalog_row("85-110", "Cognitive Psychology", soc_sections=[{"section": "A", "semester_code": "F25"}])
+    absent = catalog_row("85-901", "Old Course", soc_sections=[])
+    _, rows, _ = run_reconcile(tmp_path, soc, [legacy, absent])
+    assert [(o["semester_code"], o["campus"]) for o in rows["85-110"]["offerings"]] == [("F26", "Qatar")]
+    assert rows["85-110"]["offered_qatar"] is True and rows["85-110"]["offered_pitts"] is False
+    assert [o["section"] for o in rows["85-213"]["offerings"]] == ["A"], "a new row from the SOC"
+    assert not any("soc_sections" in row for row in rows.values())
+    path = tmp_path / "courses.json"
+    before = path.read_bytes()
+    reconcile_file(str(path), str(tmp_path / "soc.json"))
+    assert path.read_bytes() == before
 
 
 def test_soc_ingested_offered_follows_offerings(tmp_path):

@@ -64,7 +64,7 @@ def test_lectures_stay_ahead_of_their_sections_through_the_pipeline(tmp_path, mo
     catalog_row = {
         "course_code": "09-207", "course_name": TITLE, "units": 9, "offered": ["F26"],
         "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
-        "offerings": [], "soc_sections": [], "description": "", "prerequisites": "",
+        "offerings": [], "description": "", "prerequisites": "",
     }
     courses_path.write_text(json.dumps({"_meta": {}, "courses": [catalog_row]}), encoding="utf-8")
 

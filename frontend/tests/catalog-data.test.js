@@ -5,7 +5,8 @@
 // checks data/requirement_buckets.json, the admin course editor's bucket list:
 // it lists every row path, in the tree's catalog order. And the planner: no
 // offering of the catalog conflicts with itself when it is planned. And the
-// semester picker: the catalog lists the SOC's semesters (soc_semesters).
+// semester picker: the catalog lists the SOC's semesters (soc_semesters), and
+// the SOC sections are in offerings only.
 //
 // Node only: it reads the 30 MB catalog with fs, so scripts/run-data-tests.js
 // loads it with require() and tests/test.html does not include it. It runs
@@ -222,4 +223,12 @@ test('semester picker: the catalog lists the SOC semesters, newest first, and op
   const s = catalogSemesters(courses(), listed);
   assertEqual(s.codes, listed);
   assertTrue('FS'.includes(s.defaultCode[0]), s.defaultCode);
+});
+
+test('catalog: the SOC sections are in offerings only (no legacy soc_sections copy)', () => {
+  const legacy = courses().filter(c => 'soc_sections' in c).map(c => c.course_code);
+  assertEqual(legacy.slice(0, 10), []);
+  const withSections = courses().filter(c => getCourseOfferings(c).length);
+  assertTrue(withSections.length > 5000, `${withSections.length} courses have SOC sections`);
+  assertEqual(getCourseOfferings({ course_code: '15-112', soc_sections: [{ section: 'A', semester_code: 'F26' }] }), []);
 });

@@ -168,7 +168,9 @@ def reconcile_course(course: dict, offerings: list[dict], meta: dict | None = No
     """Attach the SOC offerings and set the campus flags and units they give.
 
     The campus is the SOC's; a confirmed correction is the overlay step's
-    "campus_overrides" section (backend/data/mapping_overlays.json).
+    "campus_overrides" section (backend/data/mapping_overlays.json). The
+    legacy "soc_sections" copy of the offerings is no longer written, and an
+    old one is removed: nothing reads it.
     """
     qatar, pitts = campus_flags_from_offerings(offerings)
 
@@ -180,24 +182,7 @@ def reconcile_course(course: dict, offerings: list[dict], meta: dict | None = No
     course["offerings"] = offerings
     course["offered_qatar"] = qatar
     course["offered_pitts"] = pitts
-    # Legacy single-semester sections for older UI paths
-    course["soc_sections"] = [
-        {
-            "section": o.get("section"),
-            "days": (o.get("days_times") or "").split(" ")[0] if o.get("days_times") else "",
-            "begin_time": "",
-            "end_time": "",
-            "location": o.get("location") or (
-                "Doha, Qatar" if o.get("campus") == "Qatar" else "Pittsburgh, Pennsylvania"
-            ),
-            "delivery_mode": o.get("delivery_mode_raw") or o.get("modality"),
-            "campus": o.get("campus"),
-            "modality": o.get("modality"),
-            "semester_code": o.get("semester_code"),
-            "semester": o.get("semester"),
-        }
-        for o in offerings
-    ]
+    course.pop("soc_sections", None)
 
 
 def offered_semesters(offerings: list[dict]) -> list[str]:
@@ -233,7 +218,6 @@ def stub_course_from_soc(code: str, offerings: list[dict], meta: dict | None = N
         "offered_qatar": False,
         "offered_pitts": False,
         "requirements": {"CS": [], "IS": [], "BA": [], "BS": []},
-        "soc_sections": [],
         "offerings": [],
         "soc_title": title,
         "soc_department": (meta or {}).get("department"),
