@@ -314,9 +314,9 @@ def test_overlay_file_lists_only_settled_entries():
     # 03-351 is cross-listed with 02-262: the SCS Science and Engineering rule rules it out,
     # and AI keeps only what its own lists state (its CS, BA and BS rows stay).
     assert removals == {"85-426": "all", "03-351": ["AI"]}
-    assert [(e["course_code"], e["rule"]) for e in OVERLAY_DOC["qatar_visibility"]] == [
-        ("85-100", "show_only_if_offered_qatar"),
-    ]
+    # Empty since November 11, 2026: 85-100 Introduction to Psychology shows like any other
+    # course (the user's answer). The section and its rule stay for later use.
+    assert OVERLAY_DOC["qatar_visibility"] == []
     # The one campus correction, moved here from the scraper code (CAMPUS_FIXTURES).
     assert [(e["course_code"], e["campus"]) for e in OVERLAY_DOC["campus_overrides"]] == [("82-289", "Qatar")]
     sheet = [o for o in OVERLAY_DOC["overlays"] if o["id"].startswith("hss-sheet-")]
@@ -386,7 +386,9 @@ def test_real_overlay_merge_result(real_courses):
         ("BS", "E. Nontechnical Elective Courses", True),
         ("AI", "C. Humanities and Arts Electives", True),
     }
-    assert rows["85-100"]["qatar_only"] is True
+    # qatar_visibility is empty, so no row keeps a qatar_only flag (85-100 shows).
+    assert "qatar_only" not in rows["85-100"]
+    assert not any(c.get("qatar_only") for c in courses)
 
 
 # Removed on 2026-11-09 and not on the department's renumbering list.

@@ -559,7 +559,8 @@ def test_catalog_follows_the_list(real_rows):
     # 85-151 Personality has 85-251's history, and the M26 section the SOC still lists under 85-251.
     assert real_rows["85-151"]["offered"] == ["F20", "F21", "M23", "S24", "M24", "M25", "M26"]
     assert [(o["semester_code"], o["section"]) for o in real_rows["85-151"]["offerings"]] == [("M26", "A6")]
-    assert real_rows["85-100"]["qatar_only"] is True
+    # 85-100 Introduction to Psychology shows like any other course (November 11, 2026).
+    assert "qatar_only" not in real_rows["85-100"]
     # 85-414's old course's rows are 85-472's; it has only the rows the rule step owns.
     assert {s for *_, s in keys(real_rows["85-414"], True)} == {"rule"}
     assert {("BA", SR), ("BS", NTE)} <= keys(real_rows["85-472"])
