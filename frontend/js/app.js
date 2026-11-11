@@ -2276,11 +2276,9 @@ const App = {
     if (!el) return;
 
     const deptName = getDeptName(course.course_code);
-    const offeringSems = sortSemesters(
-      [...new Set(getCourseOfferings(course).map(o => o.semester_code).filter(Boolean))]
-    );
-    const histSems = sortSemesters(course.offered || []);
-    const semesters = sortSemesters([...new Set([...offeringSems, ...histSems])]);
+    // Every semester the course ran in: its SOC sections (also of semesters
+    // that left the SOC) and the catalog's history.
+    const semesters = sortSemesters(getCourseOfferings(course).map(o => o.semester_code).concat(course.offered || []).filter(Boolean));
     const prereq = formatPrereq(course.prerequisites);
     const profile = this.profile;
     const facultyView = isFaculty(profile);
