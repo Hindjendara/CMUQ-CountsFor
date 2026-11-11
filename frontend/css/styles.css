@@ -3203,6 +3203,13 @@ body.is-resizing-panels * {
 
 .plan-view { padding: 18px 20px 40px; }
 .plan-header { margin-bottom: 18px; }
+.plan-elsewhere-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
 .plan-title-row {
   display: flex;
   align-items: baseline;

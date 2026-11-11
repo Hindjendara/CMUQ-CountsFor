@@ -317,6 +317,8 @@ const App = {
     try {
       await this._prepareCatalog();
       this._resolveSemesters();
+      // The navbar was drawn before the catalog and the semester were known.
+      this._refreshNavPlanCount();
 
       // Auto-expand first level of the default major
       this.autoExpandFirstLevel(this.activeMajor);
@@ -1168,7 +1170,7 @@ const App = {
         if (action === 'plan-remove-section') {
           this.removePlanSection(code, actionBtn.dataset.semesterCode, actionBtn.dataset.section, actionBtn.dataset.campus);
         }
-        if (action === 'plan-remove') this.removeFromPlan(actionBtn.dataset.planId);
+        if (action === 'plan-show-semester') this.setSemester(actionBtn.dataset.semesterCode);
         if (action === 'plan-add-first') this.addFirstSectionToPlan(code);
         if (action === 'plan-open') this.openPlanDetail(actionBtn.dataset.planId);
         if (action === 'plan-create') this.createNewPlan();
@@ -1318,6 +1320,7 @@ const App = {
       if (this._planDetailId) this.openPlanDetail(this._planDetailId);
       else this.showPlanView();
     }
+    this._refreshNavPlanCount();
     showToast('Showing ' + semesterLabel(code));
   },
 
@@ -2179,18 +2182,24 @@ const App = {
       </button>`;
   },
 
+  /**
+   * The navbar plan button: { planCount, label }. With one schedule the label
+   * gives its units in the semester on screen ("Plan · 24u"); until the
+   * catalog has loaded there is no semester or units to give.
+   */
+  _navPlanState() {
+    const planCount = (this._loadPlansStore().plans || []).length;
+    if (planCount > 1) return { planCount, label: `${planCount} schedules` };
+    const active = this._ensureActivePlan(false);
+    const planned = active && this.activeSemester ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
+    if (!planned.length) return { planCount, label: 'Plan schedule' };
+    return { planCount, label: `Plan · ${this._planUnitsTotal(planned) || '?'}u` };
+  },
+
   _navbarPlanHtml() {
     if (!canUseSchedulePlan(this.profile)) return '';
-    const store = this._loadPlansStore();
-    const planCount = (store.plans || []).length;
-    const active = this._ensureActivePlan(false);
-    const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
-    const units = this._planUnitsTotal(planned);
+    const { planCount, label } = this._navPlanState();
     const countChip = planCount > 0 ? `<span class="nav-plan-count">${planCount}</span>` : '';
-    const label = planCount > 1
-      ? `${planCount} schedules`
-      : (count > 0 ? `Plan · ${units || '?'}u` : 'Plan schedule');
     return `
       <button class="nav-plan" onclick="App.showPlanView()" title="Your schedule plans" aria-label="Your schedule plans">
         ${this._iconCalendar()}
@@ -2202,16 +2211,11 @@ const App = {
   _refreshNavPlanCount() {
     const btn = document.querySelector('.nav-plan');
     if (!btn) return;
-    const store = this._loadPlansStore();
-    const planCount = (store.plans || []).length;
-    const active = this._ensureActivePlan(false);
-    const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
-    const units = this._planUnitsTotal(planned);
+    const { planCount, label: text } = this._navPlanState();
     const existing = btn.querySelector('.nav-plan-count');
     const label = btn.querySelector('.nav-plan-label');
     if (planCount > 0) {
-      if (label) label.textContent = planCount > 1 ? `${planCount} schedules` : (count > 0 ? `Plan · ${units || '?'}u` : 'Plan schedule');
+      if (label) label.textContent = text;
       if (existing) existing.textContent = String(planCount);
       else btn.insertAdjacentHTML('beforeend', `<span class="nav-plan-count">${planCount}</span>`);
     } else {
@@ -3684,7 +3688,11 @@ const App = {
     this._refreshPlanSurfaces(courseCode);
   },
 
-  /** Plan list "Remove": the whole offering (lecture and section) of that entry. */
+  /**
+   * "Remove" in the plan list and under "No time listed": the whole offering
+   * (lecture and section) of that entry, so a lecture never stays without
+   * the section planned with it.
+   */
   removePlanSection(courseCode, semesterCode, section, campus) {
     const groups = this._offeringGroups(courseCode);
     const key = planItemOfferingGroup({ course_code: courseCode, semester_code: semesterCode, section, campus }, groups).key;
@@ -3693,18 +3701,6 @@ const App = {
     this._savePlanItems(list);
     showToast('Removed from schedule plan');
     this._refreshPlanSurfaces(courseCode);
-  },
-
-  removeFromPlan(planId) {
-    if (!planId) return;
-    const list = this._getPlanItems();
-    const idx = list.findIndex(i => i.id === planId);
-    if (idx === -1) return;
-    const code = list[idx].course_code;
-    list.splice(idx, 1);
-    this._savePlanItems(list);
-    showToast('Removed from schedule plan');
-    this._refreshPlanSurfaces(code);
   },
 
   _refreshPlanSurfaces(courseCode) {
@@ -3790,7 +3786,7 @@ const App = {
                   <span class="plan-tba-name">${esc(c ? c.course_name : '')}</span>
                   <span class="plan-tba-meta">${esc(planSectionLabel(item.section))}${days ? ' · ' + esc(days) : ''}${item.campus ? ' · ' + esc(item.campus) : ''}</span>
                 </button>
-                <button type="button" class="plan-tba-remove" data-action="plan-remove" data-plan-id="${esc(item.id)}" aria-label="Remove from plan">Remove</button>
+                <button type="button" class="plan-tba-remove" data-action="plan-remove-section" data-course-code="${esc(item.course_code)}" data-semester-code="${esc(item.semester_code)}" data-section="${esc(item.section)}" data-campus="${esc(item.campus)}" aria-label="Remove ${esc(item.course_code)} ${esc(planSectionLabel(item.section))} from plan">Remove</button>
               </div>`;
           }).join('')}
         </div>
@@ -3934,6 +3930,7 @@ const App = {
     if (!el) return;
 
     const items = this._getPlanItemsForSemester(this.activeSemester, planId);
+    const elsewhere = items.length ? '' : this._planElsewhereHtml(plan);
     const offeringOf = this._planOfferingKeyOf();
     const conflicts = findPlanConflicts(items, offeringOf);
     const units = this._planUnitsTotal(items);
@@ -3966,12 +3963,47 @@ const App = {
             ${conflictNote}
           </div>
         </div>
-        ${this._renderPlanCalendar(items, conflicts)}
+        ${elsewhere || this._renderPlanCalendar(items, conflicts)}
         ${this._renderPlanList(items, conflicts)}
       </div>
     `;
     this._syncDirectoryFabLayout();
     this._refreshNavPlanCount();
+  },
+
+  /**
+   * The empty state of a schedule that has courses only in other semesters
+   * (a Fall 2026 plan opened on the Spring 2027 default): it names them, newest
+   * first, with a button to show each semester the picker lists, or "All
+   * semesters" for one the Schedule of Classes no longer lists. '' when the
+   * schedule has no courses at all.
+   */
+  _planElsewhereHtml(plan) {
+    const bySemester = new Map();
+    for (const item of this._getPlanItems(plan.id)) {
+      const code = item.semester_code || '';
+      if (!bySemester.has(code)) bySemester.set(code, new Set());
+      bySemester.get(code).add(item.course_code);
+    }
+    if (!bySemester.size) return '';
+    const codes = sortSemesters([...bySemester.keys()]);
+    const count = n => `${n} course${n === 1 ? '' : 's'}`;
+    const parts = codes.map(code => `${count(bySemester.get(code).size)} in ${isSemesterCode(code) ? semesterLabel(code) : 'no semester'}`);
+    const listed = codes.filter(code => this._semesters.codes.includes(code));
+    const buttons = listed.map(code =>
+      `<button type="button" class="plan-new-btn" data-action="plan-show-semester" data-semester-code="${esc(code)}">Show ${esc(semesterLabel(code))}</button>`);
+    if (listed.length < codes.length) {
+      buttons.push('<button type="button" class="plan-new-btn" data-action="plan-show-semester" data-semester-code="all">Show all semesters</button>');
+    }
+    const last = parts.pop();
+    const where = parts.length ? `${parts.join(', ')} and ${last}` : last;
+    return `
+      <div class="plan-empty plan-elsewhere">
+        <div class="plan-empty-icon">${this._iconCalendar()}</div>
+        <div class="plan-empty-title">No courses in ${esc(semesterLabel(this.activeSemester))}</div>
+        <div class="plan-empty-hint">This schedule has ${esc(where)}.</div>
+        <div class="plan-elsewhere-actions">${buttons.join('')}</div>
+      </div>`;
   },
 
   async showStudentFlagsView() {

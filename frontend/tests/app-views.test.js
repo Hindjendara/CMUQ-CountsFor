@@ -1034,3 +1034,97 @@ test('planner: a shared snapshot and the imported plan keep the lecture and sect
   assertEqual(entryParts(App, items), [['Lec 2', 'W']]);
   assertEqual(App._planUnitsTotal(items), 9);
 });
+
+// "No time listed": Remove takes the whole offering out, as Remove in the course list does.
+test('plan view: Remove under "No time listed" removes the lecture and the section planned with it', () => {
+  const { App, ctx, document } = loadPlanApp();
+  // 15-210 as the SOC lists it in Pittsburgh: Lec 2 has no time, its section M has one.
+  App.courses.push({ course_code: '15-210', course_name: 'Parallel and Sequential Data Structures and Algorithms', units: 12,
+    requirements: { CS: [], IS: [], BA: [], BS: [] }, offered: ['F26'], offerings: [
+      planRow('F26', 'Pittsburgh', 'Lec 2', 'TBA'),
+      planRow('F26', 'Pittsburgh', 'M', 'T 04:00PM-04:50PM'),
+    ] });
+  App.courseIndex = vm.runInContext('buildCourseIndex', ctx)(App.courses);
+  App.togglePlanSection('15-210', 'F26', 'M', 'Pittsburgh');
+  App.togglePlanSection('21-120', 'F26', 'Lec 1', 'Pittsburgh');
+  assertEqual(plannedRows(App).filter(r => r[0] === '15-210'), [['15-210', 'Lec 2', 'TBA'], ['15-210', 'M', 'T 04:00PM-04:50PM']]);
+  App.openPlanDetail(App._ensureActivePlan(false).id);
+  const html = leftBodyHtml(document);
+  const tba = html.slice(html.indexOf('class="plan-tba"'));
+  const btn = tba.match(/<button type="button" class="plan-tba-remove"([^>]*)>/);
+  assertTrue(!!btn, 'a Remove under No time listed');
+  const attr = name => (btn[1].match(new RegExp(`data-${name}="([^"]*)"`)) || [])[1];
+  assertEqual([attr('action'), attr('course-code'), attr('semester-code'), attr('section'), attr('campus')],
+    ['plan-remove-section', '15-210', 'F26', 'Lec 2', 'Pittsburgh']);
+  assertFalse(html.includes('data-action="plan-remove"'), 'no Remove of a single meeting');
+  // What the click does (the delegated handler calls removePlanSection with these attributes).
+  App.removePlanSection(attr('course-code'), attr('semester-code'), attr('section'), attr('campus'));
+  assertEqual(plannedRows(App), [['21-120', 'Lec 1', 'MWF 10:00AM-10:50AM']], 'Lec 2 and Sec M both gone, 21-120 stays');
+});
+
+// A schedule saved for another semester (Fall 2026) opened on the Spring 2027 default.
+test('plan view: a schedule with no courses in the semester on screen names the semesters that have them', () => {
+  const { App, ctx, document } = loadPlanApp();
+  App._semesters = { codes: ['S27', 'F26', 'M26', 'S26', 'F25'], defaultCode: 'S27' };
+  App.togglePlanSection('09-207', 'F26', 'W', 'Qatar');
+  App.togglePlanSection('15-112', 'F26', 'W', 'Qatar');
+  const plan = App._ensureActivePlan(false);
+  App.activeSemester = 'S27';
+  App.openPlanDetail(plan.id);
+  let html = leftBodyHtml(document);
+  assertTrue(html.includes('No courses in Spring 2027'), html.slice(0, 200));
+  assertTrue(html.includes('This schedule has 2 courses in Fall 2026.'));
+  assertTrue(html.includes('data-action="plan-show-semester" data-semester-code="F26">Show Fall 2026</button>'));
+  assertFalse(html.includes('Your schedule is empty'));
+  assertFalse(html.includes('Show all semesters'), 'Fall 2026 is in the picker');
+
+  // An item of a semester the SOC no longer lists: named, and reachable under All semesters.
+  const items = App._getPlanItems(plan.id).concat([{ course_code: '21-120', semester_code: 'F24', section: 'Lec 1', campus: 'Pittsburgh', days_times: 'MWF 10:00AM-10:50AM' }]);
+  App._savePlanItems(items, plan.id);
+  App.openPlanDetail(plan.id);
+  html = leftBodyHtml(document);
+  assertTrue(html.includes('This schedule has 2 courses in Fall 2026 and 1 course in Fall 2024.'));
+  assertTrue(html.includes('data-semester-code="all">Show all semesters</button>'));
+
+  // The button switches the semester (setSemester), and the schedule shows its Fall 2026 courses.
+  App.setSemester('F26');
+  html = leftBodyHtml(document);
+  assertEqual(App.activeSemester, 'F26');
+  assertFalse(html.includes('No courses in'));
+  assertTrue(html.includes('<span class="plan-stat">2 courses</span>'));
+
+  // A schedule with no courses at all keeps the plain empty state.
+  const store = JSON.parse(ctx.localStorage.getItem('cf_plans_v2'));
+  store.plans.push({ id: 'empty', name: 'Empty', items: [] });
+  ctx.localStorage.setItem('cf_plans_v2', JSON.stringify(store));
+  App.openPlanDetail('empty');
+  html = leftBodyHtml(document);
+  assertTrue(html.includes('Your schedule is empty'));
+  assertFalse(html.includes('No courses in'));
+});
+
+// The navbar plan label is drawn before the catalog loads; it must follow the catalog and the semester.
+test('navbar: the plan label shows the units once the catalog loads and follows a semester switch on home', async () => {
+  const env = loadApp();
+  const { App, ctx, document } = env;
+  ctx.localStorage.setItem('cf_plans_v2', JSON.stringify({ activePlanId: 'p1', plans: [{ id: 'p1', name: 'My plan', items: [
+    { course_code: '15-112', semester_code: 'S27', section: 'A', campus: 'Qatar', days_times: 'MW 10:00AM-11:20AM', modality: 'In Person' },
+  ] }] }));
+  const label = { textContent: '' };
+  const button = { querySelector: sel => (sel === '.nav-plan-label' ? label : sel === '.nav-plan-count' ? { textContent: '1' } : null), insertAdjacentHTML() {} };
+  document.querySelector = sel => (sel === '.nav-plan' ? button : null);
+  App.renderShell();
+  const shell = document.getElementById('app').innerHTML;
+  assertTrue(shell.includes('<span class="nav-plan-label">Plan schedule</span>'), 'no "?u" before the catalog has loaded');
+  ctx.fetchCatalog = async () => ({ courses: semesterCatalog(), socSemesters: SOC_SEMESTERS });
+  ctx.fetchMinors = async () => MINORS_JSON;
+  ctx.apiGetCourseOverrides = async () => ({ ok: true, data: { items: [] } });
+  await App.loadData();
+  assertEqual(App.activeSemester, 'S27');
+  assertEqual(label.textContent, 'Plan · 12u', 'drawn again once the catalog has loaded');
+  App._homeView = 'home';
+  App.setSemester('F26');
+  assertEqual(label.textContent, 'Plan schedule', 'nothing planned for Fall 2026');
+  App.setSemester('S27');
+  assertEqual(label.textContent, 'Plan · 12u');
+});
