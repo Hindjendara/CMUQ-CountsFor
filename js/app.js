@@ -29,6 +29,7 @@ const App = {
   treeSearchQuery: '',
   locationFilter: 'all', // 'all' | 'qatar' | 'pittsburgh'
   activeSemester: null,  // a semester code or 'all'; null until the catalog loads (_resolveSemesters)
+  _socSemesters: null,   // courses.json "soc_semesters": the Schedule of Classes' semesters
   _semesters: { codes: [], defaultCode: null }, // catalogSemesters() of the loaded catalog
   modalityFilter: 'all', // 'all' | 'in_person' | 'remote' | 'hybrid'
   theme: loadStore('cf_theme', 'light'),
@@ -242,8 +243,8 @@ const App = {
    * when minors.json cannot be loaded; the minor sections then say so.
    */
   async _prepareCatalog() {
-    const [courses, minorsData] = await Promise.all([
-      fetchAllCourses(),
+    const [catalog, minorsData] = await Promise.all([
+      fetchCatalog(),
       fetchMinors().catch(err => {
         console.warn('[CountsFor] Minor requirements unavailable.', err.message);
         this._minorsLoadError = err.message;
@@ -258,7 +259,8 @@ const App = {
     else console.warn('[CountsFor] Course edits unavailable; showing the scraped catalog.', r.error);
     if (mr.ok && mr.data) minorOverrides = mr.data.items || [];
     else if (minorsData) console.warn('[CountsFor] Minor settings unavailable; showing the minor file as it is.', mr.error);
-    this._buildCatalog(courses, overrides, minorsData, minorOverrides);
+    this._socSemesters = catalog.socSemesters;
+    this._buildCatalog(catalog.courses, overrides, minorsData, minorOverrides);
   },
 
   /** The synchronous half of _prepareCatalog: edits, index, annotations, trees. */
@@ -315,6 +317,8 @@ const App = {
     try {
       await this._prepareCatalog();
       this._resolveSemesters();
+      // The navbar was drawn before the catalog and the semester were known.
+      this._refreshNavPlanCount();
 
       // Auto-expand first level of the default major
       this.autoExpandFirstLevel(this.activeMajor);
@@ -673,7 +677,7 @@ const App = {
     this.renderTree();
     showToast(kind === 'faculty'
       ? 'Faculty view. You can flag course issues (saved locally in guest mode).'
-      : 'Student view. Save courses, add minors and mark the courses you took.');
+      : 'Student view. Save courses, add minors and plan your schedule.');
   },
 
   async signOut() {
@@ -1166,7 +1170,7 @@ const App = {
         if (action === 'plan-remove-section') {
           this.removePlanSection(code, actionBtn.dataset.semesterCode, actionBtn.dataset.section, actionBtn.dataset.campus);
         }
-        if (action === 'plan-remove') this.removeFromPlan(actionBtn.dataset.planId);
+        if (action === 'plan-show-semester') this.setSemester(actionBtn.dataset.semesterCode);
         if (action === 'plan-add-first') this.addFirstSectionToPlan(code);
         if (action === 'plan-open') this.openPlanDetail(actionBtn.dataset.planId);
         if (action === 'plan-create') this.createNewPlan();
@@ -1212,6 +1216,7 @@ const App = {
   _filterParams() {
     return {
       semesterCode: this.activeSemester,
+      semesters: this._semesters.codes,  // what "All semesters" covers
       locationFilter: this.locationFilter,
       modalityFilter: this.modalityFilter,
     };
@@ -1219,12 +1224,12 @@ const App = {
 
   /**
    * Take the semester list from the loaded catalog (catalogSemesters in
-   * js/data.js) and settle the semester on screen: the one already shown if
-   * the catalog still has it, else the saved choice or the default
-   * (resolveSemesterChoice).
+   * js/data.js: the Schedule of Classes' semesters) and settle the semester on
+   * screen: the one already shown if the list still has it, else the saved
+   * choice or the default (resolveSemesterChoice).
    */
   _resolveSemesters() {
-    this._semesters = catalogSemesters(this.courses);
+    this._semesters = catalogSemesters(this.courses, this._socSemesters);
     const current = this.activeSemester;
     if (current === 'all' || this._semesters.codes.includes(current)) return;
     this.activeSemester = resolveSemesterChoice(this._semesters, loadStore(SEMESTER_STORE_KEY, null));
@@ -1233,7 +1238,7 @@ const App = {
   /** The semester picker's options; a placeholder until the catalog has loaded. */
   _semesterOptionsHtml() {
     if (!this.activeSemester) return '<option value="" selected disabled>Loading semesters…</option>';
-    return semesterOptions(this._semesters.codes, this.activeSemester)
+    return semesterOptions(this._semesters.codes)
       .map(s => `<option value="${esc(s.code)}" ${this.activeSemester === s.code ? 'selected' : ''}>${esc(s.label)}</option>`)
       .join('');
   },
@@ -1315,6 +1320,7 @@ const App = {
       if (this._planDetailId) this.openPlanDetail(this._planDetailId);
       else this.showPlanView();
     }
+    this._refreshNavPlanCount();
     showToast('Showing ' + semesterLabel(code));
   },
 
@@ -2176,18 +2182,24 @@ const App = {
       </button>`;
   },
 
+  /**
+   * The navbar plan button: { planCount, label }. With one schedule the label
+   * gives its units in the semester on screen ("Plan · 24u"); until the
+   * catalog has loaded there is no semester or units to give.
+   */
+  _navPlanState() {
+    const planCount = (this._loadPlansStore().plans || []).length;
+    if (planCount > 1) return { planCount, label: `${planCount} schedules` };
+    const active = this._ensureActivePlan(false);
+    const planned = active && this.activeSemester ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
+    if (!planned.length) return { planCount, label: 'Plan schedule' };
+    return { planCount, label: `Plan · ${this._planUnitsTotal(planned) || '?'}u` };
+  },
+
   _navbarPlanHtml() {
     if (!canUseSchedulePlan(this.profile)) return '';
-    const store = this._loadPlansStore();
-    const planCount = (store.plans || []).length;
-    const active = this._ensureActivePlan(false);
-    const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
-    const units = this._planUnitsTotal(planned);
+    const { planCount, label } = this._navPlanState();
     const countChip = planCount > 0 ? `<span class="nav-plan-count">${planCount}</span>` : '';
-    const label = planCount > 1
-      ? `${planCount} schedules`
-      : (count > 0 ? `Plan · ${units || '?'}u` : 'Plan schedule');
     return `
       <button class="nav-plan" onclick="App.showPlanView()" title="Your schedule plans" aria-label="Your schedule plans">
         ${this._iconCalendar()}
@@ -2199,16 +2211,11 @@ const App = {
   _refreshNavPlanCount() {
     const btn = document.querySelector('.nav-plan');
     if (!btn) return;
-    const store = this._loadPlansStore();
-    const planCount = (store.plans || []).length;
-    const active = this._ensureActivePlan(false);
-    const planned = active ? this._getPlanItemsForSemester(this.activeSemester, active.id) : [];
-    const count = active ? this._countPlannedCourses(this.activeSemester, active.id) : 0;
-    const units = this._planUnitsTotal(planned);
+    const { planCount, label: text } = this._navPlanState();
     const existing = btn.querySelector('.nav-plan-count');
     const label = btn.querySelector('.nav-plan-label');
     if (planCount > 0) {
-      if (label) label.textContent = planCount > 1 ? `${planCount} schedules` : (count > 0 ? `Plan · ${units || '?'}u` : 'Plan schedule');
+      if (label) label.textContent = text;
       if (existing) existing.textContent = String(planCount);
       else btn.insertAdjacentHTML('beforeend', `<span class="nav-plan-count">${planCount}</span>`);
     } else {
@@ -2269,11 +2276,9 @@ const App = {
     if (!el) return;
 
     const deptName = getDeptName(course.course_code);
-    const offeringSems = sortSemesters(
-      [...new Set(getCourseOfferings(course).map(o => o.semester_code).filter(Boolean))]
-    );
-    const histSems = sortSemesters(course.offered || []);
-    const semesters = sortSemesters([...new Set([...offeringSems, ...histSems])]);
+    // Every semester the course ran in: its SOC sections (also of semesters
+    // that left the SOC) and the catalog's history.
+    const semesters = sortSemesters(getCourseOfferings(course).map(o => o.semester_code).concat(course.offered || []).filter(Boolean));
     const prereq = formatPrereq(course.prerequisites);
     const profile = this.profile;
     const facultyView = isFaculty(profile);
@@ -3580,6 +3585,11 @@ const App = {
     return groupPlanItemsByOffering(items, code => this._offeringGroups(code));
   },
 
+  /** The planned parts of one _groupPlanItems() entry, lecture first: "Lec 2 + Sec W". */
+  _planOfferingLabel(group) {
+    return group.parts.map(p => planSectionLabel(p.section)).join(' + ');
+  },
+
   /**
    * The offering of a planned meeting, for the conflict check: the meetings of
    * a lecture and its section (or of one section) never conflict with each
@@ -3618,13 +3628,14 @@ const App = {
     this._ensureActivePlan(true);
     const course = lookupCourse(this.courseIndex, courseCode);
     if (!course) return;
-    const group = this._visibleOfferingGroups(course)[0];
+    const group = quickPlanGroup(this._visibleOfferingGroups(course));
     if (!group) {
       showToast('No sections match your current filters.');
       return;
     }
-    // The first matching offering: its lecture with its first section (or with
-    // the section of it already in the plan), or a section that stands alone.
+    // The first matching offering (in Qatar when the filters show both
+    // campuses): its lecture with its first section (or with the section of
+    // it already in the plan), or a section that stands alone.
     const head = offeringGroupParts(group)[0];
     this.togglePlanSection(courseCode, group.semester_code || this.activeSemester, head.section, head.campus, { forceAdd: true });
     const ta = document.getElementById('typeahead');
@@ -3680,7 +3691,11 @@ const App = {
     this._refreshPlanSurfaces(courseCode);
   },
 
-  /** Plan list "Remove": the whole offering (lecture and section) of that entry. */
+  /**
+   * "Remove" in the plan list and under "No time listed": the whole offering
+   * (lecture and section) of that entry, so a lecture never stays without
+   * the section planned with it.
+   */
   removePlanSection(courseCode, semesterCode, section, campus) {
     const groups = this._offeringGroups(courseCode);
     const key = planItemOfferingGroup({ course_code: courseCode, semester_code: semesterCode, section, campus }, groups).key;
@@ -3689,18 +3704,6 @@ const App = {
     this._savePlanItems(list);
     showToast('Removed from schedule plan');
     this._refreshPlanSurfaces(courseCode);
-  },
-
-  removeFromPlan(planId) {
-    if (!planId) return;
-    const list = this._getPlanItems();
-    const idx = list.findIndex(i => i.id === planId);
-    if (idx === -1) return;
-    const code = list[idx].course_code;
-    list.splice(idx, 1);
-    this._savePlanItems(list);
-    showToast('Removed from schedule plan');
-    this._refreshPlanSurfaces(code);
   },
 
   _refreshPlanSurfaces(courseCode) {
@@ -3772,6 +3775,14 @@ const App = {
         </div>`;
     }).join('');
 
+    // Remove under "No time listed" takes the whole offering out
+    // (removePlanSection()), so its label names every planned part of it, as
+    // the course list does: "Remove 15-210 Lec 2 + Sec M from plan".
+    const offeringOf = planItemOfferingGroups(code => this._offeringGroups(code));
+    const offeringLabel = tba.length
+      ? new Map(this._groupPlanItems(items).map(group => [group.key, this._planOfferingLabel(group)]))
+      : new Map();
+
     const tbaHtml = tba.length ? `
       <section class="plan-tba" aria-label="Courses without listed times">
         <h3 class="plan-tba-title">No time listed</h3>
@@ -3779,6 +3790,7 @@ const App = {
           ${tba.map(({ item, parsed }) => {
             const c = lookupCourse(this.courseIndex, item.course_code);
             const days = parsed.days.length ? parsed.days.join('') : '';
+            const removeLabel = offeringLabel.get(offeringOf(item).key) || planSectionLabel(item.section);
             return `
               <div class="plan-tba-row">
                 <button type="button" class="plan-tba-main" onclick="App.selectCourseFromTree('${esc(item.course_code)}')">
@@ -3786,7 +3798,7 @@ const App = {
                   <span class="plan-tba-name">${esc(c ? c.course_name : '')}</span>
                   <span class="plan-tba-meta">${esc(planSectionLabel(item.section))}${days ? ' · ' + esc(days) : ''}${item.campus ? ' · ' + esc(item.campus) : ''}</span>
                 </button>
-                <button type="button" class="plan-tba-remove" data-action="plan-remove" data-plan-id="${esc(item.id)}" aria-label="Remove from plan">Remove</button>
+                <button type="button" class="plan-tba-remove" data-action="plan-remove-section" data-course-code="${esc(item.course_code)}" data-semester-code="${esc(item.semester_code)}" data-section="${esc(item.section)}" data-campus="${esc(item.campus)}" aria-label="Remove ${esc(item.course_code)} ${esc(removeLabel)} from plan">Remove</button>
               </div>`;
           }).join('')}
         </div>
@@ -3825,7 +3837,7 @@ const App = {
         <div class="plan-list-rows">
           ${groups.map(group => {
             const c = lookupCourse(this.courseIndex, group.course_code);
-            const label = group.parts.map(p => planSectionLabel(p.section)).join(' + ');
+            const label = this._planOfferingLabel(group);
             const timesOf = part => part.meetings.map(m => formatDaysTimesForDisplay(m.days_times)).join(' · ');
             const groupConflict = group.meetings.some(m => conflicts.has(m.id));
             const tail = `${group.campus ? ' · ' + esc(group.campus) : ''}${c && c.units ? ' · ' + c.units + 'u' : ''}${groupConflict ? ' · Time conflict' : ''}`;
@@ -3842,7 +3854,7 @@ const App = {
                     ${metaHtml}
                   </span>
                 </button>
-                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.parts[0].section)}" data-campus="${esc(group.campus)}" aria-label="Remove ${esc(label)} from plan">Remove</button>
+                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.parts[0].section)}" data-campus="${esc(group.campus)}" aria-label="Remove ${esc(group.course_code)} ${esc(label)} from plan">Remove</button>
               </div>`;
           }).join('')}
         </div>
@@ -3930,6 +3942,7 @@ const App = {
     if (!el) return;
 
     const items = this._getPlanItemsForSemester(this.activeSemester, planId);
+    const elsewhere = items.length ? '' : this._planElsewhereHtml(plan);
     const offeringOf = this._planOfferingKeyOf();
     const conflicts = findPlanConflicts(items, offeringOf);
     const units = this._planUnitsTotal(items);
@@ -3962,12 +3975,47 @@ const App = {
             ${conflictNote}
           </div>
         </div>
-        ${this._renderPlanCalendar(items, conflicts)}
+        ${elsewhere || this._renderPlanCalendar(items, conflicts)}
         ${this._renderPlanList(items, conflicts)}
       </div>
     `;
     this._syncDirectoryFabLayout();
     this._refreshNavPlanCount();
+  },
+
+  /**
+   * The empty state of a schedule that has courses only in other semesters
+   * (a Fall 2026 plan opened on the Spring 2027 default): it names them, newest
+   * first, with a button to show each semester the picker lists, or "All
+   * semesters" for one the Schedule of Classes no longer lists. '' when the
+   * schedule has no courses at all.
+   */
+  _planElsewhereHtml(plan) {
+    const bySemester = new Map();
+    for (const item of this._getPlanItems(plan.id)) {
+      const code = item.semester_code || '';
+      if (!bySemester.has(code)) bySemester.set(code, new Set());
+      bySemester.get(code).add(item.course_code);
+    }
+    if (!bySemester.size) return '';
+    const codes = sortSemesters([...bySemester.keys()]);
+    const count = n => `${n} course${n === 1 ? '' : 's'}`;
+    const parts = codes.map(code => `${count(bySemester.get(code).size)} in ${isSemesterCode(code) ? semesterLabel(code) : 'no semester'}`);
+    const listed = codes.filter(code => this._semesters.codes.includes(code));
+    const buttons = listed.map(code =>
+      `<button type="button" class="plan-new-btn" data-action="plan-show-semester" data-semester-code="${esc(code)}">Show ${esc(semesterLabel(code))}</button>`);
+    if (listed.length < codes.length) {
+      buttons.push('<button type="button" class="plan-new-btn" data-action="plan-show-semester" data-semester-code="all">Show all semesters</button>');
+    }
+    const last = parts.pop();
+    const where = parts.length ? `${parts.join(', ')} and ${last}` : last;
+    return `
+      <div class="plan-empty plan-elsewhere">
+        <div class="plan-empty-icon">${this._iconCalendar()}</div>
+        <div class="plan-empty-title">No courses in ${esc(semesterLabel(this.activeSemester))}</div>
+        <div class="plan-empty-hint">This schedule has ${esc(where)}.</div>
+        <div class="plan-elsewhere-actions">${buttons.join('')}</div>
+      </div>`;
   },
 
   async showStudentFlagsView() {
@@ -6331,12 +6379,8 @@ const App = {
     const el = document.getElementById('admContent');
     if (!el || this._adminConsole.tab !== 'insights') return;
     const d = r.data;
-    const semLabel = code => {
-      const opt = (availableSemesterOptions(this.courses || [], code) || []).find(s => s.code === code);
-      return opt ? opt.label : code;
-    };
     const semOpts = ['<option value="">All semesters</option>']
-      .concat((d.semesters || []).map(s => `<option value="${esc(s)}" ${this._adminConsole.semester === s ? 'selected' : ''}>${esc(semLabel(s))}</option>`))
+      .concat((d.semesters || []).map(s => `<option value="${esc(s)}" ${this._adminConsole.semester === s ? 'selected' : ''}>${esc(semesterLabel(s))}</option>`))
       .join('');
 
     const bars = (rows, labelFn, valueKey = 'count', empty = 'No data yet.') => {

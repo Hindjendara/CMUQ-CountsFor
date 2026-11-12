@@ -11,13 +11,9 @@
   --cf-parchment: #F5F0EA;
   /* Red as TEXT — same as brand red in light, lightened in dark for contrast */
   --cmu-red-text: #C41230;
-  --cf-maroon: #7A0F1F;
-  --cf-black: #262626;
-  --cf-line: #E2DACF;
 
   /* Brand */
   --cmu-red: #C41230;
-  --charcoal: #1F1F1F;
   --gold: #B8860B;
   --surface: #FAF9F7;
   --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.06);
@@ -37,25 +33,21 @@
 
   --major-ba: #2563EB;
   --major-ba-bg: rgba(37,99,235,0.08);
-  --major-ba-bg-hover: rgba(37,99,235,0.14);
   --major-ba-text: #1D4ED8;
   --major-ba-border: rgba(37,99,235,0.25);
 
   --major-bs: #059669;
   --major-bs-bg: rgba(5,150,105,0.08);
-  --major-bs-bg-hover: rgba(5,150,105,0.15);
   --major-bs-text: #047857;
   --major-bs-border: rgba(5,150,105,0.25);
 
   --major-ai: #7C3AED;
   --major-ai-bg: rgba(124,58,237,0.08);
-  --major-ai-bg-hover: rgba(124,58,237,0.15);
   --major-ai-text: #6D28D9;
   --major-ai-border: rgba(124,58,237,0.25);
 
   --major-gs: #6B7280;
   --major-gs-bg: rgba(107,114,128,0.08);
-  --major-gs-bg-hover: rgba(107,114,128,0.15);
   --major-gs-text: #4B5563;
   --major-gs-border: rgba(107,114,128,0.25);
 
@@ -90,17 +82,11 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
-  --radius-xl: 18px;
   --transition: 0.2s ease;
   --transition-slow: 0.35s cubic-bezier(0.4,0,0.2,1);
   --navbar-h: auto;
   --navbar-pad-y: 16px;
   --panel-divider: 1px solid var(--border-light);
-
-  /* Tree section accent tokens (consumed in Phase E — distinct from --major-is/bs) */
-  --accent-math: #6b21a8;
-  --accent-humanities: #B45309;   /* darker amber — distinct from --major-is base; value coincidentally matches --major-is-text */
-  --accent-science: #047857;      /* darker green — distinct from --major-bs base; value coincidentally matches --major-bs-text */
 
   /* Minors (requirement map) */
   --minor-accent: #0E7490;
@@ -258,26 +244,37 @@ body {
   -webkit-backdrop-filter:blur(16px) saturate(180%);
   border-bottom:var(--panel-divider);
   display:flex;
+  flex-wrap:wrap;
   align-items:center;
   justify-content:space-between;
-  gap:24px;
+  column-gap:24px;
+  row-gap:8px;
   padding:var(--navbar-pad-y) 24px;
   flex-shrink:0;
   z-index:100;
   transition:background var(--transition-slow);
 }
+/* The left group asks for the width of its controls (the role badge adds
+   none, see .navbar .role-badge), so when the controls on the right do not
+   fit beside them they move to a second row instead of covering Saved and
+   Plan (a signed-in navbar on a phone). */
 .navbar-left-group {
   display:flex;
   align-items:center;
   gap:24px;
   min-width:0;
-  flex:1;
+  flex:1 1 auto;
 }
 .navbar-right {
   display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
   align-items:center;
-  gap:24px;
+  column-gap:24px;
+  row-gap:8px;
   flex-shrink:0;
+  max-width:100%;
+  margin-left:auto;
 }
 .navbar-filters {
   display:flex;
@@ -1651,18 +1648,9 @@ body.is-resizing-panels * {
 .role-badge.rb-as   .rb-primary { background: var(--bg-tertiary); color: var(--text-secondary); }
 .role-badge.rb-ah   .rb-primary { background: var(--bg-tertiary); color: var(--text-secondary); }
 
-.role-badge.rb-cs-ba .rb-secondary { background: var(--major-ba-bg); color: var(--major-ba); }
-.role-badge.rb-cs-is .rb-secondary { background: var(--major-is-bg); color: var(--major-is); }
-.role-badge.rb-cs-bs .rb-secondary { background: var(--major-bs-bg); color: var(--major-bs); }
 .role-badge.rb-is-cs .rb-secondary { background: var(--major-cs-bg); color: var(--major-cs); }
-.role-badge.rb-is-ba .rb-secondary { background: var(--major-ba-bg); color: var(--major-ba); }
-.role-badge.rb-is-bs .rb-secondary { background: var(--major-bs-bg); color: var(--major-bs); }
 .role-badge.rb-ba-cs .rb-secondary { background: var(--major-cs-bg); color: var(--major-cs); }
-.role-badge.rb-ba-is .rb-secondary { background: var(--major-is-bg); color: var(--major-is); }
-.role-badge.rb-ba-bs .rb-secondary { background: var(--major-bs-bg); color: var(--major-bs); }
 .role-badge.rb-bs-cs .rb-secondary { background: var(--major-cs-bg); color: var(--major-cs); }
-.role-badge.rb-bs-is .rb-secondary { background: var(--major-is-bg); color: var(--major-is); }
-.role-badge.rb-bs-ba .rb-secondary { background: var(--major-ba-bg); color: var(--major-ba); }
 
 .role-badge .rb-suffix {
   font-weight: 500;
@@ -1681,9 +1669,19 @@ body.is-resizing-panels * {
 
 .role-badge:hover .rb-edit-hint { display: inline-flex; align-items: center; }
 
+/* In the navbar the badge takes the room the other controls leave, up to its
+   own width, and adds nothing to the width the left group asks for: the
+   navbar's controls never move to a second row for it. Its text stays on one
+   line (clipped when the room is short) instead of making the navbar taller. */
+.navbar .role-badge {
+  width: 0;
+  flex-grow: 1;
+  max-width: max-content;
+  white-space: nowrap;
+}
+
 @media (max-width: 860px) {
-  .navbar { flex-wrap: wrap; }
-  .role-badge { margin-left: 0; margin-top: 6px; flex-basis: 100%; justify-content: flex-start; }
+  .role-badge { margin-left: 0; }
 }
 
 .major-tab-suffix {
@@ -2167,7 +2165,10 @@ body.is-resizing-panels * {
 .home-foot-logo img { height: 30px; width: auto; display: block; }
 .home-foot-note { font-size: 11px; color: var(--text-tertiary); text-align: right; }
 
-@media (max-width: 768px) {
+/* Navbar filters (semester, campus, modality): a "Filters" popover below
+   1280px. Inline they take about 615px, so from 769px to about 1100px they
+   covered a student's Saved and Plan buttons. */
+@media (max-width: 1279px) {
   .navbar-filters-toggle { display: inline-flex; }
   .navbar-filters.navbar-filters-panel {
     display: none;
@@ -2187,19 +2188,34 @@ body.is-resizing-panels * {
   }
   .navbar-filters.navbar-filters-panel.open { display: flex; }
   .navbar-filters-wrap .navbar-filters { padding-left: 0; border-left: none; }
+}
+
+@media (min-width: 1280px) {
+  .navbar-filters.navbar-filters-panel { display: flex; }
+  .navbar-filters-toggle { display: none !important; }
+}
+
+/* Phones and small tablets: the popover opens at the navbar's right edge,
+   8px below the Filters button, so it stays on screen whatever sits right
+   of that button (under the button it ran off the left edge below 360px). */
+@media (max-width: 720px) {
+  .navbar { position: relative; }
+  .navbar-filters-wrap { position: static; }
+  .navbar-filters.navbar-filters-panel {
+    top: calc(100% - var(--navbar-pad-y) + 8px);
+    right: 8px;
+  }
+}
+
+@media (max-width: 768px) {
   .navbar-left-group { gap: 12px; }
-  .navbar-right { gap: 12px; }
+  .navbar-right { column-gap: 12px; }
   .home-hero { padding: 0 16px; }
   .home-search-input { font-size: 18px; }
   .home-quickstart { padding: 0 16px 20px; }
   .home-quickstart-grid { grid-template-columns: 1fr; }
   .home-foot { flex-direction: column; text-align: center; padding: 12px 16px; --home-foot-height: 96px; }
   .home-foot-note { text-align: center; }
-}
-
-@media (min-width: 769px) {
-  .navbar-filters.navbar-filters-panel { display: flex; }
-  .navbar-filters-toggle { display: none !important; }
 }
 
 @media (max-width: 375px) {
@@ -3086,19 +3102,18 @@ body.is-resizing-panels * {
 @media (max-width: 720px) {
   .nav-wish-label { display: none; }
   .nav-wish { padding: 6px 10px; }
-  .nav-plan-label { display: none; }
-  .nav-plan { padding: 6px 10px; }
 }
 
 /* ════════════════════════════════════════════════════════════
    NAVBAR — student schedule plan shortcut
    ════════════════════════════════════════════════════════════ */
 
+/* No margin after it: Plan is the last control of the left group, and a
+   trailing margin only pushed the controls on the right to a second row. */
 .nav-plan {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-right: 8px;
   padding: 6px 12px;
   height: 34px;
   border: 1px solid var(--border-light);
@@ -3118,6 +3133,38 @@ body.is-resizing-panels * {
 }
 .nav-plan svg { flex-shrink: 0; }
 .nav-plan-label { display: inline-block; }
+@media (max-width: 720px) {
+  .nav-plan-label { display: none; }
+  .nav-plan { padding: 6px 10px; }
+}
+@media (max-width: 480px) {
+  .navbar-wordmark { display: none; }
+}
+/* Saved and Plan keep their width and one line of text; the role badge
+   before them shrinks instead. */
+.nav-wish, .nav-plan { white-space: nowrap; flex-shrink: 0; }
+/* Phones (540px and below): tighter navbar spacing, so a guest's navbar
+   (Saved, Plan, Filters, theme) stays one row down to 300px, Plan clear of
+   Filters. A signed-in navbar adds Sign out and takes two rows on most
+   phones (see .navbar-left-group). */
+@media (max-width: 540px) {
+  .navbar { padding-left: 12px; padding-right: 12px; column-gap: 12px; }
+  .navbar-left-group, .navbar-right { column-gap: 8px; }
+  .nav-wish { margin-right: 0; }
+}
+/* Below 390px a student's navbar has no role badge: there is no room for
+   it beside Saved and Plan (students change their major and minors in the
+   programs bar). */
+@media (max-width: 389px) {
+  .navbar-left-group:has(.nav-wish) .role-badge { display: none; }
+  .nav-wish { margin-left: 0; }
+}
+@media (max-width: 339px) {
+  .navbar { padding-left: 8px; padding-right: 8px; column-gap: 8px; }
+  .navbar-left-group, .navbar-right { column-gap: 6px; }
+  .nav-wish, .nav-plan { padding: 6px 8px; }
+  .navbar-filters-toggle { padding: 0 8px; }
+}
 .nav-plan-count {
   display: inline-flex;
   align-items: center;
@@ -3202,7 +3249,15 @@ body.is-resizing-panels * {
    ════════════════════════════════════════════════════════════ */
 
 .plan-view { padding: 18px 20px 40px; }
+.layout-focused .plan-view { max-width: 100%; }
 .plan-header { margin-bottom: 18px; }
+.plan-elsewhere-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
 .plan-title-row {
   display: flex;
   align-items: baseline;
@@ -3541,20 +3596,6 @@ body.is-resizing-panels * {
   font-weight: 600;
   opacity: 0.9;
   line-height: 1.25;
-}
-.plan-block-warn {
-  position: absolute;
-  top: 4px;
-  right: 5px;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: var(--major-is-text);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 14px;
-  text-align: center;
 }
 
 .plan-tba,

@@ -532,7 +532,7 @@ function sameRequirementEdit(a, b) {
  */
 function applyCourseOverrides(courses, overrides) {
   if (!overrides || !overrides.length) return { courses, archived: [] };
-  // Copy before editing: fetchAllCourses caches the parsed catalog, and a later
+  // Copy before editing: fetchCatalog caches the parsed catalog, and a later
   // reload must start from the scraped values, not from edited objects.
   courses = courses.slice();
   const index = new Map(courses.map((c, i) => [normalizeCourseCode(c.course_code), i]));
@@ -567,7 +567,6 @@ function applyCourseOverrides(courses, overrides) {
         offered_qatar: false,
         offered_pitts: false,
         requirements: _emptyRequirements(),
-        soc_sections: [],
         offerings: [],
         _added: true,
         _copied: true,
@@ -891,10 +890,12 @@ function getDeptName(courseCode) {
 
 // ── Semesters (from the Schedule of Classes) ─────────────────
 // No semester list is kept in code. The daily update scrapes every semester
-// the Schedule of Classes lists into backend/data/soc.json and
-// reconcile_offerings.py copies their sections into each course's
-// `offerings`, so the loaded catalog says which semesters exist: a new one
-// (Spring 2027, a summer) is in the semester picker the day it is scraped.
+// the Schedule of Classes search form lists into backend/data/soc.json and
+// reconcile_offerings.py writes that list to courses.json ("soc_semesters")
+// and copies the sections into each course's `offerings`. The semester picker
+// lists exactly the SOC's semesters: a new one (Spring 2027, a summer) is in
+// it the day it is scraped, and one that left the SOC goes, while its
+// sections stay in the offerings as the course's offering history.
 const SEMESTER_CODE_RE = /^[FSMN]\d{2}$/;
 // The semester picked last, { code, defaultCode }: see resolveSemesterChoice.
 const SEMESTER_STORE_KEY = 'cf_semester';
@@ -930,46 +931,40 @@ function semesterLabel(code) {
 }
 
 /**
- * The semesters the catalog has sections for, newest first (summer
- * included), and the one the app opens on: the newest fall or spring with a
- * section in Qatar, so CMU-Q students see the next regular semester as soon
- * as its Qatar schedule is out. Without a Qatar section it is the newest fall
- * or spring; a summer is the default only in a catalog with no fall or spring.
+ * The semesters of the semester picker, newest first, and the one the app
+ * opens on. socSemesters is the Schedule of Classes' list (courses.json
+ * "soc_semesters"): the picker lists exactly those, summer included, also one
+ * with no sections yet. A catalog without that list (an old file) gives the
+ * semesters its offerings have.
+ * The default is the newest of them that is a fall or spring with a section in
+ * Qatar, so CMU-Q students see the next regular semester as soon as its Qatar
+ * schedule is out. Without a Qatar section it is the newest fall or spring; a
+ * summer is the default only when there is no fall or spring.
  * pick_default_semester in backend/semesters.py applies the same rule to
  * soc.json.
  * Returns { codes: ['S27', 'F26', ...], defaultCode: 'S27' } (null when empty).
  */
-function catalogSemesters(courses) {
+function catalogSemesters(courses, socSemesters) {
+  const listed = sortSemesters((Array.isArray(socSemesters) ? socSemesters : []).map(normalizeSemesterCode).filter(Boolean));
   const found = new Set();
   const inQatar = new Set();
   for (const course of courses || []) {
     for (const o of getCourseOfferings(course)) {
-      const code = o && !o.cancelled && normalizeSemesterCode(o.semester_code || o.semesterCode || o.semester);
+      const code = o && !o.cancelled && normalizeSemesterCode(o.semester_code);
       if (!code) continue;
       found.add(code);
       if (o.campus === 'Qatar') inQatar.add(code);
     }
   }
-  const codes = sortSemesters([...found]);
+  const codes = listed.length ? listed : sortSemesters([...found]);
   const regular = codes.filter(c => c[0] === 'F' || c[0] === 'S');
   return { codes, defaultCode: regular.find(c => inQatar.has(c)) || regular[0] || codes[0] || null };
 }
 
-/**
- * Semester picker options: "All semesters", then each code newest first.
- * alwaysInclude (the semester on screen) is listed even if codes lack it.
- */
-function semesterOptions(codes, alwaysInclude) {
-  const list = Array.isArray(codes) ? codes.slice() : [];
-  const extra = normalizeSemesterCode(alwaysInclude);
-  if (extra && !list.includes(extra)) list.push(extra);
+/** Semester picker options: "All semesters", then each code newest first. */
+function semesterOptions(codes) {
   return [{ code: 'all', label: semesterLabel('all') }]
-    .concat(sortSemesters(list).map(code => ({ code, label: semesterLabel(code) })));
-}
-
-/** semesterOptions for the semesters the catalog's offerings have. */
-function availableSemesterOptions(courses, alwaysInclude) {
-  return semesterOptions(catalogSemesters(courses).codes, alwaysInclude);
+    .concat(sortSemesters(Array.isArray(codes) ? codes : []).map(code => ({ code, label: semesterLabel(code) })));
 }
 
 /**
@@ -993,43 +988,9 @@ function resolveSemesterChoice(semesters, saved) {
   return choice.code;
 }
 
+/** A course's SOC sections (reconcile_offerings.py writes them, newest semester first). */
 function getCourseOfferings(course) {
-  if (!course) return [];
-  if (Array.isArray(course.offerings) && course.offerings.length) {
-    return course.offerings;
-  }
-  // Legacy soc_sections → normalized offering shape. A section without a
-  // semester code is listed under "All semesters" only.
-  return (course.soc_sections || []).map(s => ({
-    semester: s.semester || semesterLabel(s.semester_code),
-    semester_code: s.semester_code || '',
-    campus: s.campus || (s.location && s.location.includes('Qatar') ? 'Qatar'
-      : s.location && s.location.includes('Pittsburgh') ? 'Pittsburgh' : null),
-    section: s.section,
-    modality: s.modality || normalizeOfferingModality(s.delivery_mode),
-    units: course.units,
-    days_times: s.days_times || formatLegacyDaysTimes(s),
-    instructor: s.instructor || '',
-    location: s.location,
-    delivery_mode_raw: s.delivery_mode,
-  }));
-}
-
-function formatLegacyDaysTimes(s) {
-  const days = s.days || 'TBA';
-  if (s.begin_time && s.begin_time !== 'TBA' && s.end_time) {
-    return `${days} ${s.begin_time}-${s.end_time}`;
-  }
-  return days;
-}
-
-function normalizeOfferingModality(raw) {
-  const d = (raw || '').toLowerCase();
-  if (!d) return 'In Person';
-  if (d.includes('remote only') || d === 'remote') return 'Remote';
-  if (d.includes('hybrid') || (d.includes('remote') && d.includes('in-person'))) return 'Hybrid';
-  if (d.includes('remote')) return 'Remote';
-  return 'In Person';
+  return course && Array.isArray(course.offerings) ? course.offerings : [];
 }
 
 function modalityFilterMatches(offeringModality, filterId) {
@@ -1046,17 +1007,38 @@ function campusFilterMatches(offeringCampus, locationFilter) {
   return true;
 }
 
-function filterOfferings(offerings, { semesterCode, locationFilter, modalityFilter }) {
+/**
+ * The semester filter: one semester, or under "All semesters" ('all') any of
+ * the semesters of the picker (semesters, the Schedule of Classes' list). The
+ * sections of a semester that left the SOC are history: no filter shows them.
+ * Without a list, "All semesters" takes every semester.
+ */
+function semesterFilterMatches(code, semesterCode, semesters) {
+  if (semesterCode && semesterCode !== 'all') return code === semesterCode;
+  return !Array.isArray(semesters) || !semesters.length || semesters.includes(code);
+}
+
+/**
+ * The offerings the filters show. filters: { semesterCode, semesters,
+ * locationFilter, modalityFilter }, as App._filterParams() gives them.
+ */
+function filterOfferings(offerings, { semesterCode, semesters, locationFilter, modalityFilter }) {
   return (offerings || []).filter(o => {
-    if (semesterCode && semesterCode !== 'all' && o.semester_code !== semesterCode) return false;
+    if (!semesterFilterMatches(o.semester_code, semesterCode, semesters)) return false;
     if (!campusFilterMatches(o.campus, locationFilter)) return false;
     if (!modalityFilterMatches(o.modality, modalityFilter)) return false;
     return true;
   });
 }
 
+/**
+ * Whether a course shows under the filters. A course with no section in the
+ * picker's semesters (none at all, or only in semesters that left the SOC) is
+ * judged by its history: `offered` for a semester, the campus flags for a
+ * campus.
+ */
 function courseHasMatchingOffering(course, filters) {
-  const all = getCourseOfferings(course);
+  const all = getCourseOfferings(course).filter(o => semesterFilterMatches(o.semester_code, 'all', filters.semesters));
   if (all.length === 0) {
     if (filters.semesterCode && filters.semesterCode !== 'all') {
       const hist = Array.isArray(course.offered) ? course.offered : [];
@@ -1256,9 +1238,9 @@ function offeringGroupParts(group) {
  * shows when its semester and campus match and, for the modality filter, when
  * any of its meetings matches. A group that shows keeps all its sections.
  */
-function filterOfferingGroups(groups, { semesterCode, locationFilter, modalityFilter }) {
+function filterOfferingGroups(groups, { semesterCode, semesters, locationFilter, modalityFilter }) {
   return (groups || []).filter(g => {
-    if (semesterCode && semesterCode !== 'all' && g.semester_code !== semesterCode) return false;
+    if (!semesterFilterMatches(g.semester_code, semesterCode, semesters)) return false;
     if (!campusFilterMatches(g.campus, locationFilter)) return false;
     return offeringGroupParts(g).some(p => p.meetings.some(m => modalityFilterMatches(m.modality, modalityFilter)));
   });
@@ -1277,6 +1259,19 @@ function findOfferingGroup(groups, semesterCode, section, campus) {
     if (part) return { group, part };
   }
   return null;
+}
+
+/**
+ * The offering group a quick "+ Plan" (search results, "Add to plan") adds,
+ * from the groups the filters show: the first one, or the first Qatar one of
+ * that semester when the filters show both campuses (the Schedule of Classes
+ * lists Pittsburgh first, and CMU-Q students take the Doha sections). null
+ * when no group shows.
+ */
+function quickPlanGroup(groups) {
+  const first = (groups || [])[0];
+  if (!first) return null;
+  return groups.find(g => g.campus === 'Qatar' && g.semester_code === first.semester_code) || first;
 }
 
 /**
@@ -1355,9 +1350,15 @@ function groupPlanItemsByOffering(items, groupsFor) {
   return out;
 }
 
+/**
+ * True when two planned meetings of one semester meet at the same time on a
+ * shared day. Meetings on different campuses never conflict: Doha and
+ * Pittsburgh times are local times.
+ */
 function planEntriesOverlap(a, b) {
   if (!a || !b) return false;
   if (a.semester_code !== b.semester_code) return false;
+  if (a.campus && b.campus && a.campus !== b.campus) return false;
   const pa = parseDaysTimes(a.days_times);
   const pb = parseDaysTimes(b.days_times);
   if (!pa.parseable || !pb.parseable) return false;
