@@ -12,7 +12,9 @@
 # What it does:
 #   1. Refuses to run when the working tree has uncommitted or untracked files,
 #      and refuses the main repo (Adicmu/Countsfor-Summer-26, remote adi in that
-#      checkout): its GitHub Pages site was the production site.
+#      checkout; any fetch or push URL of the remote counts): its GitHub Pages
+#      site was the production site. Also refuses a remote that pushes to more
+#      than one repo.
 #   2. Builds the site from the commit itself: frontend/ without tests/, plus an
 #      empty .nojekyll. Nothing outside the commit can reach the site.
 #   3. Commits that tree on top of the remote's gh-pages and pushes it as a
@@ -29,6 +31,8 @@ die() { echo "publish_test_site: $*" >&2; exit 1; }
 # The cf-build tag of the app.html on stdin (reads all of it, so no writer gets SIGPIPE).
 cf_build() { sed -n 's/.*<meta name="cf-build" content="\([^"]*\)".*/\1/p' | sed -n '1p'; }
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+# URLs given one per line, as one line: "a, b".
+url_list() { printf '%s' "$1" | tr '\n' ',' | sed 's/,/, /g'; }
 
 WAIT=1
 if [ "${1:-}" = "--no-wait" ]; then WAIT=0; shift; fi
@@ -48,14 +52,19 @@ SHORT=$(git rev-parse --short "$COMMIT")
 git cat-file -e "$COMMIT:frontend/app.html" 2>/dev/null || die "$SHORT has no frontend/app.html"
 
 URL=$(git remote get-url "$REMOTE" 2>/dev/null) || die "there is no remote named $REMOTE"
-PUSH_URL=$(git remote get-url --push "$REMOTE" 2>/dev/null || printf '%s' "$URL")
-SHOWN=$URL
-[ "$PUSH_URL" = "$URL" ] || SHOWN="$URL, pushing to $PUSH_URL"
-# GitHub owner names ignore case, so compare in lower case, the push URL included.
-case "$(lower "$REMOTE $URL $PUSH_URL")" in
+# A remote can have several URLs, and git pushes to every push URL (to every
+# URL when it has no push URL), so read them all, not just the first.
+ALL_URLS=$(git remote get-url --all "$REMOTE" 2>/dev/null || printf '%s' "$URL")
+PUSH_URL=$(git remote get-url --push --all "$REMOTE" 2>/dev/null || printf '%s' "$URL")
+SHOWN=$(url_list "$ALL_URLS")
+[ "$PUSH_URL" = "$ALL_URLS" ] || SHOWN="$SHOWN; pushing to $(url_list "$PUSH_URL")"
+# GitHub owner names ignore case, so compare in lower case, every fetch and push URL included.
+case "$(lower "$REMOTE $ALL_URLS $PUSH_URL")" in
   "adi "* | *adicmu/*)
-    die "refusing to publish to $REMOTE ($SHOWN): that is the main repo, whose GitHub Pages site was the production site. The test copy is the gh-pages branch of Hindjendara/CMUQ-CountsFor." ;;
+    die "refusing to publish to $REMOTE ($SHOWN): it points to the main repo, whose GitHub Pages site was the production site. The test copy is the gh-pages branch of Hindjendara/CMUQ-CountsFor." ;;
 esac
+[ "$(printf '%s\n' "$PUSH_URL" | sed -n '$=')" = 1 ] \
+  || die "refusing to publish to $REMOTE ($SHOWN): it pushes to more than one repo. Publish through a remote that pushes only to Hindjendara/CMUQ-CountsFor."
 
 # The Pages address of a GitHub remote; none for any other remote (set PAGES_URL then).
 SITE=${PAGES_URL:-}
