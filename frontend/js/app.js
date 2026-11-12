@@ -3585,6 +3585,11 @@ const App = {
     return groupPlanItemsByOffering(items, code => this._offeringGroups(code));
   },
 
+  /** The planned parts of one _groupPlanItems() entry, lecture first: "Lec 2 + Sec W". */
+  _planOfferingLabel(group) {
+    return group.parts.map(p => planSectionLabel(p.section)).join(' + ');
+  },
+
   /**
    * The offering of a planned meeting, for the conflict check: the meetings of
    * a lecture and its section (or of one section) never conflict with each
@@ -3770,6 +3775,14 @@ const App = {
         </div>`;
     }).join('');
 
+    // Remove under "No time listed" takes the whole offering out
+    // (removePlanSection()), so its label names every planned part of it, as
+    // the course list does: "Remove 15-210 Lec 2 + Sec M from plan".
+    const offeringOf = planItemOfferingGroups(code => this._offeringGroups(code));
+    const offeringLabel = tba.length
+      ? new Map(this._groupPlanItems(items).map(group => [group.key, this._planOfferingLabel(group)]))
+      : new Map();
+
     const tbaHtml = tba.length ? `
       <section class="plan-tba" aria-label="Courses without listed times">
         <h3 class="plan-tba-title">No time listed</h3>
@@ -3777,6 +3790,7 @@ const App = {
           ${tba.map(({ item, parsed }) => {
             const c = lookupCourse(this.courseIndex, item.course_code);
             const days = parsed.days.length ? parsed.days.join('') : '';
+            const removeLabel = offeringLabel.get(offeringOf(item).key) || planSectionLabel(item.section);
             return `
               <div class="plan-tba-row">
                 <button type="button" class="plan-tba-main" onclick="App.selectCourseFromTree('${esc(item.course_code)}')">
@@ -3784,7 +3798,7 @@ const App = {
                   <span class="plan-tba-name">${esc(c ? c.course_name : '')}</span>
                   <span class="plan-tba-meta">${esc(planSectionLabel(item.section))}${days ? ' · ' + esc(days) : ''}${item.campus ? ' · ' + esc(item.campus) : ''}</span>
                 </button>
-                <button type="button" class="plan-tba-remove" data-action="plan-remove-section" data-course-code="${esc(item.course_code)}" data-semester-code="${esc(item.semester_code)}" data-section="${esc(item.section)}" data-campus="${esc(item.campus)}" aria-label="Remove ${esc(item.course_code)} ${esc(planSectionLabel(item.section))} from plan">Remove</button>
+                <button type="button" class="plan-tba-remove" data-action="plan-remove-section" data-course-code="${esc(item.course_code)}" data-semester-code="${esc(item.semester_code)}" data-section="${esc(item.section)}" data-campus="${esc(item.campus)}" aria-label="Remove ${esc(item.course_code)} ${esc(removeLabel)} from plan">Remove</button>
               </div>`;
           }).join('')}
         </div>
@@ -3823,7 +3837,7 @@ const App = {
         <div class="plan-list-rows">
           ${groups.map(group => {
             const c = lookupCourse(this.courseIndex, group.course_code);
-            const label = group.parts.map(p => planSectionLabel(p.section)).join(' + ');
+            const label = this._planOfferingLabel(group);
             const timesOf = part => part.meetings.map(m => formatDaysTimesForDisplay(m.days_times)).join(' · ');
             const groupConflict = group.meetings.some(m => conflicts.has(m.id));
             const tail = `${group.campus ? ' · ' + esc(group.campus) : ''}${c && c.units ? ' · ' + c.units + 'u' : ''}${groupConflict ? ' · Time conflict' : ''}`;
@@ -3840,7 +3854,7 @@ const App = {
                     ${metaHtml}
                   </span>
                 </button>
-                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.parts[0].section)}" data-campus="${esc(group.campus)}" aria-label="Remove ${esc(label)} from plan">Remove</button>
+                <button type="button" class="plan-list-remove" data-action="plan-remove-section" data-course-code="${esc(group.course_code)}" data-semester-code="${esc(group.semester_code)}" data-section="${esc(group.parts[0].section)}" data-campus="${esc(group.campus)}" aria-label="Remove ${esc(group.course_code)} ${esc(label)} from plan">Remove</button>
               </div>`;
           }).join('')}
         </div>

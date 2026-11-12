@@ -1035,7 +1035,8 @@ test('planner: a shared snapshot and the imported plan keep the lecture and sect
   assertEqual(App._planUnitsTotal(items), 9);
 });
 
-// "No time listed": Remove takes the whole offering out, as Remove in the course list does.
+// "No time listed": Remove takes the whole offering out, as Remove in the course list does,
+// and its label names the whole offering.
 test('plan view: Remove under "No time listed" removes the lecture and the section planned with it', () => {
   const { App, ctx, document } = loadPlanApp();
   // 15-210 as the SOC lists it in Pittsburgh: Lec 2 has no time, its section M has one.
@@ -1057,6 +1058,12 @@ test('plan view: Remove under "No time listed" removes the lecture and the secti
   assertEqual([attr('action'), attr('course-code'), attr('semester-code'), attr('section'), attr('campus')],
     ['plan-remove-section', '15-210', 'F26', 'Lec 2', 'Pittsburgh']);
   assertFalse(html.includes('data-action="plan-remove"'), 'no Remove of a single meeting');
+  // Its label names everything it removes, as the course list's Remove does, so a screen
+  // reader does not announce one meeting when two sections go.
+  const ariaLabel = tag => (tag.match(/aria-label="([^"]*)"/) || [])[1];
+  assertEqual(ariaLabel(btn[1]), 'Remove 15-210 Lec 2 + Sec M from plan');
+  const listLabels = (html.match(/<button type="button" class="plan-list-remove"[^>]*>/g) || []).map(ariaLabel);
+  assertEqual(listLabels, ['Remove 15-210 Lec 2 + Sec M from plan', 'Remove 21-120 Lec 1 from plan']);
   // What the click does (the delegated handler calls removePlanSection with these attributes).
   App.removePlanSection(attr('course-code'), attr('semester-code'), attr('section'), attr('campus'));
   assertEqual(plannedRows(App), [['21-120', 'Lec 1', 'MWF 10:00AM-10:50AM']], 'Lec 2 and Sec M both gone, 21-120 stays');
