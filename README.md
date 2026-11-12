@@ -526,7 +526,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to the data files (`data/courses.json`, `data/minors.json`, and `data/requirement_buckets.json` for the admin course editor). Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-10c`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-10d`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
