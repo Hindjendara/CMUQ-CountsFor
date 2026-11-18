@@ -276,12 +276,13 @@ body {
   max-width:100%;
   margin-left:auto;
 }
+/* No separator line before the inline filters: from 1280px they can start
+   the second row of a navbar that wraps, and the 24px gap already sets them
+   apart from the left group. */
 .navbar-filters {
   display:flex;
   align-items:center;
   gap:12px;
-  padding-left:24px;
-  border-left:1px solid var(--border-light);
 }
 .navbar-filters-toggle {
   display:none;
