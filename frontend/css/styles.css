@@ -255,9 +255,9 @@ body {
   transition:background var(--transition-slow);
 }
 /* The left group asks for the width of its controls (the role badge adds
-   none, see .navbar .role-badge), so when the controls on the right do not
-   fit beside them they move to a second row instead of covering Saved and
-   Plan (a signed-in navbar on a phone). */
+   none, or 56px when signed in: see .navbar .role-badge), so when the
+   controls on the right do not fit beside them they move to a second row
+   instead of covering Saved and Plan (a signed-in navbar on a phone). */
 .navbar-left-group {
   display:flex;
   align-items:center;
@@ -1671,15 +1671,21 @@ body.is-resizing-panels * {
 .role-badge:hover .rb-edit-hint { display: inline-flex; align-items: center; }
 
 /* In the navbar the badge takes the room the other controls leave, up to its
-   own width, and adds nothing to the width the left group asks for: the
-   navbar's controls never move to a second row for it. Its text stays on one
-   line (clipped when the room is short) instead of making the navbar taller. */
+   own width, and adds nothing to the width the left group asks for (56px on
+   a signed-in navbar, below): on a guest's navbar the controls never move to
+   a second row for it. Its text stays on one line (clipped when the room is
+   short) instead of making the navbar taller. */
 .navbar .role-badge {
   width: 0;
   flex-grow: 1;
   max-width: max-content;
   white-space: nowrap;
 }
+/* A signed-in navbar (it has Sign out) keeps 56px of its badge, so the
+   controls on the right move to the next row a little sooner instead of
+   leaving the badge a stub of a few pixels. A guest's badge has no minimum:
+   a guest's navbar stays one row at every width. */
+.navbar:has(.nav-signout) .role-badge { min-width: 56px; }
 
 @media (max-width: 860px) {
   .role-badge { margin-left: 0; }
