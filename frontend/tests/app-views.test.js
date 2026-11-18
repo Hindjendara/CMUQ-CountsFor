@@ -169,6 +169,20 @@ test('app views: reset() from the schedule view shows home', () => {
   assertEqual(leftBodyHtml(document), HOME_MARKER);
 });
 
+test('app.html preloads the catalog and the minors at the exact URLs js/api.js fetches', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
+  const tag = /<meta name="cf-build" content="([^"]+)"/.exec(html)[1];
+  const preloads = [...html.matchAll(/<link rel="preload" href="([^"]+)" as="fetch" crossorigin="anonymous" \/>/g)].map(m => m[1]);
+  // js/api.js on its own, with a page whose cf-build meta is the one in app.html.
+  const ctx = { document: { querySelector: sel => (sel === 'meta[name="cf-build"]' ? { getAttribute: () => tag } : null) },
+    localStorage: new MemoryStorage(), sessionStorage: new MemoryStorage(), console, setTimeout, clearTimeout };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/api.js'), 'utf8'), ctx, { filename: 'js/api.js' });
+  const expected = vm.runInContext('[_bundledDataUrl(LOCAL_DATA), _bundledDataUrl(MINORS_DATA)]', ctx);
+  assertEqual(preloads, expected);
+  assertTrue(!/\?v=/.test(html.replace(/(href|src)="[^"]*"/g, '')), 'no version query text outside href and src (the bump script would rewrite it)');
+});
+
 test('app views: there is no guest mode; a stale guest flag is cleared and the app asks for a session', async () => {
   const { App, ctx } = loadApp();
   for (const name of ['setGuestRole', 'exitGuest', '_readGuestFlag', '_guestBannerHtml', 'isGuest']) {
