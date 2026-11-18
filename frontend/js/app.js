@@ -49,12 +49,11 @@ const App = {
   //   2. If 200 but profile is incomplete (missing role/program), show the
   //      existing onboarding flow but PATCH /api/me on completion.
   //   3. Otherwise (401, or the server is unreachable), redirect to the
-  //      landing page (index.html) to sign in or continue as a guest.
-  //   Guest mode (sessionStorage cf_guest) is the only localStorage-only
-  //   "demo" mode.
+  //      landing page (index.html) to sign in. There is no guest mode (removed
+  //      November 18, 2026): everyone signs in. 'demo' is the local-only state
+  //      before sign-in completes, and the state the JS tests run the app in.
   authedUser: null,             // server-confirmed user, or null in demo mode
   authMode: 'demo',             // 'authed' | 'demo' | 'login'
-  isGuest: false,               // deliberate guest session (sessionStorage cf_guest)
   serverFlags: [],
   _pendingSharePlanToken: null,
   async init() {
@@ -72,17 +71,8 @@ const App = {
       return;
     }
 
-    // Guest mode, entered deliberately from the landing. Skips the /api/me
-    // probe (guests need no server, and an unreachable one would only delay
-    // them) and boots straight into localStorage-only demo mode.
-    if (this._readGuestFlag()) {
-      this.isGuest = true;
-      this.authMode = 'demo';
-      this.profile = loadProfile() || { role: 'student', primary: 'CS', secondary: null, scope: null };
-      try { saveProfile(this.profile); } catch (e) { /* keep going with the in-memory profile */ }
-      this._afterAuthed();
-      return;
-    }
+    // Guest mode is gone: a flag left by an older version must not matter.
+    try { sessionStorage.removeItem('cf_guest'); } catch {}
 
     const me = await apiGetMe();
     if (me.ok) {
@@ -92,7 +82,7 @@ const App = {
 
     // 401 / 403, or the server could not be reached (status 0): back to the
     // landing page. It shows the sign-in form, or the "could not reach the
-    // server" banner with a guest link when the API is down.
+    // server" banner when the API is down.
     this._redirectToLogin();
   },
 
@@ -255,7 +245,7 @@ const App = {
         return null;
       }),
     ]);
-    // Public routes, so guests get admin course edits and minor settings too.
+    // Public routes: admin course edits and minor settings load before sign-in completes too.
     let overrides = [];
     let minorOverrides = [];
     const [r, mr] = await Promise.all([apiGetCourseOverrides(), apiGetMinorOverrides()]);
@@ -618,7 +608,7 @@ const App = {
   },
 
   // ══════════════════════════════════════════════════════════
-  // AUTH — sign-in result, guest mode, sign-out
+  // AUTH — sign-in result, sign-out
   // ══════════════════════════════════════════════════════════
 
   _afterSignIn(user) {
@@ -633,55 +623,6 @@ const App = {
     }
     this._hydrateProfileFromServer(user);
     this._afterAuthed();
-  },
-
-  _readGuestFlag() {
-    try { return sessionStorage.getItem('cf_guest') === '1'; } catch { return false; }
-  },
-
-  // Guest → landing to sign in. Keeps cf_flags / cf_wishlist so the existing
-  // _syncLocalToServer migration picks them up after a real sign-in.
-  exitGuest() {
-    try { sessionStorage.removeItem('cf_guest'); } catch {}
-    location.href = 'index.html';
-  },
-
-  // Guest-only view switcher: flips the local profile between a student and
-  // a cross-program faculty demo persona. Never touches the server. The
-  // student's major and minors are kept in cf_guest_student while the faculty
-  // view is on, so switching back restores them.
-  setGuestRole(kind) {
-    if (!this.isGuest) return;
-    const current = this.profile || {};
-    if (current.role === 'student' && current.primary) {
-      saveStore('cf_guest_student', { primary: current.primary, minors: getProfileMinors(current) });
-    }
-    let profile;
-    if (kind === 'faculty') {
-      profile = { role: 'professor', primary: 'AS', secondary: null, scope: null };
-    } else {
-      const kept = loadStore('cf_guest_student', null) || {};
-      const primary = (current.role === 'student' && current.primary)
-        || (STUDENT_PROGRAMS.includes(kept.primary) ? kept.primary : 'CS');
-      const minors = cleanProfileMinors(primary,
-        current.role === 'student' ? getProfileMinors(current) : (Array.isArray(kept.minors) ? kept.minors : []));
-      profile = { role: 'student', primary, secondary: minors[0] || null, secondaries: minors, scope: null };
-    }
-    try { saveProfile(profile); } catch {}
-    this.profile = profile;
-    if (profile.primary && profile.primary !== 'AS' && MAJOR_LIST.includes(profile.primary)) {
-      this.activeMajor = profile.primary;
-      this.autoExpandFirstLevel(this.activeMajor);
-    }
-    annotateDoubleCounters(this.courses, this.profile, this.minorIndex);
-    this.renderShell();
-    this.bindGlobalEvents();
-    this._refreshSemesterOptions();
-    this.renderLeftEmpty();
-    this.renderTree();
-    showToast(kind === 'faculty'
-      ? 'Faculty view. You can flag course issues (saved locally in guest mode).'
-      : 'Student view. Save courses, add minors and plan your schedule.');
   },
 
   async signOut() {
@@ -832,10 +773,6 @@ const App = {
       showToast('Admin roles are managed in the Directory.');
       return;
     }
-    if (this.isGuest && isFaculty(this.profile)) {
-      showToast('Use the Student/Faculty toggle in the guest bar to switch views.');
-      return;
-    }
     if (isFaculty(this.profile)) {
       showToast('Your role is set by the CountsFor admin. Contact them to change it.');
       return;
@@ -856,21 +793,6 @@ const App = {
     }
     if (vm === 'focused-single') return [this.profile.primary];
     return MAJOR_ORDER.slice();
-  },
-
-  _guestBannerHtml() {
-    const fac = isFaculty(this.profile);
-    return `
-      <div class="guest-banner" role="status">
-        <span class="guest-banner-badge">Guest mode</span>
-        <span class="guest-banner-text">Exploring as</span>
-        <div class="guest-banner-toggle">
-          <button class="guest-role-btn ${!fac ? 'active' : ''}" onclick="App.setGuestRole('student')">Student</button>
-          <button class="guest-role-btn ${fac ? 'active' : ''}" onclick="App.setGuestRole('faculty')">Faculty</button>
-        </div>
-        <span class="guest-banner-note">Saved locally on this device only</span>
-        <button class="guest-banner-signin" onclick="App.exitGuest()">Sign in →</button>
-      </div>`;
   },
 
   // ── Shell Rendering ───────────────────────────────────────
@@ -896,7 +818,6 @@ const App = {
     ` : '';
 
     document.getElementById('app').innerHTML = `
-      ${this.isGuest ? this._guestBannerHtml() : ''}
       <nav class="navbar">
         <div class="navbar-left-group">
           <div class="navbar-brand" onclick="App.reset()"><img class="navbar-scotty" src="assets/img/scotty-head.png" alt="" aria-hidden="true" /><span class="navbar-wordmark">CountsFor</span></div>
@@ -1990,8 +1911,8 @@ const App = {
     const studentMinors = isStudent(this.profile) ? getProfileMinors(this.profile) : [];
 
     const lead = 'See which major requirements and Gen Ed categories a course counts for.';
-    // Students and guests: CountsFor is a guide, the degree audit is the record.
-    const auditNotice = (!this.profile || isStudent(this.profile))
+    // Students: CountsFor is a guide, the degree audit is the record.
+    const auditNotice = isStudent(this.profile)
       ? '<p class="home-notice" role="note">CountsFor does not replace your degree audit. Check your plan in Stellic and with your advisor.</p>'
       : '';
 
@@ -2890,7 +2811,7 @@ const App = {
       const saved = this._isInWishlist(course.course_code);
       acts.push(`<button class="tr-leaf-action tr-leaf-wishlist ${saved ? 'is-saved' : ''}" data-action="wishlist" data-course-code="${esc(course.course_code)}" title="${saved ? 'Remove from wishlist' : 'Save for later'}" aria-label="${saved ? 'Remove from wishlist' : 'Save for later'}">${saved ? this._iconBookmarkFilled() : this._iconBookmarkOutline()}</button>`);
     }
-    if (canFlagCourses(this.profile) && (this.authMode === 'authed' || this.isGuest)) {
+    if (canFlagCourses(this.profile) && this.authMode === 'authed') {
       acts.push(`<button class="tr-leaf-action tr-leaf-flag" data-action="flag" data-course-code="${esc(course.course_code)}" title="Flag course data issue" aria-label="Flag course data issue">${this._iconFlag()}</button>`);
     } else if (isStudent(this.profile) && this._courseHasVisibleFlag(course.course_code)) {
       acts.push(`<span class="tr-leaf-flag-badge" title="Faculty-flagged course">${this._iconFlag()}</span>`);
@@ -2949,7 +2870,7 @@ const App = {
           </button>`);
       }
     }
-    if (canFlagCourses(this.profile) && (this.authMode === 'authed' || this.isGuest)) {
+    if (canFlagCourses(this.profile) && this.authMode === 'authed') {
       parts.push(`
         <button class="cc-action cc-action-flag" data-action="flag" data-course-code="${esc(course.course_code)}" title="Report a data issue with this course" aria-label="Flag course issue">
           ${this._iconFlag()}
@@ -4222,7 +4143,7 @@ const App = {
   },
 
   openFlagModal(courseCode) {
-    if (!canFlagCourses(this.profile) || (this.authMode !== 'authed' && !this.isGuest)) {
+    if (!canFlagCourses(this.profile) || this.authMode !== 'authed') {
       showToast('Course flagging is available to signed-in faculty only.');
       return;
     }
@@ -4338,8 +4259,6 @@ const App = {
         try { localStorage.removeItem('cf_synced'); } catch {}
         toast = 'Saved locally. Sync to server failed, will retry next sign-in.';
       }
-    } else if (this.isGuest) {
-      toast = 'Guest mode. Flag saved on this device only. Sign in to submit it for review.';
     } else {
       toast = 'Flag saved offline. Sign in to submit for admin review.';
     }
@@ -7500,8 +7419,8 @@ const App = {
   },
 
   /**
-   * Save a student's major and minors: locally always (guests have nothing
-   * else), and on their account when signed in. Minors the new major may not
+   * Save a student's major and minors: locally always, and on their account
+   * when signed in. Minors the new major may not
    * take are dropped, with a note.
    */
   async _applyStudentPrograms(primary, minors, message) {

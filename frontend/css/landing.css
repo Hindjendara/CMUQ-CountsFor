@@ -776,41 +776,6 @@ a.landing-sso-btn:visited {
 
 /* ── Status toast (no storage) ──────────────────────────────── */
 
-/* ── Guest mode entry ─────────────────────────────────────── */
-
-.landing-guest-row {
-  text-align: center;
-  margin-top: 16px;
-}
-
-.landing-guest {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  color: #fff;
-  border-radius: 999px;
-  padding: 10px 22px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.landing-guest:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.landing-guest:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-
-.landing-guest-note {
-  margin: 8px 0 0;
-  font-size: 12.5px;
-  color: var(--cf-on-dark-faint);
-}
-
 /* Toast created by showToast() in js/utils.js (the app styles the same
    element in css/styles.css). */
 .toast {
@@ -870,10 +835,6 @@ a.landing-sso-btn:visited {
     flex-shrink: 0;
   }
 
-  .landing-guest-row {
-    flex-shrink: 0;
-    margin-top: 0;
-  }
 }
 
 @media (max-height: 599px) {
@@ -881,13 +842,6 @@ a.landing-sso-btn:visited {
     margin-bottom: 10px;
   }
 
-  .landing-guest-row {
-    margin-top: 10px;
-  }
-
-  .landing-guest {
-    padding: 7px 18px;
-  }
 }
 
 /* ── Reduced motion ───────────────────────────────────────── */

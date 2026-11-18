@@ -1,6 +1,6 @@
 /**
  * CountsFor landing page (index.html): sign in, create account, forgot and
- * reset password, and guest mode. Shares js/utils.js and js/api.js with the app.
+ * reset password. There is no guest mode (removed November 18, 2026). Shares js/utils.js and js/api.js with the app.
  *
  * With CMU sign-in on (GET /api/auth/methods says mode "shibboleth") the card
  * shows one "Sign in with Andrew ID" button instead of the password views.
@@ -44,7 +44,7 @@
   const SSO_ERROR_MESSAGES = {
     domain: 'Only Andrew accounts can sign in to CountsFor.',
     identity: 'CMU sign-in did not share your Andrew ID. Try again later.',
-    unavailable: 'CMU sign-in is not available right now. Try again later, or continue as a guest.',
+    unavailable: 'CMU sign-in is not available right now. Try again later.',
   };
   const SSO_ERROR_DEFAULT = 'CMU sign-in did not finish. Try again.';
 
@@ -376,15 +376,13 @@
   // probe, and every failed submit, so the user never sees two different
   // descriptions of the same outage.
   //
-  // The wording is plain (the server could not be reached) and points at guest
-  // mode, which needs no server and covers the whole catalog. Leaving a
-  // working-looking sign-in form on screen during an outage just makes people
+  // The wording is plain (the server could not be reached), so people do not
   // retype passwords that were never wrong.
   const ACCOUNTS_UNAVAILABLE_MSG =
-    'Could not reach the server. Try again in a moment, or browse everything as a guest.';
+    'Could not reach the server. Try again in a moment.';
   const UNREACHABLE_MSG = ACCOUNTS_UNAVAILABLE_MSG;
   const SLOW_MSG =
-    'The server took too long to respond. Try again in a moment, or browse everything as a guest.';
+    'The server took too long to respond. Try again in a moment.';
 
   // status 0 means the request never completed: connection refused, DNS, a CORS
   // rejection, the abort timeout, or a gateway error from the reverse proxy
@@ -401,8 +399,7 @@
     setFormError('');
     clearFieldMsg('cfLoginPass', 'cfLoginPassMsg');
     setBackendAlert(
-      r && r.message === 'The server took too long to respond.' ? SLOW_MSG : ACCOUNTS_UNAVAILABLE_MSG,
-      { guestLink: true }
+      r && r.message === 'The server took too long to respond.' ? SLOW_MSG : ACCOUNTS_UNAVAILABLE_MSG
     );
   }
 
@@ -428,17 +425,6 @@
       btn.className = 'landing-link-btn';
       btn.textContent = 'Continue to CountsFor →';
       btn.addEventListener('click', goToApp);
-      box.appendChild(btn);
-    }
-    // When accounts are unavailable there is still a fully usable path: guest mode
-    // needs no server. Offer it inline instead of leaving the user at a sign-in form
-    // that cannot succeed.
-    if (opts && opts.guestLink) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'landing-link-btn';
-      btn.textContent = 'Browse as guest →';
-      btn.addEventListener('click', enterGuestMode);
       box.appendChild(btn);
     }
     box.hidden = false;
@@ -978,19 +964,11 @@
     }
     if (me.status === 0) {
       state.backendUnreachable = true;
-      setBackendAlert(ACCOUNTS_UNAVAILABLE_MSG, { guestLink: true });
+      setBackendAlert(ACCOUNTS_UNAVAILABLE_MSG);
     }
   }
 
-  function enterGuestMode() {
-    try { sessionStorage.setItem('cf_guest', '1'); } catch (e) { /* storage blocked */ }
-    location.href = APP_URL;
-  }
-
   async function init() {
-    const guestBtn = document.getElementById('cfGuestBtn');
-    if (guestBtn) guestBtn.addEventListener('click', enterGuestMode);
-
     const params = new URLSearchParams(location.search);
     const sharePlan = params.get('share_plan') || '';
     if (sharePlan) {

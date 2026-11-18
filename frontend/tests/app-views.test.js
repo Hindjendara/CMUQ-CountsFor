@@ -71,7 +71,7 @@ class MemoryStorage {
 const HOME_MARKER = '<div class="home-test-marker">home</div>';
 
 // Fresh App in its own context. The network and heavy renderers are stubbed;
-// renderShell(), renderLeftEmpty(), reset() and setGuestRole() are the real code.
+// renderShell(), renderLeftEmpty() and reset() are the real code.
 // With { realTree: true } the requirement map (renderTree) is the real code too,
 // with { realCard: true } the course card (renderCourseCard), and with
 // { realEvents: true } bindGlobalEvents (the test calls it).
@@ -169,30 +169,20 @@ test('app views: reset() from the schedule view shows home', () => {
   assertEqual(leftBodyHtml(document), HOME_MARKER);
 });
 
-test('app views: guest view switch with a course open shows home in both directions', () => {
-  const { App, document } = loadApp();
-  App.isGuest = true;
-  App._refreshSemesterOptions = () => {};
-  App._selectCourse(COURSE);
-  App.setGuestRole('faculty');
-  assertEqual(App.profile.role, 'professor');
-  assertEqual(leftBodyHtml(document), HOME_MARKER, 'student to faculty');
-  App._selectCourse(COURSE);
-  App.setGuestRole('student');
-  assertEqual(App.profile.role, 'student');
-  assertEqual(leftBodyHtml(document), HOME_MARKER, 'faculty to student');
-});
-
-test('app views: the guest Student toast describes the app as it is (no marking of courses taken)', () => {
+test('app views: there is no guest mode; a stale guest flag is cleared and the app asks for a session', async () => {
   const { App, ctx } = loadApp();
-  App.isGuest = true;
-  App._refreshSemesterOptions = () => {};
-  const toasts = [];
-  ctx.showToast = msg => toasts.push(msg);
-  App.setGuestRole('faculty');
-  App.setGuestRole('student');
-  assertEqual(toasts.pop(), 'Student view. Save courses, add minors and plan your schedule.');
-  assertFalse(toasts.concat(App.setGuestRole.toString()).some(s => /mark the courses|you took/i.test(s)));
+  for (const name of ['setGuestRole', 'exitGuest', '_readGuestFlag', '_guestBannerHtml', 'isGuest']) {
+    assertTrue(typeof App[name] === 'undefined', name);
+  }
+  ctx.URLSearchParams = URLSearchParams;
+  ctx.sessionStorage.setItem('cf_guest', '1');
+  let redirected = false;
+  App._redirectToLogin = () => { redirected = true; };
+  ctx.apiGetMe = async () => ({ ok: false, status: 401 });
+  App.applyTheme = () => {};
+  await App.init();
+  assertEqual(ctx.sessionStorage.getItem('cf_guest'), null, 'the old flag is removed');
+  assertTrue(redirected, 'no session: back to the sign-in page');
 });
 
 // Admin course editor.
@@ -425,7 +415,7 @@ test('minors: no minor shows a campus note; Product Management is not open to BA
     assertTrue(html.includes(`id="mn-section-${code}"`), code);
     assertFalse(/Pittsburgh version|Campus not stated|mn-pill-campus|mn-campus/i.test(html), code);
   }
-  const ba = loadMinorsApp(STUDENT('BA', []), { isGuest: true });
+  const ba = loadMinorsApp(STUDENT('BA', []), {});
   ba.App._refreshSemesterOptions = () => {};
   ba.App.addStudentMinor('product');
   assertEqual(ba.App.profile.secondaries, [], 'product is not open to BA majors');
@@ -455,18 +445,14 @@ test('minors: the Minors tab dropdown lists a student\'s own minors first; the h
   assertFalse(html.includes('Minor in Psychology'), 'the official name only repeats the title');
 });
 
-test('minors: a guest student adds and removes minors in the tree and keeps them across a view switch', () => {
-  const { App, document, ctx } = loadMinorsApp(STUDENT('CS', []), { isGuest: true });
+test('minors: a student adds and removes minors in the tree', () => {
+  const { App, document, ctx } = loadMinorsApp(STUDENT('CS', []), {});
   App._refreshSemesterOptions = () => {};
   App.addStudentMinor('psychology');
   App.addStudentMinor('math');
   App.addStudentMinor('cs');  // not open to CS majors
   assertEqual(App.profile.secondaries, ['psychology', 'math']);
   assertEqual(JSON.parse(ctx.localStorage.getItem('cf_minors')), ['psychology', 'math'], 'saved on this device');
-  App.setGuestRole('faculty');
-  assertEqual(App.profile.role, 'professor');
-  App.setGuestRole('student');
-  assertEqual([App.profile.primary, App.profile.secondaries], ['CS', ['psychology', 'math']]);
   App.removeStudentMinor('math');
   assertEqual(App.profile.secondaries, ['psychology']);
   App.addStudentMinor('business');
@@ -478,7 +464,7 @@ test('minors: a guest student adds and removes minors in the tree and keeps them
 });
 
 test('minors: on a closed programs dropdown a key only moves the choice; Enter, Tab or a pick in the list applies it', () => {
-  const { App, ctx, document } = loadMinorsApp(STUDENT('CS', []), { isGuest: true });
+  const { App, ctx, document } = loadMinorsApp(STUDENT('CS', []), {});
   App._refreshSemesterOptions = () => {};
   App.renderTree();
   assertTrue(treeHtml(document).includes('id="mnMinorAdd" aria-label="Add a minor" onchange="App._onProgramSelectChange(this)" onkeydown="App._onProgramSelectKey(event, this)"'));
