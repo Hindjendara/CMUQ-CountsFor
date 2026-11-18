@@ -260,6 +260,23 @@ async function apiLogout()  {
   clearAuthToken();
   return r;
 }
+// Which sign-in the server offers: { mode: 'password' | 'shibboleth', methods,
+// login_url, logout_url }. The landing page waits for it before drawing the
+// sign-in card, so the timeout is short; status 0 there means "as before".
+async function apiAuthMethods() {
+  return apiFetch('/api/auth/methods', { timeoutMs: 4000 });
+}
+// True for a path on this site ("/x", not "//host" or "/\host").
+function isSitePath(url) {
+  return typeof url === 'string' && /^\/(?![/\\])/.test(url);
+}
+// Where to go after apiLogout(): with CMU sign-in the server names the
+// Shibboleth logout URL (it ends the SSO session, then returns to the site);
+// otherwise, or when the server could not be reached, `fallback`.
+function afterLogoutUrl(r, fallback) {
+  const url = r && r.data && r.data.logout_url;
+  return isSitePath(url) ? url : fallback;
+}
 async function apiGetMe()   { return apiFetch('/api/me'); }
 async function apiPatchMe(patch) {
   return apiFetch('/api/me', { method: 'PATCH', body: patch });
@@ -352,7 +369,7 @@ async function apiUpdateFlag(id, patch)   { return apiFetch('/api/flags/' + enco
 
 // ── Wishlist ─────────────────────────────────────────────────
 async function apiGetWishlist()                 { return apiFetch('/api/wishlist'); }
-async function apiGetWishlistRoster()           { return apiFetch('/api/wishlist/roster'); }
+async function apiGetWishlistInterest()         { return apiFetch('/api/wishlist/interest'); }
 async function apiAddWishlist(course_code, note) {
   const body = { course_code };
   if (note !== undefined) body.note = note;
