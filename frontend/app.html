@@ -16,8 +16,10 @@
        plus the cf-build tag), or the browser downloads the file twice.
        scripts/bump_cf_build.py moves the tags together, and
        tests/app-views.test.js checks them. Keep the version query text out of
-       this comment: the bump script rewrites every occurrence of it. -->
-  <link rel="preload" href="data/courses.json?v=release-2026-11-18f" as="fetch" crossorigin="anonymous" />
+       this comment: the bump script rewrites every occurrence of it. The 1 MB
+       catalog is low priority, so on a narrow connection the scripts still come
+       first and the catalog uses the time the page waits for GET /api/me. -->
+  <link rel="preload" href="data/courses.json?v=release-2026-11-18f" as="fetch" crossorigin="anonymous" fetchpriority="low" />
   <link rel="preload" href="data/minors.json?v=release-2026-11-18f" as="fetch" crossorigin="anonymous" />
   <!-- The API is called on this page's own origin (/api/..., see js/api.js). -->
   <!-- Google OAuth web client ID. Its Authorized JavaScript origins must list

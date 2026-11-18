@@ -172,7 +172,7 @@ test('app views: reset() from the schedule view shows home', () => {
 test('app.html preloads the catalog and the minors at the exact URLs js/api.js fetches', () => {
   const html = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
   const tag = /<meta name="cf-build" content="([^"]+)"/.exec(html)[1];
-  const preloads = [...html.matchAll(/<link rel="preload" href="([^"]+)" as="fetch" crossorigin="anonymous" \/>/g)].map(m => m[1]);
+  const preloads = [...html.matchAll(/<link rel="preload" href="([^"]+)" as="fetch" crossorigin="anonymous"(?: fetchpriority="low")? \/>/g)].map(m => m[1]);
   // js/api.js on its own, with a page whose cf-build meta is the one in app.html.
   const ctx = { document: { querySelector: sel => (sel === 'meta[name="cf-build"]' ? { getAttribute: () => tag } : null) },
     localStorage: new MemoryStorage(), sessionStorage: new MemoryStorage(), console, setTimeout, clearTimeout };
