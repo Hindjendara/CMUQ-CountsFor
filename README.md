@@ -851,7 +851,7 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 - `list_elevated_directory()` merges both and marks each row `source` as `db`, `json` or `db+json`.
 - Adding with only name and email defaults to role `professor`, department `Dean's Office`, program `AS`.
 - "Revoke" for a JSON-only person creates a DB row with role `student` (DB wins, so they become a student). For a DB row it deletes the row.
-- **All directory routes are open to the whole faculty group, not just admins**, including setting `role: "admin"`. See 21.1.
+- **Admin access is for admins only.** Every directory route is open to the faculty and admin groups, but `_refuse_admin_change()` answers 403 `admin_only` to a non-admin whose write would give the role `admin`, would change or remove the entry of someone who is an admin now (database entry first, then the JSON seeds), or would delete a database entry so that a JSON seed making the person an admin applies again. Faculty keep every other write (adding, editing and removing faculty and advisors). Until November 18, 2026 any faculty member could make themselves admin this way. Tests: `backend/tests/test_directory.py`.
 
 ### 9.5 Users (`backend/users.py`)
 
@@ -921,11 +921,11 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | GET | `/api/users` | admin | `users.py` | List users |
 | PATCH | `/api/users/<id>` | admin | `users.py` | Edit a user (role edits revert on next login, see 7.1) |
 | GET | `/api/directory/entries` | faculty, admin | `directory_routes.py` | Merged directory |
-| POST | `/api/directory/entries` | faculty, admin | `directory_routes.py` | Add or update by email |
-| PATCH | `/api/directory/entries/<id>` | faculty, admin | `directory_routes.py` | Edit a DB row |
-| PATCH | `/api/directory/entries/by-email` | faculty, admin | `directory_routes.py` | Create or update the DB overlay for an email |
-| DELETE | `/api/directory/entries/<id>` | faculty, admin | `directory_routes.py` | Delete a DB row |
-| POST | `/api/directory/entries/revoke` | faculty, admin | `directory_routes.py` | Remove elevated access |
+| POST | `/api/directory/entries` | faculty, admin | `directory_routes.py` | Add or update by email; admin entries: admin only (9.4) |
+| PATCH | `/api/directory/entries/<id>` | faculty, admin | `directory_routes.py` | Edit a DB row; admin entries: admin only (9.4) |
+| PATCH | `/api/directory/entries/by-email` | faculty, admin | `directory_routes.py` | Create or update the DB overlay for an email; admin entries: admin only (9.4) |
+| DELETE | `/api/directory/entries/<id>` | faculty, admin | `directory_routes.py` | Delete a DB row; admin entries: admin only (9.4) |
+| POST | `/api/directory/entries/revoke` | faculty, admin | `directory_routes.py` | Remove elevated access; admin entries: admin only (9.4) |
 | POST | `/api/search-analytics/events` | role `student` | `search_analytics.py` | Count a course lookup |
 | GET | `/api/search-analytics/popular` | public | `search_analytics.py` | Top courses per program and semester |
 | GET | `/api/plans` | login | `plans.py` | Shared plans in my account |
@@ -2380,9 +2380,8 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 ### 21.1 Security issues (fix first)
 
-1. **Faculty can make themselves admin.** All `/api/directory/entries` write routes accept `role: "admin"` from any faculty user (verified locally: a professor upserted their own entry to admin and was admin after signing in again). Restrict admin grants (and probably all directory writes) to `ROLE_GROUP_ADMIN`.
-2. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
-3. **The daily scraper can rewrite the code it runs next to.** On the server `countsfor` owns every deployed file (15.3, 15.4): the API code, `backend/.venv` and the served JS, and the same user runs the scraper, from cron, with no sandbox, on HTML fetched from the SOC servlet. The API is sandboxed (`ProtectSystem=strict`); the scraper is not. A bug exploited in the scrape could change the API code (run on the next restart) or the served JS (every visitor, and the sign-in tokens in their browser storage). The scraper only needs to write `backend/data/`, `frontend/data/` and `backend/var/`. Two ways to close this, not done because each changes the deploy and must be tested on the server: deploy the code as `root:countsfor` (folders 750, files 640, `frontend/` world-readable, `pip` run as root) and give `countsfor` write access only to those three folders; or run the update from a systemd service and timer with `ProtectSystem=strict` and `ReadWritePaths=` limited to them, in place of the cron line.
+1. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
+2. **The daily scraper can rewrite the code it runs next to.** On the server `countsfor` owns every deployed file (15.3, 15.4): the API code, `backend/.venv` and the served JS, and the same user runs the scraper, from cron, with no sandbox, on HTML fetched from the SOC servlet. The API is sandboxed (`ProtectSystem=strict`); the scraper is not. A bug exploited in the scrape could change the API code (run on the next restart) or the served JS (every visitor, and the sign-in tokens in their browser storage). The scraper only needs to write `backend/data/`, `frontend/data/` and `backend/var/`. Two ways to close this, not done because each changes the deploy and must be tested on the server: deploy the code as `root:countsfor` (folders 750, files 640, `frontend/` world-readable, `pip` run as root) and give `countsfor` write access only to those three folders; or run the update from a systemd service and timer with `ProtectSystem=strict` and `ReadWritePaths=` limited to them, in place of the cron line.
 
 ### 21.2 Operational and data issues
 

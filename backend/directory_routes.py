@@ -12,7 +12,7 @@ from .directory import (
     _load_json_directory,
 )
 from .models import DirectoryEntry, VALID_DEPARTMENTS
-from .permissions import require_role_group, ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN
+from .permissions import is_admin, require_role_group, ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN
 
 bp = Blueprint("directory", __name__, url_prefix="/api/directory")
 
@@ -59,6 +59,24 @@ def _validate_entry_payload(data: dict, *, require_email: bool = True) -> tuple[
     }, None
 
 
+def _refuse_admin_change(email: str, new_role: str | None = None, *, removes_db_row: bool = False):
+    """Only an admin may grant, change or remove admin access (README 21.1).
+
+    Faculty keep every other directory write. A non-admin is refused when the
+    write would give the role admin, or touches a person who is an admin now
+    (database entry first, then the JSON seeds), or removes a database entry so
+    that a JSON seed making the person an admin applies again.
+    """
+    if is_admin(g.user):
+        return None
+    roles = [new_role, (load_merged_directory().get(email) or {}).get("role")]
+    if removes_db_row:
+        roles.append((_load_json_directory().get(email) or {}).get("role"))
+    if any((r or "").strip().lower() == "admin" for r in roles):
+        return jsonify(error="admin_only", message="Only an admin can grant, change or remove admin access."), 403
+    return None
+
+
 @bp.route("/entries", methods=["GET"])
 @require_role_group(ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN)
 def list_entries():
@@ -72,6 +90,9 @@ def add_entry():
     payload, err = _validate_entry_payload(request.get_json(silent=True) or {})
     if err:
         return err
+    refused = _refuse_admin_change(payload["email"], payload["role"])
+    if refused:
+        return refused
 
     email = payload["email"]
     existing = db.session.query(DirectoryEntry).filter_by(email=email).one_or_none()
@@ -107,6 +128,10 @@ def update_entry(entry_id: int):
     payload, err = _validate_entry_payload(data, require_email=True)
     if err:
         return err
+    refused = _refuse_admin_change(row.email, payload["role"]) or (
+        _refuse_admin_change(payload["email"]) if payload["email"] != row.email else None)
+    if refused:
+        return refused
 
     for field in ("name", "role", "department", "primary_program", "picture_url"):
         setattr(row, field, payload[field])
@@ -127,6 +152,9 @@ def upsert_entry_by_email():
     payload, err = _validate_entry_payload(data)
     if err:
         return err
+    refused = _refuse_admin_change(email, payload["role"])
+    if refused:
+        return refused
 
     row = db.session.query(DirectoryEntry).filter_by(email=email).one_or_none()
     created = row is None
@@ -148,6 +176,9 @@ def delete_entry(entry_id: int):
     if row is None:
         return jsonify(error="not_found", message="No such directory entry."), 404
     email = row.email
+    refused = _refuse_admin_change(email, removes_db_row=True)
+    if refused:
+        return refused
     db.session.delete(row)
     record_event(g.user, "directory.remove", email, name=row.name)
     db.session.commit()
@@ -162,6 +193,9 @@ def revoke_access():
     email = normalize_cmu_email(data.get("email") or "")
     if not email:
         return jsonify(error="invalid_email", message="Email is required."), 400
+    refused = _refuse_admin_change(email, removes_db_row=True)
+    if refused:
+        return refused
 
     row = db.session.query(DirectoryEntry).filter_by(email=email).one_or_none()
     if row is not None:

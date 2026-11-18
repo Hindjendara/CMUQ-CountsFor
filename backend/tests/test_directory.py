@@ -103,3 +103,70 @@ def test_admin_seed_sign_in_makes_admin(app, client, tmp_path):
     assert r.status_code in (200, 201), r.get_json()
     me = client.get("/api/me").get_json()
     assert me["role"] == "admin" and me["role_group"] == "admin"
+
+
+# Only an admin grants, changes or removes admin access (README 21.1). Faculty keep
+# every other directory write.
+ADMIN_ENTRY = {"name": "Boss", "role": "admin", "primary_program": "CS", "department": "Computer Science"}
+
+
+def _admin_rows(client):
+    with client.application.app_context():
+        return db.session.query(DirectoryEntry).filter_by(role="admin").count()
+
+
+def test_faculty_cannot_grant_admin(client, professor):
+    login(client, professor)
+    r = client.post("/api/directory/entries", json=dict(ADMIN_ENTRY, email="boss@andrew.cmu.edu"))
+    assert r.status_code == 403, r.get_json()
+    assert r.get_json()["error"] == "admin_only"
+    # Not to themselves either (the hole README 21.1 described).
+    r = client.patch("/api/directory/entries/by-email", json=dict(ADMIN_ENTRY, email="prof@andrew.cmu.edu"))
+    assert r.status_code == 403, r.get_json()
+    r = client.post("/api/directory/entries", json={"name": "Prof", "email": "prof@andrew.cmu.edu"})
+    assert r.status_code == 201, r.get_json()
+    r = client.patch(f"/api/directory/entries/{r.get_json()['id']}", json={"role": "admin"})
+    assert r.status_code == 403, r.get_json()
+    assert _admin_rows(client) == 0
+
+
+def test_faculty_cannot_change_or_remove_an_admin(client, admin, professor):
+    login(client, admin)
+    r = client.post("/api/directory/entries", json=dict(ADMIN_ENTRY, email="boss@andrew.cmu.edu"))
+    assert r.status_code == 201, r.get_json()
+    entry_id = r.get_json()["id"]
+
+    login(client, professor)
+    assert client.patch(f"/api/directory/entries/{entry_id}", json={"role": "professor"}).status_code == 403
+    assert client.patch("/api/directory/entries/by-email", json={
+        "email": "boss@andrew.cmu.edu", "name": "Boss", "role": "professor"}).status_code == 403
+    assert client.delete(f"/api/directory/entries/{entry_id}").status_code == 403
+    assert client.post("/api/directory/entries/revoke", json={"email": "boss@andrew.cmu.edu"}).status_code == 403
+    assert _admin_rows(client) == 1
+
+    login(client, admin)
+    assert client.patch(f"/api/directory/entries/{entry_id}", json={"role": "professor", "department": "Computer Science"}).status_code == 200
+    assert client.delete(f"/api/directory/entries/{entry_id}").status_code == 200
+
+
+def test_faculty_cannot_uncover_an_admin_seed(app, client, admin, professor, tmp_path):
+    """Removing a database entry that overrides an admin seed would make the person an admin again."""
+    import json
+    admins = tmp_path / "admins.json"
+    admins.write_text(json.dumps({"people": [dict(ADMIN_ENTRY, email="boss@andrew.cmu.edu")]}))
+    app.config["ADMIN_SEED_PATH"] = str(admins)
+    login(client, admin)
+    r = client.patch("/api/directory/entries/by-email", json={
+        "email": "boss@andrew.cmu.edu", "name": "Boss", "role": "professor", "department": "Computer Science"})
+    assert r.status_code in (200, 201), r.get_json()
+
+    login(client, professor)
+    assert client.delete(f"/api/directory/entries/{r.get_json()['id']}").status_code == 403
+    assert client.post("/api/directory/entries/revoke", json={"email": "boss@andrew.cmu.edu"}).status_code == 403
+
+
+def test_admin_can_grant_admin(client, admin):
+    login(client, admin)
+    r = client.post("/api/directory/entries", json=dict(ADMIN_ENTRY, email="boss@andrew.cmu.edu"))
+    assert r.status_code == 201, r.get_json()
+    assert r.get_json()["role"] == "admin"
