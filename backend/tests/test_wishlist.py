@@ -61,3 +61,16 @@ def test_wishlists_are_user_isolated(app, client, student):
     r = client.get("/api/wishlist")
     assert r.status_code == 200
     assert r.get_json()["items"] == []
+
+
+def test_roster_names_each_students_minors(client, student, professor):
+    from .conftest import login as _login
+    _login(client, student)
+    assert client.patch("/api/me", json={"primary_program": "CS", "minor_codes": ["psychology"]}).status_code == 200
+    assert client.post("/api/wishlist", json={"course_code": "15-112"}).status_code in (200, 201)
+    _login(client, professor)
+    r = client.get("/api/wishlist/roster")
+    assert r.status_code == 200, r.get_json()
+    [entry] = r.get_json()["students"]
+    assert entry["email"] == "alice@andrew.cmu.edu"
+    assert entry["minor_codes"] == ["psychology"]

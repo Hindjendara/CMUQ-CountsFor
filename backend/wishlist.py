@@ -42,6 +42,7 @@ def get_wishlist_roster():
                 "name": user.name,
                 "email": user.email,
                 "primary_program": user.primary_program,
+                "minor_codes": user.minor_codes_list(),
                 "items": [],
             },
         )

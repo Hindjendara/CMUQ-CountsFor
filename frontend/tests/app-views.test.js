@@ -624,6 +624,91 @@ function semesterCatalog(...extra) {
   ];
 }
 
+// Faculty and admins open one student's major and minors together in the
+// same tree, read only (the original request's Step 3; README 8.10).
+const ALICE = { id: 7, role: 'student', name: 'Alice Student', email: 'alice@andrew.cmu.edu', primary_program: 'CS', minor_codes: ['psychology', 'math'] };
+const STAFF = role => ({ role, primary: 'AS', secondary: null, secondaries: [], scope: null });
+
+test('staff view: faculty and admins see a student\'s major with the minors below it, read only, and go back', () => {
+  for (const role of ['professor', 'admin']) {
+    const { App, document } = loadMinorsApp(STAFF(role));
+    App.viewStudentPrograms(ALICE);
+    assertEqual(App.activeMajor, 'CS', role + ': the tree opens on the student\'s major');
+    const html = treeHtml(document);
+    assertTrue(html.includes('class="mn-viewing"') && html.includes('Viewing Alice Student'), role + ': the banner names the student');
+    assertTrue(html.includes('Computer Science major; Psychology and Mathematical Sciences minors. Read only.'), role + ': the banner lists the programs');
+    const iMajor = html.indexOf('data-tree-major="CS"');
+    const iPsych = html.indexOf('id="mn-section-psychology"');
+    const iMath = html.indexOf('id="mn-section-math"');
+    assertTrue(iMajor >= 0 && iPsych > iMajor && iMath > iPsych, role + ': the major first, then the minors in the student\'s order');
+    assertTrue(html.includes('Courses may also count toward this student&#039;s major or another minor without a limit.'), role + ': the limit names this student');
+    assertTrue(html.includes('Also counts for Psychology minor') && html.includes('Also counts for CS Gen Ed'), role + ': the double counting tags follow the student');
+    assertFalse(html.includes('class="mn-programs"') || html.includes('data-action="minor-remove"') || html.includes('id="mnMinorAdd"'), role + ': nothing to edit');
+    assertFalse(html.includes('Add to my minors'), role + ': no add buttons');
+    // Another major tab keeps the banner but shows no minors.
+    App.switchMajor('IS');
+    const other = treeHtml(document);
+    assertTrue(other.includes('Viewing Alice Student') && !other.includes('id="mn-section-psychology"'), role + ': other majors show only their tree');
+    App.exitStudentView();
+    App.switchMajor('CS');
+    const back = treeHtml(document);
+    assertFalse(back.includes('mn-viewing') || back.includes('id="mn-section-psychology"'), role + ': back to the plain major tree');
+    assertEqual(App.viewingStudent, null);
+  }
+});
+
+test('staff view: a student without a major is not opened; students cannot use it', () => {
+  const toasts = [];
+  const { App, ctx } = loadMinorsApp(STAFF('professor'));
+  ctx.showToast = msg => toasts.push(msg);
+  App.viewStudentPrograms({ name: 'New Student', email: 'new@andrew.cmu.edu', primary_program: null, minor_codes: [] });
+  assertEqual(App.viewingStudent, null);
+  assertEqual(toasts.pop(), 'New Student has not chosen a major yet.');
+  // Unknown minor codes are left out of the view.
+  App.viewStudentPrograms(Object.assign({}, ALICE, { minor_codes: ['psychology', 'not_a_minor'] }));
+  assertEqual(JSON.stringify(App.viewingStudent.minors), '["psychology"]');
+  const student = loadMinorsApp(STUDENT('CS', ['psychology']));
+  student.App.viewStudentPrograms(ALICE);
+  assertEqual(student.App.viewingStudent, null, 'a student viewer is ignored');
+});
+
+test('staff view: Admin, Users has View programs on student rows only', () => {
+  const { App, document } = loadMinorsApp(STAFF('admin'));
+  const prof = { id: 8, role: 'professor', name: 'Prof', email: 'prof@andrew.cmu.edu', primary_program: 'CS', minor_codes: [] };
+  assertTrue(App._renderUserAdminRow(ALICE).includes('App._viewUserPrograms(7)'));
+  assertFalse(App._renderUserAdminRow(prof).includes('View programs'));
+  App._userAdminState.items = [ALICE, prof];
+  App._viewUserPrograms(7);
+  assertTrue(treeHtml(document).includes('Viewing Alice Student'));
+});
+
+test('staff view: Student favorites names each student\'s minors, finds any student and opens one', async () => {
+  const { App, document, ctx } = loadMinorsApp(STAFF('professor'));
+  App.authMode = 'authed';
+  const searches = [];
+  ctx.apiGetWishlistRoster = async () => ({ ok: true, data: { students: [
+    { user_id: 7, name: 'Alice Student', email: 'alice@andrew.cmu.edu', primary_program: 'CS', minor_codes: ['psychology'], items: [{ course_code: '85-110', note: '' }] },
+  ] } });
+  ctx.apiListStudents = async q => { searches.push(q); return { ok: true, data: { total: 1, items: [
+    { id: 9, name: 'Bob Builder', email: 'bob@andrew.cmu.edu', primary_program: 'BA', minor_codes: ['economics'] },
+  ] } }; };
+  await App.showStudentFavorites();
+  let left = document.getElementById('leftBody').innerHTML;
+  assertTrue(left.includes('Alice Student') && left.includes(' · Psychology minor'), 'the roster names the minors');
+  assertTrue(left.includes("App._viewListedStudent('roster', 0)") && left.includes('Find any student'));
+  assertTrue(left.includes('id="sfFindResults"'));
+  // The fake DOM makes elements only for ids under #app; give the results list one.
+  document.live.set('sfFindResults', { innerHTML: '' });
+  await App._findStudents(' bob ');
+  assertEqual(searches.pop(), 'bob');
+  const found = document.getElementById('sfFindResults').innerHTML;
+  assertTrue(found.includes('Bob Builder') && found.includes(' · Economics minor') && found.includes("App._viewListedStudent('found', 0)"));
+  App._viewListedStudent('found', 0);
+  assertEqual(App.activeMajor, 'BA');
+  const html = treeHtml(document);
+  assertTrue(html.includes('Viewing Bob Builder') && html.includes('id="mn-section-economics"'));
+});
+
 async function loadSemesterApp(catalog, saved, socSemesters = SOC_SEMESTERS) {
   const env = loadApp();
   const { App, ctx } = env;

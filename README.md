@@ -679,7 +679,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | Course data | `fetchCatalog()` (`{ courses, socSemesters }`), `fetchMinors()`, `fetchRequirementBuckets()` (null when `data/requirement_buckets.json` is missing or unreadable; only the admin Courses tab asks for it) | static files (see 3.3) |
 | Backend URL and token | `getBackendUrl()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
 | Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword` (these six are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
-| Users | `apiListUsers(query)`, `apiPatchUser(id, patch)` | `/api/users` |
+| Users | `apiListUsers(query)`, `apiListStudents(search)`, `apiPatchUser(id, patch)` | `/api/users`, `/api/users/students` |
 | Admin console | `apiAdminOverview`, `apiAdminInsights(semester)`, `apiAdminActivity(query)` | `/api/admin/*` |
 | Course edits | `apiGetCourseOverrides` (10 s timeout), `apiAddCourse`, `apiEditCourse`, `apiBatchEditCourses`, `apiArchiveCourse`, `apiRestoreCourse`, `apiRevertCourse` | `/api/courses/overrides` |
 | Minor settings | `apiGetMinorOverrides` (10 s timeout, fetched with the course edits), `apiEditMinor`, `apiRevertMinor` | `/api/minors/overrides` |
@@ -783,6 +783,8 @@ The navbar: the semester, campus and modality filters sit inline from 1280px and
 
 **Double counting.** A course in a minor's tree that also counts for the student's major is tagged "Also counts for CS" (a major requirement) or "Also counts for CS Gen Ed"; in the major tree a course a chosen minor can use is tagged "Also counts for Psychology minor". A course counts for the major through any of its rows for that major, older audit rows and rule rows included (14.10, 14.5.1). The header states the limit (`minorDoubleCountLimitText()`, from `minorDoubleCountRules()`): "At most 2 courses may also count toward your major or another minor", "No course may ..." with the categories that are free, "... without a limit" with the categories that may never be shared, or "Confirm double counting with your advisor" when the file states no rule (Biological Sciences, Student-defined). The limit is the file's (`max_with_major`, which equals `max_with_other_minors` in every file) unless an admin set one (12.6). The app does not check a student's courses against it: without course statuses it does not know which courses a student took, so there are no double counting warnings. The app offers every minor to every major, AI included, except to the majors a minor's `blocked_majors` names.
 
+**Staff view of one student.** Faculty and admins see any student's major and minors together in the same tree, read only (the original request's Step 3). A "View programs" button opens it: on every student row of Admin, Users (`_viewUserPrograms()`), on every student in Student favorites, and on every result of the "Find any student" search at the top of Student favorites (`_findStudents()`, `GET /api/users/students`, 9.5), so faculty reach students who saved no course too. `viewStudentPrograms()` sets `App.viewingStudent` (name, email, major, the known minor codes), opens the split view on the student's major and draws the tree as the student sees it, through `_treeSubject()` and `_isStudentTree()`: the major's cards, then one section per minor in the student's order (`_renderMinorSection(code, 'viewed')`), the "Also counts for" tags of that student's programs, and limit lines that say "this student's major". A banner above the tree names the student and the programs, with "Back to my view" (`exitStudentView()`); it stays on the other major tabs, which show only their own tree. There is no programs bar, no add or remove control, and nothing is saved: to change a student's programs, an admin uses the Users tab. A student without a major gets a toast instead. Tests: the "staff view" tests in `tests/app-views.test.js`, `test_users.py` and `test_wishlist.py`.
+
 **Browse view.** Every role has a Minors tab after the major tabs: one dropdown (`#mnBrowsePick`, "Minor") lists all 17 minors, a student's own first under "Your minors", then "Other minors"; until one is chosen it shows "Choose a minor" and an empty state. Choosing one shows its full tree; only the part under the dropdown is drawn again, so the dropdown keeps the focus and its typing ("Psy" reaches Psychology) while the arrow keys move through the minors. Course codes in notes never break at their hyphen (`.mn-code`). Students also see an "Add to my minors" button there (or "Not open to BA majors"); an advisor with minor scope starts on their minor. Course cards list the minors a course counts for ("Psychology: Survey Courses or Psychology Elective", the student's own first), and the home search offers each minor ("Minor · Neuroscience minor").
 
 Tests: `tests/minors.test.js` (selection rules, trees, the double counting limit text), `tests/minors-file.test.js` (the real file through `fetchMinors()`, the fallback list, every category's rule) and the minors part of `tests/app-views.test.js` (the student tree, no status controls, progress, version line or warnings, an old `cf_course_status` ignored and kept, the Minors tab dropdown for faculty and for a student, Product Management, no campus note, guest changes, the save queue, a missing file).
@@ -855,7 +857,7 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 
 ### 9.5 Users (`backend/users.py`)
 
-Admin only: both routes have `@require_role_group(ROLE_GROUP_ADMIN)`. List with `search`, `role_group`, `incomplete`, `limit` (max 1000). Patch validates like `PATCH /api/me`, writes a `user.update` audit row with before and after values. Remember 7.1: the role part is overwritten on next sign-in unless the directory agrees. Some code comments still mention area heads managing users; that is no longer allowed.
+`GET /api/users/students` is open to the faculty and admin groups and is read only: students only (`role == "student"`), each as `{id, name, email, primary_program, minor_codes}`, ordered by name, with `search` (email or name) and `limit` (default 50, max 200), plus `total`. The staff view of one student (8.10) uses it. The other two routes are admin only: both have `@require_role_group(ROLE_GROUP_ADMIN)`. List with `search`, `role_group`, `incomplete`, `limit` (max 1000). Patch validates like `PATCH /api/me`, writes a `user.update` audit row with before and after values. Remember 7.1: the role part is overwritten on next sign-in unless the directory agrees. Some code comments still mention area heads managing users; that is no longer allowed.
 
 ### 9.6 Flags (`backend/flags.py`)
 
@@ -865,7 +867,7 @@ Admin only: both routes have `@require_role_group(ROLE_GROUP_ADMIN)`. List with 
 
 ### 9.7 Wishlist (`backend/wishlist.py`)
 
-Student-only CRUD on the caller's own saved courses with notes. `GET /api/wishlist/roster` gives faculty and admins every student's saved courses grouped by student (advising view).
+Student-only CRUD on the caller's own saved courses with notes. `GET /api/wishlist/roster` gives faculty and admins every student's saved courses grouped by student (advising view), with each student's `primary_program` and `minor_codes` (8.10).
 
 ### 9.8 Plans (`backend/plans.py`)
 
@@ -919,6 +921,7 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | PATCH | `/api/wishlist/<code>` | role `student` | `wishlist.py` | Edit note |
 | DELETE | `/api/wishlist/<code>` | role `student` | `wishlist.py` | Remove (204) |
 | GET | `/api/users` | admin | `users.py` | List users |
+| GET | `/api/users/students` | faculty, admin | `users.py` | Students and their programs, read only (8.10) |
 | PATCH | `/api/users/<id>` | admin | `users.py` | Edit a user (role edits revert on next login, see 7.1) |
 | GET | `/api/directory/entries` | faculty, admin | `directory_routes.py` | Merged directory |
 | POST | `/api/directory/entries` | faculty, admin | `directory_routes.py` | Add or update by email; admin entries: admin only (9.4) |

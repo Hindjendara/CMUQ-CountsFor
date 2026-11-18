@@ -5,7 +5,7 @@ from .auth import USER_SETTABLE_ROLES, _sync_user_minors, _validate_consistent_p
 from .admin import record_event
 from .db import db
 from .models import User
-from .permissions import require_role_group, ROLE_GROUP_ADMIN
+from .permissions import require_role_group, ROLE_GROUP_ADMIN, ROLE_GROUP_FACULTY
 from .models import FACULTY_ROLES
 
 bp = Blueprint("users", __name__, url_prefix="/api/users")
@@ -65,6 +65,37 @@ def list_users():
         row = u.to_public_dict()
         row["created_at"] = u.created_at.isoformat() if u.created_at else None
         items.append(row)
+    return jsonify(items=items, total=total)
+
+
+@bp.route("/students", methods=["GET"])
+@require_role_group(ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN)
+def list_students():
+    """Students and their programs, read only, for faculty and admins who open one
+    student's major and minors in the requirement tree (README 8.10).
+
+    Query: search (email or name, case insensitive) and limit (default 50, max 200).
+    """
+    q = db.session.query(User).filter(User.role == "student").order_by(User.name, User.email)
+    search = (request.args.get("search") or "").strip().lower()
+    if search:
+        like = f"%{search}%"
+        q = q.filter((User.email.ilike(like)) | (User.name.ilike(like)))
+    try:
+        limit = max(1, min(int(request.args.get("limit", 50)), 200))
+    except ValueError:
+        limit = 50
+    total = q.count()
+    items = [
+        {
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "primary_program": u.primary_program,
+            "minor_codes": u.minor_codes_list(),
+        }
+        for u in q.limit(limit).all()
+    ]
     return jsonify(items=items, total=total)
 
 

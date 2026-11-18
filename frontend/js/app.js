@@ -22,6 +22,7 @@ const App = {
   minorIndex: null,   // buildMinorIndex(): every minor's tree against the catalog
   _minorsLoadError: null,
   browseMinorCode: null, // the minor open in the Minors tab
+  viewingStudent: null,  // a student whose programs faculty or an admin opened (viewStudentPrograms)
 
   layoutMode: 'focused', // 'focused' | 'split'
   activeMajor: 'CS',     // a major code, or MINORS_TAB
@@ -2612,7 +2613,9 @@ const App = {
   /**
    * The requirement map. A major tab shows that major's tree; for a student on
    * their own major it starts with their programs bar and ends with one
-   * section per minor they chose. The Minors tab lists every minor.
+   * section per minor they chose. Faculty and admins who opened one student
+   * (viewStudentPrograms) see that student's major and minors the same way,
+   * read only, under a banner naming the student. The Minors tab lists every minor.
    */
   renderTree() {
     const rightBody = document.getElementById('rightBody');
@@ -2621,10 +2624,11 @@ const App = {
       rightBody.innerHTML = this._renderMinorsBrowse();
       return;
     }
-    const p = this.profile;
-    const studentTree = this._isStudentView() && p.primary === this.activeMajor;
+    const p = this._treeSubject();
+    const studentTree = this._isStudentTree() && p.primary === this.activeMajor;
     const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
-    let html = studentTree ? this._studentProgramsBarHtml() : '';
+    let html = this.viewingStudent ? this._viewedStudentBannerHtml()
+      : (studentTree ? this._studentProgramsBarHtml() : '');
     const sections = this.treeSections[this.activeMajor];
     if (!sections) {
       const pending = isProgramDataPending(this.activeMajor);
@@ -2655,7 +2659,8 @@ const App = {
       }
     }
     if (studentTree) {
-      for (const mc of getProfileMinors(p)) html += this._renderMinorSection(mc, 'student');
+      const mode = this.viewingStudent ? 'viewed' : 'student';
+      for (const mc of getProfileMinors(p)) html += this._renderMinorSection(mc, mode);
     }
     rightBody.innerHTML = html;
   },
@@ -2801,16 +2806,16 @@ const App = {
   },
 
   /**
-   * One course row. For a student, a minor tree row says when the course also
-   * counts for their major, and a major tree row names their minors the course
-   * also counts for.
+   * One course row. For a student (or the student faculty or an admin opened),
+   * a minor tree row says when the course also counts for their major, and a
+   * major tree row names their minors the course also counts for.
    */
   _renderLeafCourse(c, major, ctx) {
     const fullCourse = lookupCourse(this.courseIndex, c.code) || c;
     const isActive = this.selectedCourse && this.selectedCourse.course_code === c.code;
     const vm = computeViewMode(this.profile);
-    const p = this.profile;
-    const student = this._isStudentView();
+    const p = this._treeSubject();
+    const student = this._isStudentTree();
     const inMinor = !!(ctx && ctx.minor);
 
     let mpChip = '';
@@ -4060,12 +4065,14 @@ const App = {
       return;
     }
     const students = (r.data && r.data.students) || [];
-    const blocks = students.length ? students.map(s => {
+    this._sfStudents = { roster: students, found: [] };
+    const blocks = students.length ? students.map((s, n) => {
       const rows = (s.items || []).map(i => `
         <li><strong>${esc(i.course_code)}</strong>${i.note ? `: <em>${esc(i.note)}</em>` : ''}</li>`).join('') || '<li class="sf-empty">No saved courses</li>';
       return `
         <div class="sf-student">
-          <div class="sf-student-head"><strong>${esc(s.name)}</strong> <span class="sf-email">${esc(s.email)}</span>${s.primary_program ? ` · ${esc(s.primary_program)}` : ''}</div>
+          <div class="sf-student-head"><strong>${esc(s.name)}</strong> <span class="sf-email">${esc(s.email)}</span>${s.primary_program ? ` · ${esc(s.primary_program)}` : ''}${this._sfMinorsText(s)}
+            <button type="button" class="adm-btn sf-view" onclick="App._viewListedStudent('roster', ${n})" title="Open this student's major and minors in the requirement tree">View programs</button></div>
           <ul class="sf-courses">${rows}</ul>
         </div>`;
     }).join('') : '<div class="empty-state"><div class="empty-text">No students have saved courses yet.</div></div>';
@@ -4075,8 +4082,52 @@ const App = {
           <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
           <div class="adm-title">Student favorites <span class="adm-count">· ${students.length} students</span></div>
         </div>
+        <div class="sf-find">
+          <label class="sf-find-label" for="sfFind">Find any student to see their major and minors</label>
+          <div class="adm-search-row">
+            <input type="search" class="adm-search" id="sfFind" placeholder="Name or andrew email" autocomplete="off"
+              onkeydown="if(event.key==='Enter'){App._findStudents(this.value);}" />
+            <button type="button" class="adm-btn" onclick="App._findStudents(document.getElementById('sfFind').value)">Search</button>
+          </div>
+          <div id="sfFindResults" class="sf-find-results" aria-live="polite"></div>
+        </div>
         <div class="sf-list">${blocks}</div>
       </div>`;
+  },
+
+  /** " · Psychology and Economics minors" after a student's name, or nothing. */
+  _sfMinorsText(s) {
+    const minors = (Array.isArray(s.minor_codes) ? s.minor_codes : []).filter(mc => isKnownMinor(mc)).map(mc => getMinorLabel(mc));
+    return minors.length ? ` · ${esc(joinWithAnd(minors))} minor${minors.length === 1 ? '' : 's'}` : '';
+  },
+
+  /** Student favorites: search every student (GET /api/users/students) to open one. */
+  async _findStudents(query) {
+    const out = document.getElementById('sfFindResults');
+    if (!out) return;
+    out.innerHTML = '<div class="empty-text">Searching…</div>';
+    const r = await apiListStudents(String(query || '').trim());
+    if (!r.ok) {
+      out.innerHTML = `<div class="empty-text">Could not search students: ${esc((r.data && r.data.message) || 'error')}</div>`;
+      return;
+    }
+    const found = (r.data && r.data.items) || [];
+    if (!this._sfStudents) this._sfStudents = { roster: [], found: [] };
+    this._sfStudents.found = found;
+    const total = (r.data && r.data.total) || found.length;
+    out.innerHTML = found.length ? `
+      ${total > found.length ? `<div class="sf-find-more">Showing ${found.length} of ${total}. Type more of the name or email to narrow it.</div>` : ''}
+      <ul class="sf-find-list">${found.map((s, n) => `
+        <li class="sf-find-row">
+          <span><strong>${esc(s.name)}</strong> <span class="sf-email">${esc(s.email)}</span>${s.primary_program ? ` · ${esc(s.primary_program)}` : ''}${this._sfMinorsText(s)}</span>
+          <button type="button" class="adm-btn sf-view" onclick="App._viewListedStudent('found', ${n})">View programs</button>
+        </li>`).join('')}
+      </ul>` : '<div class="empty-text">No student matches.</div>';
+  },
+
+  _viewListedStudent(list, index) {
+    const s = this._sfStudents && (this._sfStudents[list] || [])[index];
+    if (s) this.viewStudentPrograms(s);
   },
 
   // ══════════════════════════════════════════════════════════
@@ -6784,9 +6835,16 @@ const App = {
           <div id="faculty-fields-${u.id}" ${isStudent ? 'hidden' : ''}>${facultyFields}</div>
         </div>
         <div class="adm-actions">
+          ${isStudent ? `<button type="button" class="adm-btn" onclick="App._viewUserPrograms(${u.id})" title="Open this student's major and minors in the requirement tree">View programs</button>` : ''}
           <button class="adm-btn adm-btn-resolve" onclick="App._saveUserAdmin(${u.id})">Save</button>
         </div>
       </div>`;
+  },
+
+  /** Admin, Users: open a listed student's saved major and minors (viewStudentPrograms). */
+  _viewUserPrograms(userId) {
+    const u = (this._userAdminState.items || []).find(x => x.id === userId);
+    if (u) this.viewStudentPrograms(u);
   },
 
   _onUserAdminRoleChange(userId, role) {
@@ -6995,6 +7053,64 @@ const App = {
   /** The programs bar, a student's minor sections and the "Also counts for" tags are for the student view only. */
   _isStudentView() {
     return !!(this.profile && this.profile.role === 'student');
+  },
+
+  /** The person the requirement tree is about: the student faculty or an admin opened, or else the viewer. */
+  _treeSubject() {
+    const v = this.viewingStudent;
+    if (!v) return this.profile;
+    return { role: 'student', primary: v.primary, secondary: v.minors[0] || null, secondaries: v.minors.slice(), scope: null };
+  },
+
+  /** True when the tree shows a student's programs: the viewer's own, or the student staff opened. */
+  _isStudentTree() {
+    return !!this.viewingStudent || this._isStudentView();
+  },
+
+  /**
+   * Faculty and admins: open one student's major tree with the student's
+   * minors below it, read only (README 8.10). s is a student as the users
+   * list, /api/users/students or the favorites roster give it:
+   * { name, email, primary_program, minor_codes }.
+   */
+  viewStudentPrograms(s) {
+    if (!s || this._isStudentView()) return;
+    const primary = String(s.primary_program || '').toUpperCase();
+    const name = s.name || s.email || 'This student';
+    if (!STUDENT_PROGRAMS.includes(primary)) {
+      showToast(`${name} has not chosen a major yet.`);
+      return;
+    }
+    const codes = Array.isArray(s.minor_codes) ? s.minor_codes : (s.minor_code ? [s.minor_code] : []);
+    this.viewingStudent = { name, email: s.email || '', primary, minors: codes.filter(mc => isKnownMinor(mc)) };
+    if (this.layoutMode !== 'split') this.enterExplorer();
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) this.setMobileLens('map');
+    this.switchMajor(primary);
+    const body = document.getElementById('rightBody');
+    if (body) body.scrollTop = 0;
+  },
+
+  /** Back to the viewer's own requirement map. */
+  exitStudentView() {
+    if (!this.viewingStudent) return;
+    this.viewingStudent = null;
+    this.renderTree();
+  },
+
+  /** Above the tree while faculty or an admin views one student: who, which programs, and the way back. */
+  _viewedStudentBannerHtml() {
+    const v = this.viewingStudent;
+    const minors = v.minors.map(mc => getMinorLabel(mc));
+    const programs = `${this._programFullName(v.primary)} major; `
+      + (minors.length ? `${joinWithAnd(minors)} minor${minors.length === 1 ? '' : 's'}` : 'no minors');
+    return `
+      <div class="mn-viewing" role="region" aria-label="One student's programs">
+        <div class="mn-viewing-text">
+          <div><strong>Viewing ${esc(v.name)}</strong>${v.email ? `<span class="mn-viewing-email">${esc(v.email)}</span>` : ''}</div>
+          <div class="mn-viewing-programs">${esc(programs)}. Read only.</div>
+        </div>
+        <button type="button" class="adm-btn mn-viewing-exit" onclick="App.exitStudentView()">Back to my view</button>
+      </div>`;
   },
 
   /** The minors a course can count for, on its card (the student's own first). */
@@ -7479,7 +7595,8 @@ const App = {
    * One minor: a header (name, official title and units, the double counting
    * limit, the admin's limit and note, About this minor) and its categories as
    * tree cards. The file's version is kept in minors.json but never shown.
-   * mode: 'student' in the student's own tree, 'browse' in the Minors tab.
+   * mode: 'student' in the student's own tree, 'viewed' in the tree of a
+   * student faculty or an admin opened (read only), 'browse' in the Minors tab.
    */
   _renderMinorSection(code, mode) {
     const idx = this.minorIndex;
@@ -7496,8 +7613,9 @@ const App = {
     }
     this._autoExpandMinor(code);
     const def = m.def;
-    const p = this.profile;
-    const student = this._isStudentView();
+    const viewed = mode === 'viewed';
+    const p = viewed ? this._treeSubject() : this.profile;
+    const student = viewed || this._isStudentView();
     const mine = student && getProfileMinors(p).includes(code);
     const majorCode = student ? p.primary : null;
 
@@ -7521,7 +7639,7 @@ const App = {
     const metaHtml = meta.length ? `<div class="mn-meta">${meta.join('<span class="mn-dot" aria-hidden="true">·</span>')}</div>` : '';
 
     const dc = def.double_count || {};
-    const limitText = minorDoubleCountLimitText(def, majorCode, student ? 'your' : "a student's");
+    const limitText = minorDoubleCountLimitText(def, majorCode, viewed ? "this student's" : (student ? 'your' : "a student's"));
     const withPeriod = t => (/[.!?]$/.test(t) ? t : t + '.');
     const ruleText = dc.text
       ? String(dc.text).split(' | ').map(t => plainDataText(t.trim())).filter(Boolean).map(withPeriod).join(' ')

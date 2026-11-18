@@ -269,6 +269,10 @@ async function apiPatchMe(patch) {
 async function apiListUsers(query = '') {
   return apiFetch('/api/users' + (query ? '?' + query : ''));
 }
+// Students and their programs, read only, for faculty and admins (README 8.10).
+async function apiListStudents(search = '') {
+  return apiFetch('/api/users/students' + (search ? '?search=' + encodeURIComponent(search) : ''));
+}
 async function apiPatchUser(id, patch) {
   return apiFetch('/api/users/' + encodeURIComponent(id), { method: 'PATCH', body: patch });
 }
