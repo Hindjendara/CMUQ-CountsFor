@@ -12,7 +12,7 @@ const HOME_RECENT_MAPPINGS = [
 // The tab of the requirement map that lists every minor (App.activeMajor).
 const MINORS_TAB = 'MINORS';
 
-/** A minor note listing renumbered courses; the app shows "was 85-104" on each course instead. */
+/** A minor note listing renumbered courses ("85-104 is now 85-190"); the app does not show it. */
 const MINOR_RENUMBER_NOTE = /^Old numbers in the official file are shown as their current numbers: (.+)\.$/;
 
 const App = {
@@ -2870,13 +2870,11 @@ const App = {
       }
     }
 
-    const was = inMinor ? this._minorFormerCodes(ctx.minor)[c.code] : null;
-    const wasHtml = was ? ` <span class="tr-leaf-was" title="The official minor list uses the old number ${esc(was)}">was ${esc(was)}</span>` : '';
 
     return `
       <div class="tr-leaf ${isActive ? 'active' : ''}" data-course-code="${esc(c.code)}">
         <span class="tr-leaf-code">${esc(c.code)}</span>
-        <span class="tr-leaf-name">${esc(c.name)}${wasHtml}${notes.length ? `<span class="tr-leaf-notes">${notes.join('')}</span>` : ''}</span>
+        <span class="tr-leaf-name">${esc(c.name)}${notes.length ? `<span class="tr-leaf-notes">${notes.join('')}</span>` : ''}</span>
         ${c.units ? `<span class="tr-leaf-units">${c.units}u</span>` : ''}
         ${alsoHtml}${mpChip}
         ${this._renderRowActions(fullCourse)}
@@ -7261,29 +7259,6 @@ const App = {
     for (const node of m.tree.children || []) walk(node, 0);
   },
 
-  /**
-   * New code to old code for a minor whose official file uses old course
-   * numbers, read from its renumbering notes ("85-104 is now 85-190").
-   */
-  _minorFormerCodes(m) {
-    if (!m || !m.tree) return {};
-    if (!this._formerCodeCache) this._formerCodeCache = new WeakMap();
-    let map = this._formerCodeCache.get(m);
-    if (map) return map;
-    map = {};
-    const walk = node => {
-      for (const note of node.notes || []) {
-        const hit = MINOR_RENUMBER_NOTE.exec(note);
-        if (!hit) continue;
-        for (const pair of hit[1].matchAll(/(\d{2}-\d{3}) is now (\d{2}-\d{3})/g)) map[pair[2]] = pair[1];
-      }
-      for (const child of node.children || []) walk(child);
-    };
-    walk(m.tree);
-    this._formerCodeCache.set(m, map);
-    return map;
-  },
-
   /** A minor's text as HTML: escaped, with course codes ("85-170") kept whole at a line end. */
   _minorTextHtml(text) {
     return esc(text).replace(/\b\d{2}-\d{3}\b/g, '<span class="mn-code">$&</span>');
@@ -7298,7 +7273,7 @@ const App = {
     if (archived.length) node = Object.assign({}, node, { missing: node.missing.filter(code => !archived.includes(code)) });
     const lines = [];
     for (const note of node.notes || []) {
-      if (MINOR_RENUMBER_NOTE.test(note)) continue;  // shown on each course instead (_minorFormerCodes)
+      if (MINOR_RENUMBER_NOTE.test(note)) continue;  // renumbering notes are not shown
       lines.push(`<div class="mn-node-note">${this._minorTextHtml(note)}</div>`);
     }
     if (node.missing && node.missing.length) {

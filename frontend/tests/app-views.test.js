@@ -714,13 +714,14 @@ test('staff view: the Students view finds any student and opens one; favorites s
   assertTrue(html.includes('Viewing Bob Builder') && html.includes('id="mn-section-economics"'));
 });
 
-test('minors: renumbered courses show their old number beside them, not a sentence above the list', () => {
+test('minors: no renumbering note or old number is shown; the quoted rule is under About', () => {
   const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology']));
   App.renderTree();
   const html = treeHtml(document);
   assertFalse(html.includes('Old numbers in the official file'), 'the long note is not shown');
   assertFalse(html.includes('Any 2 survey courses.'), 'no note that only repeats the badge');
-  assertTrue(/data-course-code="85-110"[\s\S]*?was 85-211/.test(html), '85-110 was 85-211');
+  assertTrue(html.includes('data-course-code="85-110"'), 'the course is listed under its current number');
+  assertFalse(/was 85-\d{3}|85-211/.test(html), 'no old number beside it');
   const header = html.slice(html.indexOf('id="mn-section-psychology"'), html.indexOf('mn-about'));
   assertFalse(header.includes('Audit rule:'), 'the quoted rule is under About this minor, not in the header');
 });

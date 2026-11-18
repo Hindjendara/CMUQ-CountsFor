@@ -283,6 +283,7 @@ Removed in November 2026 and still in git history: `render.yaml`, `backend/Procf
 | `minor_overrides.py` | `/api/minors/overrides` routes for minor settings (12.6). |
 | `minors_file.py` | Reads `frontend/data/minors.json` (the plain setting `MINORS_JSON_PATH`) for both editors: which minors exist and which of their categories hold courses. Callers fall back to `VALID_MINORS_FOR_PATCH` when the file cannot be read. |
 | `migrate_override_paths.py` | `python -m backend.migrate_override_paths`: moves course edits saved in the old whole list shape to the 2026-27 names (12.7, 15.8 step 8). A dry run unless `--apply`. |
+| `reset_link.py` | `python -m backend.reset_link EMAIL [--name NAME]`: prints a one-time link (30 minutes, single use) that sets the account's password, creating a student account when there is none. For the server operator when no email provider and no Google sign-in are available, for example the first admin on a new server (19.7). Refused in `AUTH_MODE=shibboleth`. Tests: `tests/test_reset_link.py`. |
 | `flags.py` | `/api/flags` routes. |
 | `wishlist.py` | `/api/wishlist` routes. |
 | `plans.py` | `/api/plans` routes (list, share by email, share link, accept link). |
@@ -534,7 +535,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to the data files (`data/courses.json`, `data/minors.json`, and `data/requirement_buckets.json` for the admin course editor). Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-18b`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-18c`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
@@ -806,7 +807,7 @@ The navbar: the semester, campus and modality filters sit inline from 1280px and
 
 **Saved courses are private.** Since November 18, 2026 a student's saved courses and notes are seen by that student only. The faculty Students view replaced the old Student favorites roster (every student's saved courses and notes, by name): below "Find a student" it lists **Course interest**, the number of students who saved each course, most saved first, with no names or notes (`GET /api/wishlist/interest`, 9.7). Admins see the same counts as "Most saved" on Admin, Insights. The student's Saved courses view says so ("Your saved courses and notes are private. Faculty see only how many students saved each course.").
 
-**Text in the minor sections.** The header shows the minor's units and one double counting line (the limit that applies, `minorDoubleCountLimitText()`); the rule quoted from the audit or catalog file is under "About this minor", Double counting. A note of the form "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, ..." (`MINOR_RENUMBER_NOTE`) is not shown as a sentence: each listed course shows "was 85-104" after its name instead (`_minorFormerCodes()`). Two notes that only repeated the category's badge ("Any 2 survey courses." in Psychology, "Any 3 courses from the list." in Financial Management) were removed from `minors.json`.
+**Text in the minor sections.** The header shows the minor's units and one double counting line (the limit that applies, `minorDoubleCountLimitText()`); the rule quoted from the audit or catalog file is under "About this minor", Double counting. A note of the form "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, ..." (`MINOR_RENUMBER_NOTE`) is kept in `minors.json` but not shown: the tree lists the current numbers only, with no old number beside them (the user's choice, November 18, 2026). Two notes that only repeated the category's badge ("Any 2 survey courses." in Psychology, "Any 3 courses from the list." in Financial Management) were removed from `minors.json`.
 
 **Degree audit notice.** Students and guests see one line under the home page actions: "CountsFor does not replace your degree audit. Check your plan in Stellic and with your advisor." (`_renderHome()`, `.home-notice`). Staff do not see it.
 
@@ -2235,11 +2236,11 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 18, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration, the review fixes, the fixes of November 11 and 12, the staff view, admin grant and navbar fixes of November 18, the CMU sign-in work of the `sso` branch, private saved courses, flag note visibility, the text cleanup and 67-365; commit `fd0c7b0`, tag `release-2026-11-18b`)
+### 16.2 Results on November 18, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration, the review fixes, the fixes of November 11 and 12, the staff view, admin grant and navbar fixes of November 18, the CMU sign-in work of the `sso` branch, private saved courses, flag note visibility, the text cleanup, 67-365, no old minor course numbers and `reset_link.py`; tag `release-2026-11-18c`)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **343 passed, 5 failed** (the known failures below; 247 passed and 6 failed before the CMU sign-in work, which added `test_shibboleth.py` and the register tests and replaced `test_register_faculty_from_seed`; the course interest and flag note tests added 6) |
+| `python -m pytest backend/tests` | **346 passed, 5 failed** (the known failures below; 247 passed and 6 failed before the CMU sign-in work, which added `test_shibboleth.py` and the register tests and replaced `test_register_faculty_from_seed`; the course interest, flag note and reset link tests added 9) |
 | `python -m pytest backend/scraper/tests` | 295 passed |
 | `node scripts/run-data-tests.js` | 252 passed (profile 51/51, data 86/86, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 52/52, admin editor 13/13, catalog data 11/11) |
 | Browser checks (headless Chrome, not in the repo) | smoke with and without the API 3/3 each, admin end to end 51/51, planner 22/22, guest check 29/29, staff view and roles 23/23 (a faculty email cannot register with a password, the per student favorites route is gone, course interest has no names), navbar at 8 roles x 41 widths 22/22 and fresh guest 22/22, the static site on a local server 18/18 and its data 21/21; `update_data.py --no-scrape` twice gives identical files equal to the checkout |
@@ -2412,6 +2413,14 @@ Until the cutover the old API reads its secrets from the Render dashboard (web s
 ### 19.7 Give someone admin (production)
 
 **Permanent admins** (the project owners): add them to `backend/data/directory_admins.json` (email, name, `role: "admin"`, `primary_program`, `department`), merge to `main` and deploy it (15.16; before the cutover Render redeploys `main` by itself), then have them sign out and in. Since November 18, 2026 it lists only `spessoa@andrew.cmu.edu` (Silvia Pessoa), who adds other admins from the Admin page. Remove people from this file when they leave. A `directory_entries` row with role admin wins over this file, so after importing the Render database check that table too (15.8).
+
+**First sign-in of an admin on a new server** (password mode; for example Prof. Silvia Pessoa, who is in `directory_admins.json` but may have no account): a staff email cannot create a password account (21.1), Google sign-in works only once the server's origin is on the Google client (15.14), and the Forgot password email needs an email provider (15.6). Whoever has a shell on the server prints a one-time link instead and sends it to the person privately:
+
+```bash
+sudo -u countsfor bash -c 'set -a; . /etc/countsfor/countsfor.env; set +a; cd /var/www/html/countsfor && backend/.venv/bin/python -m backend.reset_link spessoa@andrew.cmu.edu --name "Silvia Pessoa"'
+```
+
+The link opens the site's "set a new password" page, works once and expires after 30 minutes (`RESET_TOKEN_MINUTES`). The person sets a password, signs in with it and gets the role of the directory, admin here. With `AUTH_MODE=shibboleth` none of this is needed: people sign in with their Andrew ID.
 
 **Anyone else:**
 
