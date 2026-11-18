@@ -1203,12 +1203,20 @@ const App = {
       }
     });
 
-    // ESC closes modals / overlays
+    // ESC closes modals / overlays, and the Filters popover (the focus goes
+    // back to the Filters button when it was in the popover).
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.closeFlagModal();
         this.closeSharePlanModal();
         this.closeDirectoryPanel();
+        const filters = document.getElementById('navbarFiltersPanel');
+        if (filters && filters.classList.contains('open')) {
+          const focusInside = filters.contains(document.activeElement);
+          this.toggleFiltersPopover(false);
+          const toggle = document.getElementById('filtersToggle');
+          if (focusInside && toggle) toggle.focus();
+        }
       }
     });
   },
@@ -1655,11 +1663,13 @@ const App = {
     this.enterExplorer(r.major, r.path);
   },
 
-  toggleFiltersPopover() {
+  // The Filters button toggles the popover; toggleFiltersPopover(true) or
+  // (false) opens or closes it.
+  toggleFiltersPopover(force) {
     const panel = document.getElementById('navbarFiltersPanel');
     const toggle = document.getElementById('filtersToggle');
     if (!panel || !toggle) return;
-    const open = panel.classList.toggle('open');
+    const open = typeof force === 'boolean' ? panel.classList.toggle('open', force) : panel.classList.toggle('open');
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   },
 

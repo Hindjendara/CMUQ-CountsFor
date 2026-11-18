@@ -73,7 +73,8 @@ const HOME_MARKER = '<div class="home-test-marker">home</div>';
 // Fresh App in its own context. The network and heavy renderers are stubbed;
 // renderShell(), renderLeftEmpty(), reset() and setGuestRole() are the real code.
 // With { realTree: true } the requirement map (renderTree) is the real code too,
-// and with { realCard: true } the course card (renderCourseCard).
+// with { realCard: true } the course card (renderCourseCard), and with
+// { realEvents: true } bindGlobalEvents (the test calls it).
 function loadApp(opts = {}) {
   const document = fakeDocument();
   const ctx = {
@@ -98,7 +99,7 @@ function loadApp(opts = {}) {
   App._loadPopularCourses = () => {};
   App._loadMyFlagsSummary = () => {};
   App._loadStudentFlagsSummary = () => {};
-  App.bindGlobalEvents = () => {};
+  if (!opts.realEvents) App.bindGlobalEvents = () => {};
   if (!opts.realTree) App.renderTree = () => {};
   if (!opts.realCard) {
     App.renderCourseCard = (course) => {
@@ -1108,6 +1109,66 @@ test('plan view: a schedule with no courses in the semester on screen names the 
   html = leftBodyHtml(document);
   assertTrue(html.includes('Your schedule is empty'));
   assertFalse(html.includes('No courses in'));
+});
+
+// The Filters popover on the fake DOM: whatever renderShell() drew last gets a
+// working classList, attributes, focus() and contains() when the app looks it
+// up, and the semester select is inside the popover.
+function filtersPopoverDom(document) {
+  const getById = document.getElementById.bind(document);
+  const done = new WeakSet();
+  document.activeElement = document.body;
+  document.getElementById = id => {
+    const el = getById(id);
+    if (!el || done.has(el)) return el;
+    done.add(el);
+    const classes = new Set();
+    const attrs = new Map();
+    el.classList = {
+      add: c => { classes.add(c); },
+      remove: c => { classes.delete(c); },
+      contains: c => classes.has(c),
+      toggle: (c, force) => {
+        const on = force === undefined ? !classes.has(c) : !!force;
+        if (on) classes.add(c); else classes.delete(c);
+        return on;
+      },
+    };
+    el.setAttribute = (k, v) => { attrs.set(k, String(v)); };
+    el.getAttribute = k => (attrs.has(k) ? attrs.get(k) : null);
+    el.focus = () => { document.activeElement = el; };
+    el.contains = other => other === el
+      || (id === 'navbarFiltersPanel' && !!other && other.id === 'semesterSelect' && other === getById('semesterSelect'));
+    return el;
+  };
+}
+
+test('navbar: Escape closes the Filters popover and gives the focus back to the Filters button', () => {
+  const { App, document } = loadApp({ realEvents: true });
+  filtersPopoverDom(document);
+  const keydown = [];
+  document.addEventListener = (type, fn) => { if (type === 'keydown') keydown.push(fn); };
+  App.bindGlobalEvents();
+  const escape = () => keydown.forEach(fn => fn({ key: 'Escape', target: document.activeElement }));
+  const panel = () => document.getElementById('navbarFiltersPanel');
+  const toggle = () => document.getElementById('filtersToggle');
+
+  App.toggleFiltersPopover();
+  assertTrue(panel().classList.contains('open'), 'the Filters button opens it');
+  assertEqual(toggle().getAttribute('aria-expanded'), 'true');
+  document.getElementById('semesterSelect').focus();
+  escape();
+  assertFalse(panel().classList.contains('open'), 'Escape closes it');
+  assertEqual(toggle().getAttribute('aria-expanded'), 'false');
+  assertTrue(document.activeElement === toggle(), 'the focus was in the popover: back to the Filters button');
+
+  // Opened with the mouse, the focus elsewhere: Escape closes it and leaves the focus alone.
+  App.toggleFiltersPopover();
+  document.activeElement = document.body;
+  escape();
+  assertFalse(panel().classList.contains('open'));
+  assertEqual(toggle().getAttribute('aria-expanded'), 'false');
+  assertTrue(document.activeElement === document.body);
 });
 
 // The navbar plan label is drawn before the catalog loads; it must follow the catalog and the semester.
