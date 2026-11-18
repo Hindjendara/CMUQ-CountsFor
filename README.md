@@ -2235,13 +2235,14 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 18, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration, the review fixes, the fixes of November 11 and 12, the staff view, admin grant and navbar fixes of November 18, and the CMU sign-in work of the `sso` branch)
+### 16.2 Results on November 18, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration, the review fixes, the fixes of November 11 and 12, the staff view, admin grant and navbar fixes of November 18, the CMU sign-in work of the `sso` branch, private saved courses, flag note visibility, the text cleanup and 67-365; commit `fd0c7b0`, tag `release-2026-11-18b`)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **337 passed, 5 failed** (the known failures below; 247 passed and 6 failed before the CMU sign-in work, which added `test_shibboleth.py` and the register tests and replaced `test_register_faculty_from_seed`) |
+| `python -m pytest backend/tests` | **343 passed, 5 failed** (the known failures below; 247 passed and 6 failed before the CMU sign-in work, which added `test_shibboleth.py` and the register tests and replaced `test_register_faculty_from_seed`; the course interest and flag note tests added 6) |
 | `python -m pytest backend/scraper/tests` | 295 passed |
-| `node scripts/run-data-tests.js` | 251 passed (profile 51/51, data 86/86, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 51/51, admin editor 13/13, catalog data 11/11) |
+| `node scripts/run-data-tests.js` | 252 passed (profile 51/51, data 86/86, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 52/52, admin editor 13/13, catalog data 11/11) |
+| Browser checks (headless Chrome, not in the repo) | smoke with and without the API 3/3 each, admin end to end 51/51, planner 22/22, guest check 29/29, staff view and roles 23/23 (a faculty email cannot register with a password, the per student favorites route is gone, course interest has no names), navbar at 8 roles x 41 widths 22/22 and fresh guest 22/22, the static site on a local server 18/18 and its data 21/21; `update_data.py --no-scrape` twice gives identical files equal to the checkout |
 
 Known failures (all pre-date the admin page; the tests are stale, the code is the intended behaviour):
 
