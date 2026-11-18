@@ -41,6 +41,7 @@ Written: November 2026. Keep it current: when you change how something works, up
     - [15.19 Troubleshooting the server](#1519-troubleshooting-the-server)
     - [15.20 Old hosting: GitHub Pages and Render (historical)](#1520-old-hosting-github-pages-and-render-historical)
     - [15.21 Test copy on GitHub Pages](#1521-test-copy-on-github-pages)
+    - [15.22 CMU sign-in (Shibboleth)](#1522-cmu-sign-in-shibboleth)
 16. [Testing](#16-testing)
 17. [Git workflow](#17-git-workflow)
 18. [Project rules and conventions](#18-project-rules-and-conventions)
@@ -180,7 +181,7 @@ The pages call the API on their own origin: `CF_BACKEND_URL` is normally `''`, s
 
 ### 3.4 Authentication model
 
-- Two ways to prove identity: **email + password** (`/api/auth/register`, `/api/auth/login`) and **Google Sign-In** (`/api/auth/google`, verifies a Google ID token against `GOOGLE_CLIENT_ID`). The old passwordless route `/api/auth/email` was removed in November 2026.
+- `AUTH_MODE` picks how people prove who they are. **`password`** (the default): **email + password** (`/api/auth/register`, `/api/auth/login`) and **Google Sign-In** (`/api/auth/google`, verifies a Google ID token against `GOOGLE_CLIENT_ID`). **`shibboleth`**: only **CMU single sign-on**: Apache (mod_shib) sends the browser through the CMU sign-in page and passes the Andrew identity to `GET /api/auth/shibboleth`; the password and Google routes answer 403 `sso_only` ([15.22](#1522-cmu-sign-in-shibboleth)). The old passwordless route `/api/auth/email` was removed in November 2026.
 - After sign-in the server sets a signed Flask session cookie `cf_session` **and** returns an `auth_token` in the JSON body. The token is an `itsdangerous` signed `{"uid": id}` valid for 30 days (`backend/tokens.py`). The frontend stores it and sends `Authorization: Bearer <token>` on every call. The token dates from when the site (github.io) and the API (onrender.com) were on different sites and browsers blocked the cookie; now that they share one origin the cookie is first-party (`SameSite=Lax`), but the frontend still relies on the token, so both stay.
 - Token storage: `sessionStorage['cf_auth_token']` by default, or `localStorage['cf_auth_token']` if the user ticked "Keep me signed in" on the landing page.
 - On every sign-in the backend recomputes the role from the directory (`_sync_directory_profile()` in `backend/auth.py`). This is the single most important rule to understand about roles. See [section 7](#7-signing-in-locally-and-making-yourself-admin).
@@ -305,13 +306,15 @@ Each file starts with comments that give its install commands. Section 15 walks 
 | File | Installed on the server as | What it does |
 |---|---|---|
 | `countsfor-api.service` | `/etc/systemd/system/countsfor-api.service` | Runs Gunicorn (3 workers, `127.0.0.1:8000`, timeout 120 s) on `'backend.app:create_app()'` from `/var/www/html/countsfor`, as user and group `countsfor`, with `/etc/countsfor/countsfor.env`. Runs `python -m backend.bootstrap_db` before every start. Restarts on failure. Hardened: the whole file system is read-only for the API (it writes no files), private `/tmp`, no capabilities. |
-| `countsfor.conf` | `/etc/apache2/sites-available/countsfor.conf` | Apache site for `countsfor.qatar.cmu.edu`: port 80 redirects to HTTPS; port 443 serves `frontend/`, proxies `/api/` to Gunicorn without stripping the prefix, keeps `/health` private, denies `backend/` and the rest of the deploy root server wide plus `tests/`, dotfiles and source or env files, serves `courses.json.gz` to browsers that accept gzip, sends `no-cache` (ETag revalidation) for html, js, css and json and 30 days for images, and sets HSTS and other security headers. The certificate and key names are `CHANGE_ME` placeholders. |
+| `countsfor.conf` | `/etc/apache2/sites-available/countsfor.conf` | Apache site for `countsfor.qatar.cmu.edu`: port 80 redirects to HTTPS; port 443 serves `frontend/`, proxies `/api/` to Gunicorn without stripping the prefix, keeps `/health` private, denies `backend/` and the rest of the deploy root server wide plus `tests/`, dotfiles and source or env files, serves `courses.json.gz` to browsers that accept gzip, sends `no-cache` (ETag revalidation) for html, js, css and json and 30 days for images, and sets HSTS and other security headers. The certificate and key names are `CHANGE_ME` placeholders. Inside `<IfModule mod_shib>` (inactive until mod_shib is installed): the CMU sign-in parts, `/Shibboleth.sso` for mod_shib, the protected `/api/auth/shibboleth` and the shared secret from `/etc/apache2/countsfor-sso.conf` (15.22). |
 | `countsfor.cron` | `/etc/cron.d/countsfor` (no dot: cron skips file names with a dot) | Daily 15:00 run of `backend/scraper/run_scrape.sh` as `countsfor`, under `flock` and `timeout`, appending to `/var/log/countsfor/scrape.log`; on failure it prints one line, which cron mails only if `MAILTO` is set (empty by default, so failures are silent, 15.12). Commented out: a weekday 09:00 run and a nightly `pg_dump` with 14-day retention. |
 | `countsfor.logrotate` | `/etc/logrotate.d/countsfor` | Weekly rotation of `/var/log/countsfor/*.log`, 12 kept. |
 | `countsfor.env.example` | `/etc/countsfor/countsfor.env` (mode 640, `root:countsfor`) | The API's environment on the server. Replace every `CHANGE_ME`. |
 | `scraper.env.example` | `/etc/countsfor/scraper.env` (mode 640, `root:countsfor`) | The daily update's environment. Everything in it is optional. |
+| `shibboleth/shibboleth2.xml` | `/etc/shibboleth/shibboleth2.xml` | Shibboleth SP configuration for CMU sign-in: entityID `https://countsfor.qatar.cmu.edu/shibboleth`, CMU's IdP, handlers under `/Shibboleth.sso`. What IT must confirm is marked `CHANGE_ME` (15.22). |
+| `shibboleth/attribute-map.xml` | `/etc/shibboleth/attribute-map.xml` | Which SAML attributes the SP keeps (eppn, mail, displayName, givenName, sn, the affiliations) and the header names the API reads, with notes. |
 
-`backend/tests/test_deploy_files.py` checks these files against the repo on every test run: every `/var/www/html/countsfor` path they name exists, the Apache sections are balanced, the proxy target matches the Gunicorn bind and Flask's `/api` routes, `ProxyTimeout` is above Gunicorn's timeout, the Gunicorn and `ExecStartPre` modules import, the cron line runs the executable `run_scrape.sh` with a lock and a timeout (and `run_scrape.sh` quotes that exact line and refuses to run as another user), `/api/` answers get exactly one `Cache-Control: no-store`, the `.prev` backups are denied, and no file has CR line endings. `backend/tests/test_env_example.py` checks that the two env templates and the variables the code reads match.
+`backend/tests/test_deploy_files.py` checks these files against the repo on every test run: every `/var/www/html/countsfor` path they name exists, the Apache sections are balanced, the proxy target matches the Gunicorn bind and Flask's `/api` routes, `ProxyTimeout` is above Gunicorn's timeout, the Gunicorn and `ExecStartPre` modules import, the cron line runs the executable `run_scrape.sh` with a lock and a timeout (and `run_scrape.sh` quotes that exact line and refuses to run as another user), `/api/` answers get exactly one `Cache-Control: no-store`, the `.prev` backups are denied, every Shibboleth line is inside `<IfModule mod_shib>`, the protected location and its secret header match the API, the SP template and attribute map match the API's settings, and no file has CR line endings. `backend/tests/test_env_example.py` checks that the two env templates and the variables the code reads match.
 
 ### 4.4 `backend/data/` and `backend/scraper/`
 
@@ -442,7 +445,7 @@ location.reload();
 
 ### 5.7 First visit behaviour
 
-1. `http://localhost:8765/` serves `index.html` (landing). `js/landing.js` renders the sign-in panel immediately, then probes `GET /api/me` in the background.
+1. `http://localhost:8765/` serves `index.html` (landing). `js/landing.js` asks `GET /api/auth/methods` (password mode locally, unless you set `AUTH_MODE`), renders the sign-in panel, then probes `GET /api/me` in the background.
    - If you already have a valid session and have not typed anything, it redirects to `app.html`.
    - If the backend is unreachable, it shows a "Could not reach the server" banner with a guest link.
 2. "Continue as guest" sets `sessionStorage['cf_guest'] = '1'` and opens `app.html`. The app boots in demo mode with a default profile (student, CS) and never calls `/api/me`.
@@ -481,6 +484,11 @@ Every variable is also listed, with local values and production values in commen
 | `ALLOWED_EMAIL_DOMAIN` | No | empty (any CMU domain) | If set (production uses `andrew.cmu.edu`), only that domain may sign in. Note that `normalize_cmu_email()` already rewrites `cmu.edu` and `qatar.cmu.edu` to `andrew.cmu.edu` and rejects all non-CMU addresses. |
 | `SEED_USERS_PATH` | No | `backend/seed_users.json` | JSON directory seed. Production uses `backend/data/faculty_directory.json`. Relative paths are resolved against the current directory, `backend/`, then the repo root. |
 | `ADMIN_SEED_PATH` | No | unset (`backend/data/directory_admins.json`) | Hand-kept admin list layered over the seed. An empty value disables it (tests do). |
+| `AUTH_MODE` | No | `password` | `password`: email + password and Google. `shibboleth`: CMU sign-in only (15.22); the password and Google routes answer 403 `sso_only`. Any other value stops the app at startup. Tests run in `password` mode (`TestConfig`). |
+| `SHIB_PROXY_SECRET` | **Yes with `AUTH_MODE=shibboleth`** | empty | Shared secret Apache sends in `X-CountsFor-SSO-Secret`, only inside the protected `/api/auth/shibboleth` location (the `Define` in `/etc/apache2/countsfor-sso.conf`). The API compares it with `hmac.compare_digest` and trusts no identity header without it. In shibboleth mode `create_app()` refuses to start when it is shorter than 32 characters. Secret. |
+| `SHIB_HEADER_EPPN`, `SHIB_HEADER_MAIL` | No | `eppn`, `mail` | Request headers that carry eppn and mail (mod_shib names them after the ids in `attribute-map.xml`). eppn is used first, mail only when eppn is missing. An empty value turns one off; at least one must stay on. |
+| `SHIB_HEADER_DISPLAY_NAME`, `SHIB_HEADER_GIVEN_NAME`, `SHIB_HEADER_SURNAME` | No | `displayName`, `givenName`, `sn` | Headers for the name: displayName, else givenName and sn, else the Andrew ID. |
+| `SHIB_LOGOUT_URL` | No | `/Shibboleth.sso/Logout?return=/` | Where the browser goes after signing out in shibboleth mode (the SP's logout handler, then back to the site). Must be a path on this site, or the app does not start. |
 | `SOC_JSON_PATH` | No | `backend/data/soc.json` | The private SOC scrape; the admin overview reads its `last_scrape`. The pipeline scripts read the same variable (6.2). |
 | `RESET_TOKEN_MINUTES` | No | `30` | Password reset link lifetime. |
 | `FRONTEND_RESET_BASE` | No | empty | The page reset emails link to; `?token=...` is appended. Server: `https://countsfor.qatar.cmu.edu/index.html`. If empty, the first `FRONTEND_ORIGIN` plus `/index.html`. |
@@ -535,7 +543,14 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 
 ### 7.1 How roles are decided (read this first)
 
-On **every** sign-in (`register`, `login`, `google`), the backend calls `_sync_directory_profile(user, email)`:
+**Sign-in methods.** `AUTH_MODE` (6.1) decides which exist:
+
+| Mode | Methods | Who proves owning the address |
+|---|---|---|
+| `password` (default, and local development) | Create account (`register`), Sign in (`login`), Forgot password (email link or Continue with Google, then `set-password`), Google (`google`) | Google sign-in and the emailed reset link prove it. `register` does not, so it only creates **new student** accounts: it refuses a faculty or staff email (403 `staff_email`, any directory role other than student) and any email that already has an account, with or without a password (409 `email_taken` or `account_exists`). Those people use Forgot password: Continue with Google, then choose a password. |
+| `shibboleth` | Sign in with Andrew ID (`GET /api/auth/shibboleth`, through the CMU sign-in page) | CMU's IdP. The password and Google routes answer 403 `sso_only` (15.22). |
+
+On **every** sign-in (`register`, `login`, `google`, `shibboleth`), the backend calls `_sync_directory_profile(user, email)`:
 
 1. Look up the email in the `directory_entries` table. If found, use that row.
 2. Otherwise look in the JSON seed. `_load_json_directory()` tries, in order, `SEED_USERS_PATH`, `backend/seed_users.json`, `backend/faculty_seed.json`, `backend/data/faculty_directory.json`, and **uses the first file that exists and has rows** (files are not merged). Then `backend/data/directory_admins.json` (path set by `ADMIN_SEED_PATH`; empty string disables it) is layered on top, so the admins listed there win over the faculty seed. It is a separate file because `backend/scraper/scrape_faculty_directory.py` rewrites `faculty_directory.json` from scratch.
@@ -551,7 +566,7 @@ Consequences:
 ### 7.2 Sign in locally with a password
 
 1. Start backend and frontend (section 5).
-2. Open `http://localhost:8765/`, choose **Create account**, use any `@andrew.cmu.edu` address (it does not need to be real locally) and an 8+ character password.
+2. Open `http://localhost:8765/`, choose **Create account**, use any `@andrew.cmu.edu` address that is not in the faculty directory or the admin list (it does not need to be real locally; a listed address is refused with `staff_email`, 7.1) and an 8+ character password.
 3. You land in `app.html` and see onboarding (pick your major) because a new student profile is incomplete.
 
 From the command line:
@@ -581,7 +596,7 @@ Pick one:
 ]
 ```
 
-Then sign out and sign in again (or create the account now). Because the first non-empty seed file wins, while `backend/seed_users.json` exists `backend/data/faculty_directory.json` is ignored locally.
+Then sign out and sign in again with the password. Create the account **before** you add the seed: once the address is listed as admin, Create account refuses it (`staff_email`, 7.1), and a listed address without an account can only get one through Google (Forgot password, Continue with Google), which needs a real Google account for it. Sign-in itself still applies the seed. Because the first non-empty seed file wins, while `backend/seed_users.json` exists `backend/data/faculty_directory.json` is ignored locally.
 
 **Option B, point at a throwaway seed:** set `SEED_USERS_PATH=/absolute/path/to/my_seed.json` in `backend/.env`.
 
@@ -600,7 +615,7 @@ with app.app_context():
 EOF
 ```
 
-After any option, sign in again. `/api/me` should show `"role": "admin"`, `"role_group": "admin"`, `"is_admin": true`, and the navbar shows the **Admin** button.
+After any option, sign in again (with an account created before the address was listed, as in Option A). `/api/me` should show `"role": "admin"`, `"role_group": "admin"`, `"is_admin": true`, and the navbar shows the **Admin** button.
 
 ### 7.4 Password reset locally
 
@@ -678,7 +693,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 |---|---|---|
 | Course data | `fetchCatalog()` (`{ courses, socSemesters }`), `fetchMinors()`, `fetchRequirementBuckets()` (null when `data/requirement_buckets.json` is missing or unreadable; only the admin Courses tab asks for it) | static files (see 3.3) |
 | Backend URL and token | `getBackendUrl()`, `getAuthToken()`, `saveAuthToken(token, persist)`, `clearAuthToken()`, `getGoogleClientId()` | none |
-| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword` (these six are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe` | `/api/auth/*`, `/api/me` |
+| Auth | `apiSignInWithGoogle`, `apiRegister`, `apiLogin`, `apiForgotPassword`, `apiResetPassword`, `apiSetPassword`, `apiAuthMethods` (4 s timeout) (these seven are called by `landing.js`), `apiLogout`, `apiGetMe`, `apiPatchMe`; helpers `isSitePath(url)` and `afterLogoutUrl(r, fallback)` (the SP logout URL from the logout answer in shibboleth mode, else `fallback`; used by `App.signOut()`) | `/api/auth/*`, `/api/me` |
 | Users | `apiListUsers(query)`, `apiListStudents(search)`, `apiPatchUser(id, patch)` | `/api/users`, `/api/users/students` |
 | Admin console | `apiAdminOverview`, `apiAdminInsights(semester)`, `apiAdminActivity(query)` | `/api/admin/*` |
 | Course edits | `apiGetCourseOverrides` (10 s timeout), `apiAddCourse`, `apiEditCourse`, `apiBatchEditCourses`, `apiArchiveCourse`, `apiRestoreCourse`, `apiRevertCourse` | `/api/courses/overrides` |
@@ -695,9 +710,13 @@ Token storage: `saveAuthToken(token, true)` puts the token in localStorage ("Kee
 
 One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "Could not reach the server" banner as soon as the server answers), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `enterGuestMode()`, `init()`.
 
+**CMU sign-in.** `init()` first asks `GET /api/auth/methods` (`loadSsoSettings()`). When the mode is `shibboleth`, the card is the `sso` view: a "Sign in with Andrew ID" link to the login URL with `next` set to `app.html` (plus `share_plan` when a shared plan link is pending, `ssoLoginHref()`), the guest option below the card as always, and no password, register or forgot views. A failed CMU sign-in comes back as `/?sso_error=domain|identity|unavailable`; the view shows a short message once and removes the code from the address. When the methods call fails or answers anything else (no API, as on the GitHub Pages test copy, 15.21), the page behaves as before. The card is drawn after that answer, so the password form never flashes up on a CMU sign-in server.
+
+**Refused registrations (password mode).** When Create account answers `staff_email` or `account_exists`, or sign-in answers `no_password_set`, `showForgotWith()` opens Forgot password with the email filled in and a message from `FORGOT_REASONS`: send a reset link, or Continue with Google (7.1).
+
 `probeSession()` sends a visitor with a valid session straight to `app.html`. Only when they have already typed into the form (`userIsEngaged()`, which uses `hasTypedText()` from `utils.js`) does it stay and show "You're already signed in." with a Continue link, so typed text is never thrown away. The "Keep me signed in" checkbox does not count: its value is always "on".
 
-`js/app.js` has no sign-in screens of its own (the old in-app copy was removed in November 2026). It redirects to `index.html` whenever a sign-in is needed.
+`js/app.js` has no sign-in screens of its own (the old in-app copy was removed in November 2026). It redirects to `index.html` whenever a sign-in is needed. After a CMU sign-in the server redirects to `app.html`, which boots as after any sign-in: `GET /api/me` succeeds on the session cookie, and `apiFetch` stores the `auth_token` from that answer (sessionStorage). `App.signOut()` sends the browser to `afterLogoutUrl(...)`: the SP logout URL in shibboleth mode, `index.html` otherwise.
 
 ### 8.7 `js/app.js` (about 7,630 lines): the `App` object
 
@@ -813,7 +832,7 @@ Tests: the planner part of `tests/data.test.js` (linking, filters, choices, grou
 
 `create_app(config_class=Config, *, bootstrap_db=None)`:
 
-1. Loads config.
+1. Loads config, then `check_auth_settings()` (`auth.py`) stops the app when `AUTH_MODE` is unknown, or is `shibboleth` without a `SHIB_PROXY_SECRET` of at least 32 characters, without an eppn or mail header, or with a `SHIB_LOGOUT_URL` that is not a path on this site. Gunicorn and `bootstrap_db` (`ExecStartPre`) both go through `create_app()`, so the service does not start.
 2. If `TRUST_PROXY` is on, wraps the WSGI app in `ProxyFix(x_for=1, x_proto=1)`; then `db.init_app(app)`.
 3. Unless `SKIP_DB_BOOTSTRAP` is truthy, runs `init_database(app)`: imports models, `db.create_all()`, then `run_migrations()`.
 4. Enables CORS for `/api/*` only, for `FRONTEND_ORIGINS`, with credentials and the `Content-Type` and `Authorization` headers.
@@ -837,13 +856,16 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 
 ### 9.3 Auth (`backend/auth.py`)
 
+- `AUTH_MODE` (6.1, 7.1): in `shibboleth` mode `register`, `login`, `forgot-password`, `reset-password`, `set-password` and `google` answer 403 `{"error": "sso_only", "message": "Sign in with your Andrew ID."}` (decorator `_password_mode_only`, checked before anything else, the login check of `set-password` included).
 - Passwords: Werkzeug `generate_password_hash` and `check_password_hash`. Minimum 8 characters.
-- `register`: CMU email only, checks `ALLOWED_EMAIL_DOMAIN`, rejects if the email already has a password (409). If the user exists without a password (for example signed in with Google before), it sets the password. Applies the directory, writes the session, returns the user plus `auth_token` (201).
-- `login`: email and password. Clear messages when the account has no password (`no_password_set`).
+- `register`: CMU email only, checks `ALLOWED_EMAIL_DOMAIN`. It cannot prove the caller owns the address, so it only creates new student accounts: 403 `staff_email` when `resolve_directory_entry()` gives the email any role other than student (a row without a role counts as professor, as in `_apply_seed`); 409 `email_taken` when the account has a password, 409 `account_exists` when it exists without one (until November 18, 2026 `register` set a password on such an account: a takeover of Google-only accounts, 21.1). Both messages point to Forgot password and Continue with Google. Otherwise it creates the user, applies the directory, writes the session and returns the user plus `auth_token` (201).
+- `login`: email and password. When the account has no password (`no_password_set`) the message points to Forgot password.
 - `forgot-password` and `reset-password`: see 6.1 and 7.4. Reset tokens are random, stored as SHA-256 hashes in `password_reset_tokens`, single use, expire after `RESET_TOKEN_MINUTES`. The response is the same whether or not the account exists.
 - `set-password`: signed-in user sets a password without a token (Google recovery flow).
 - `google`: verifies the ID token with `google.oauth2.id_token.verify_oauth2_token`, requires `email_verified`, upserts by `google_sub` then by email.
-- `logout`: clears the session (the frontend also clears the token).
+- `GET /api/auth/shibboleth` (CMU sign-in, 15.22): 404 unless `AUTH_MODE=shibboleth`. Apache protects the path with mod_shib and passes the SAML attributes as request headers, plus `X-CountsFor-SSO-Secret`, which it sets only in that protected location. The route first requires that header to equal `SHIB_PROXY_SECRET` (`hmac.compare_digest`; missing, empty or wrong is refused and logged), so a request that reached Gunicorn any other way cannot claim an identity. Then: the first value (mod_shib separates values with `;`) of eppn, or of mail when there is no eppn; `normalize_cmu_email()` and `ALLOWED_EMAIL_DOMAIN`; the name from displayName, else givenName and sn; `_upsert_user_from_login(email, name, method="shibboleth")` (directory role as for every sign-in), a fresh session, and a 302 to `next` when it is a path on this site outside `/api` and `/Shibboleth.sso` (`is_site_path()` refuses `//host`, `/\host`, schemes and their percent-encoded forms), else to `/app.html`. Errors are 302s to `/?sso_error=unavailable` (secret), `identity` (no eppn or mail) or `domain`, which the landing page explains; never a JSON page.
+- `GET /api/auth/methods` (public): `{"mode", "methods": {"password", "google", "shibboleth"}, "login_url", "logout_url"}`; the URLs are null in password mode. The landing page reads it.
+- `logout`: clears the session (the frontend also clears the token). In shibboleth mode the answer adds `logout_url` (`SHIB_LOGOUT_URL`), where the frontend then sends the browser to end the Shibboleth session too.
 - `GET /api/me`: the user, plus a fresh `auth_token`.
 - `PATCH /api/me`: allowed fields `name`, `role`, `primary_program`, `minor_code`, `minor_codes`, `advisor_scope`, `department_scope`, `department`. Validates the whole resulting profile with `_validate_consistent_profile()`: students need a major in `CS IS BA BS AI GS`, no department, no advisor scope, and minors from `VALID_MINORS_FOR_PATCH` that their major may take (`MAJOR_MINOR_COLLISION`); faculty and admin need a valid department and program, no minors, no advisor scope. `minor_codes` replaces the student's minors in the order given (`_sync_user_minors()` deletes the old rows before inserting the new ones; before November 10, 2026 keeping a minor while adding another failed with a 500). A non-admin can only set their own role to `student`; an admin cannot change their own role.
 
@@ -898,18 +920,20 @@ When a signed-in **student** opens a course, the frontend posts `/api/search-ana
 
 ## 10. API reference (every route)
 
-All `/api/*` routes return JSON. "Login" means any signed-in user. Files are under `backend/`. A write whose JSON body is not an object gets 400 `invalid_body` (9.1).
+All `/api/*` routes return JSON, except `GET /api/auth/shibboleth`, which answers with redirects. "Login" means any signed-in user. Files are under `backend/`. A write whose JSON body is not an object gets 400 `invalid_body` (9.1). The six password and Google routes answer 403 `sso_only` when `AUTH_MODE=shibboleth` (9.3).
 
 | Method | Path | Who | File | Purpose |
 |---|---|---|---|---|
 | GET | `/health` | public | `app.py` | Health and DB check |
-| POST | `/api/auth/register` | public | `auth.py` | Create account with email and password |
-| POST | `/api/auth/login` | public | `auth.py` | Email and password sign-in |
-| POST | `/api/auth/forgot-password` | public | `auth.py` | Start password reset |
-| POST | `/api/auth/reset-password` | public | `auth.py` | Finish reset with token |
-| POST | `/api/auth/set-password` | login | `auth.py` | Set password without token (after Google sign-in) |
-| POST | `/api/auth/google` | public | `auth.py` | Google ID token sign-in |
-| POST | `/api/auth/logout` | public | `auth.py` | Clear session |
+| POST | `/api/auth/register` | public, password mode | `auth.py` | Create a new student account with email and password (403 `staff_email` for faculty and staff emails, 409 when an account exists, 7.1) |
+| POST | `/api/auth/login` | public, password mode | `auth.py` | Email and password sign-in |
+| POST | `/api/auth/forgot-password` | public, password mode | `auth.py` | Start password reset |
+| POST | `/api/auth/reset-password` | public, password mode | `auth.py` | Finish reset with token |
+| POST | `/api/auth/set-password` | login, password mode | `auth.py` | Set password without token (after Google sign-in) |
+| POST | `/api/auth/google` | public, password mode | `auth.py` | Google ID token sign-in |
+| GET | `/api/auth/shibboleth` | Apache's protected location only (shared secret), shibboleth mode (404 otherwise) | `auth.py` | CMU sign-in from the SAML attribute headers; 302 to `next` or `/app.html`, or to `/?sso_error=<code>` (9.3, 15.22) |
+| GET | `/api/auth/methods` | public | `auth.py` | Sign-in mode, methods, login and logout URLs (for the landing page) |
+| POST | `/api/auth/logout` | public | `auth.py` | Clear session; in shibboleth mode also returns `logout_url` |
 | GET | `/api/me` | login (401 otherwise) | `auth.py` | Current user plus fresh token |
 | PATCH | `/api/me` | login | `auth.py` | Update own profile (onboarding) |
 | POST | `/api/flags` | faculty, admin | `flags.py` | File a flag |
@@ -1092,7 +1116,7 @@ Days are **Qatar local dates** (UTC+3, no daylight saving). The constant is `LOC
 
 | Table | One row per | Columns |
 |---|---|---|
-| `sign_in_events` | successful sign-in | `user_id`, `method` (`google`, `password`, `email_link`, `register`, `before_tracking`), `created_at` |
+| `sign_in_events` | successful sign-in | `user_id`, `method` (`google`, `password`, `email_link`, `register`, `shibboleth`, `before_tracking`), `created_at` |
 | `user_activity_days` | user per Qatar day | `user_id`, `day` (`YYYY-MM-DD` string), `visits`, `sign_ins`, `first_seen`, `last_seen`; unique on (`user_id`, `day`) |
 
 Both are SQLAlchemy models in `backend/models.py`. They are new tables, so `db.create_all()` creates them on deploy (`python -m backend.bootstrap_db`, run before the API starts, calls `init_database`). Both are in `REQUIRED_TABLES` in `backend/db_schema.py`, so `/health` on Postgres reports `degraded` if either is missing. Rows are deleted with the user (`ON DELETE CASCADE`).
@@ -1103,7 +1127,7 @@ Both are SQLAlchemy models in `backend/models.py`. They are new tables, so `db.c
 
 | Step | Where |
 |---|---|
-| Record a sign-in | `mark_signed_in(user, method)` in `backend/activity.py`. Called from `_finalize_user` (password login, `register`) and `_upsert_user_from_login` (Google) in `backend/auth.py` (`email_link` events exist only from the removed passwordless route). It sets `users.last_login`, adds an event and bumps the day row. The caller commits. |
+| Record a sign-in | `mark_signed_in(user, method)` in `backend/activity.py`. Called from `_finalize_user` (password login, `register`) and `_upsert_user_from_login` (Google, and CMU sign-in as `shibboleth`, which the Admin sign-in table shows as the raw method name: `SIGN_IN_METHOD_LABELS` in `js/app.js` has no label for it yet) in `backend/auth.py` (`email_link` events exist only from the removed passwordless route). It sets `users.last_login`, adds an event and bumps the day row. The caller commits. |
 | Record an app load | `record_visit(user)` in `backend/activity.py`, called by `GET /api/me`. It commits on its own and swallows database errors so `/api/me` can never fail because of analytics. |
 | API | `GET /api/admin/sign-ins?days=7\|30\|90` in `backend/admin.py` (admin role group only; any other value falls back to 7). The Overview's `active_7d` uses the same activity rows (plus `last_login` as a fallback). |
 | Frontend | `apiAdminSignIns` in `js/api.js`; `_openSignIns`, `_loadSignIns`, `_renderSignIns`, `_renderSignInTable`, `_exportSignInsCsv` in `js/app.js`; styles under "Admin page: sign-in activity" at the end of `css/styles.css`. Charts are plain HTML/CSS bars, no chart library. |
@@ -1395,7 +1419,7 @@ CountsFor's new home is an Ubuntu 24.04 server at CMU-Q, `https://countsfor.qata
 
 > **Status on November 11, 2026: not deployed yet.** Everything below is written from the files in `deploy/` and checked against the code, but nobody has run it on the real server yet. Production is still the old site from `main` (15.20) until the cutover (15.15), but that day its API on Render answered 503 "This service has been suspended by its owner": read the note at the top of 15.8 before you plan the import. The `cleanup` frontend can be tried as a guest on the GitHub Pages test copy (15.21), which has no API. When you do the first deploy, correct this section wherever reality differs, and record the date.
 
-The first deploy goes through 15.2 to 15.14 in order. Later deploys only need 15.16.
+The first deploy goes through 15.2 to 15.14 in order. Later deploys only need 15.16. CMU sign-in (Shibboleth) is a separate step, 15.22: the site runs in password mode until it is done.
 
 ### 15.1 What runs where
 
@@ -2047,6 +2071,11 @@ To restore for real: `sudo systemctl stop countsfor-api`, drop and recreate `cou
 | No new lines in the scrape log | Cron ignored the file (a dot in its name, wrong owner or mode, no final newline) or the time zone is not what you think: `journalctl -u cron --since today`, `timedatectl`. |
 | `Permission denied` writing `backend/data/soc.json` or `frontend/data/`, or `ERROR: cannot open the lock file .../update.lock` | A copy was made without `--chown=countsfor:countsfor`, or an update was run as root (`run_scrape.sh` now refuses that, but an older run or a direct `update_data.py` call can leave root-owned files). `sudo chown -R countsfor:countsfor /var/www/html/countsfor/frontend /var/www/html/countsfor/backend`. |
 | `ERROR: run this as countsfor, the owner of .../backend/data` | `run_scrape.sh` was started as another user (often root, `sudo` without `-u countsfor`). Run it again with `sudo -u countsfor`. |
+| Journal: `AUTH_MODE=shibboleth needs SHIB_PROXY_SECRET` | `SHIB_PROXY_SECRET` is missing from `/etc/countsfor/countsfor.env` or shorter than 32 characters. It must equal the `Define` in `/etc/apache2/countsfor-sso.conf` (15.22). |
+| Apache: `COUNTSFOR_SSO_SECRET is not defined`, or `Could not open configuration file /etc/apache2/countsfor-sso.conf` | mod_shib is enabled but the secret file is missing or has no `Define` line (15.22 step 4). |
+| The landing page says "CMU sign-in is not available right now" (`/?sso_error=unavailable`) | The API refused the secret header: `journalctl -u countsfor-api | grep 'CMU sign-in refused'`. "no X-CountsFor-SSO-Secret header": the request did not pass the protected `<Location /api/auth/shibboleth>` (mod_shib not enabled, or the block was edited). "wrong ... header": the two copies of the secret differ; fix one and restart both (15.22). |
+| `/?sso_error=identity` | The IdP released neither eppn nor mail. `/Shibboleth.sso/Session` lists what arrived; ask IT to release the attributes (15.22). |
+| `/?sso_error=domain` | The eppn (or mail) is not a CMU address in `ALLOWED_EMAIL_DOMAIN`. |
 | The site shows an old catalog | `ls -l /var/www/html/countsfor/frontend/data/`: `courses.json` and `courses.json.gz` should have about the same time. If only the `.gz` is old, run `run_scrape.sh --no-scrape`. Then 19.8. |
 
 ### 15.20 Old hosting: GitHub Pages and Render (historical)
@@ -2088,6 +2117,109 @@ The script:
 
 GitHub Pages lets browsers keep each file for 10 minutes (`Cache-Control: max-age=600`), so after a frontend change a returning visitor can get old files mixed with new ones unless the `?v=` tags changed: bump them, as above, before you publish. The script warns when the published copy already had the same `cf-build` tag, and notes when the commit is on no branch of `origin` (expected with the block above). Never publish to the main repo, and never force-push `gh-pages`.
 
+### 15.22 CMU sign-in (Shibboleth)
+
+> **Status on November 18, 2026: written, not run.** The code, the Apache blocks and the SP files are on the `sso` branch, tested with pytest only. Nothing below has been run on the server, and CMU IT has not registered the SP yet. Correct this section wherever reality differs, and record the date.
+
+With `AUTH_MODE=shibboleth` people sign in with their Andrew ID on the CMU sign-in page, and nothing else: no CountsFor passwords, no Google. This also closes the registration hole of 21.1 completely. Until this section is done the site runs in password mode, and every Shibboleth line in `deploy/countsfor.conf` sits in `<IfModule mod_shib>`, so the site file works with or without mod_shib.
+
+**How a sign-in goes:**
+
+1. The landing page asks `GET /api/auth/methods`; in shibboleth mode it shows **Sign in with Andrew ID**, a link to `/api/auth/shibboleth?next=/app.html` (8.6).
+2. Apache protects exactly that path (`<Location /api/auth/shibboleth>`: `AuthType shibboleth`, `ShibRequestSetting requireSession 1`, `Require shib-session`). Without a Shibboleth session, mod_shib sends the browser to CMU's IdP.
+3. The person signs in at CMU. The IdP posts the SAML answer to the SP's ACS, `https://countsfor.qatar.cmu.edu/Shibboleth.sso/SAML2/POST`; `shibd` checks it, starts an SP session and sends the browser back to `/api/auth/shibboleth?next=...`.
+4. Now Apache lets the request through to Gunicorn with the attributes as request headers (`ShibUseHeaders On`: mod_proxy forwards headers but not mod_shib's environment variables; mod_shib removes any client header with an attribute's name) and adds `X-CountsFor-SSO-Secret` from `/etc/apache2/countsfor-sso.conf`.
+5. Flask checks the secret against `SHIB_PROXY_SECRET`, reads eppn (or mail), creates or updates the user with the directory role, sets the `cf_session` cookie and redirects to `/app.html` (9.3). `app.html` boots with `GET /api/me` and stores the `auth_token` from it.
+6. **Sign out** clears the CountsFor session, then sends the browser to `/Shibboleth.sso/Logout?return=/`, which ends the SP session and returns to the landing page. The CMU (IdP) session can outlive both: until the browser is closed, the next "Sign in with Andrew ID" may go through without asking for the password, unless CMU's IdP supports single logout.
+
+Why the secret: Gunicorn would believe any `eppn` header it is given. Apache sets the secret only inside the protected location, after mod_shib has checked the session, and the API trusts no identity header without it. So a request that reaches Gunicorn any other way (another vhost, a later edit that drops the `<Location>`, a local process on port 8000) proves nothing; it is refused and logged. `create_app()` refuses to start in shibboleth mode without a secret of at least 32 characters, and Apache refuses to start with mod_shib enabled but no secret defined.
+
+**What to send IT:**
+
+| Item | Value |
+|---|---|
+| SP entityID | `https://countsfor.qatar.cmu.edu/shibboleth` |
+| Assertion consumer service (SAML 2, HTTP-POST) | `https://countsfor.qatar.cmu.edu/Shibboleth.sso/SAML2/POST` |
+| SP metadata (after step 5 below) | `https://countsfor.qatar.cmu.edu/Shibboleth.sso/Metadata`, or that file attached |
+| Attributes to release | eduPersonPrincipalName (eppn, `urn:oid:1.3.6.1.4.1.5923.1.1.1.6`), mail (`urn:oid:0.9.2342.19200300.100.1.3`), displayName (`urn:oid:2.16.840.1.113730.3.1.241`), givenName (`urn:oid:2.5.4.42`), sn (`urn:oid:2.5.4.4`); optional eduPersonAffiliation (`urn:oid:1.3.6.1.4.1.5923.1.1.1.1`) and eduPersonScopedAffiliation (`...1.1.1.9`), mapped but not used yet |
+| Who signs in | CMU-Q students, faculty and staff; the site runs on the CMU-Q server `countsfor.qatar.cmu.edu` |
+
+**What to ask IT for** (each is a `CHANGE_ME` in `deploy/shibboleth/shibboleth2.xml`):
+
+- CMU's IdP entityID. Believed to be `https://login.cmu.edu/idp/shibboleth`; confirm it.
+- The IdP's metadata: a file, a URL with the certificate that signs it, or registration through InCommon (the template has all three; the file is the default).
+- That eppn is released as `andrewid@andrew.cmu.edu` and that `andrew.cmu.edu` is a scope in the IdP's metadata (the SP drops an eppn whose scope is not listed; mail is then the fallback).
+- Whether the IdP supports single logout (step 6).
+- A support address for the SP's error pages (`supportContact`).
+- If the metadata comes from a URL: outbound HTTPS from the server to it. SAML itself goes through the browser and needs no other connection.
+
+**Install** (as a sudo user; the site from 15.10 must already work):
+
+```bash
+# 1. The shared secret, before mod_shib exists: the site file Includes this
+#    file inside <IfModule mod_shib>, so Apache needs it as soon as the module is on.
+sudo install -m 600 -o root -g root /dev/null /etc/apache2/countsfor-sso.conf
+echo "Define COUNTSFOR_SSO_SECRET $(openssl rand -hex 32)" | sudo tee /etc/apache2/countsfor-sso.conf > /dev/null
+sudo ls -l /etc/apache2/countsfor-sso.conf     # -rw------- root root
+
+# 2. The SP: shibd, mod_shib and the tools
+sudo apt update
+sudo apt install -y libapache2-mod-shib
+sudo a2enmod shib
+
+# 3. SP key pairs for this host (check the shibd user: ps -o user= -C shibd; _shibd on Ubuntu 24.04)
+cd /etc/shibboleth
+sudo shib-keygen -f -u _shibd -g _shibd -h countsfor.qatar.cmu.edu -y 10 -e https://countsfor.qatar.cmu.edu/shibboleth -n sp-signing
+sudo shib-keygen -f -u _shibd -g _shibd -h countsfor.qatar.cmu.edu -y 10 -e https://countsfor.qatar.cmu.edu/shibboleth -n sp-encrypt
+ls -l /etc/shibboleth/sp-*.pem                 # keys 600, owned by _shibd
+
+# 4. SP configuration (keep the package's files as .dist)
+cd ~/countsfor-src
+sudo cp /etc/shibboleth/shibboleth2.xml /etc/shibboleth/shibboleth2.xml.dist
+sudo cp /etc/shibboleth/attribute-map.xml /etc/shibboleth/attribute-map.xml.dist
+sudo install -m 644 deploy/shibboleth/shibboleth2.xml /etc/shibboleth/shibboleth2.xml
+sudo install -m 644 deploy/shibboleth/attribute-map.xml /etc/shibboleth/attribute-map.xml
+sudo editor /etc/shibboleth/shibboleth2.xml     # the CHANGE_ME values from IT
+sudo install -m 644 ~/cmu-idp-metadata.xml /etc/shibboleth/cmu-idp-metadata.xml   # if IT sent a file
+sudo shibd -t                                    # must end with "overall configuration is loadable"
+sudo systemctl enable shibd && sudo systemctl restart shibd
+
+# 5. The Apache site from the repo (it has the Shibboleth blocks)
+sudo install -m 644 deploy/countsfor.conf /etc/apache2/sites-available/countsfor.conf
+sudo editor /etc/apache2/sites-available/countsfor.conf   # the certificate names again (15.10)
+sudo apachectl configtest && sudo systemctl reload apache2
+curl -s https://countsfor.qatar.cmu.edu/Shibboleth.sso/Metadata > ~/countsfor-sp-metadata.xml   # send to IT
+```
+
+If `shib-keygen` on the server has no `-n` option, it writes `sp-key.pem` and `sp-cert.pem`: run it once per pair and rename them to the names in `shibboleth2.xml` (`sp-signing-key.pem`, `sp-signing-cert.pem`, `sp-encrypt-key.pem`, `sp-encrypt-cert.pem`). The keys and `/etc/apache2/countsfor-sso.conf` exist only on the server: keep copies with `countsfor.env` (23.1). New keys mean new metadata for IT.
+
+**Test, still in password mode** (once IT has registered the SP):
+
+1. `https://countsfor.qatar.cmu.edu/Shibboleth.sso/Session` says "A valid session was not found."
+2. Open `https://countsfor.qatar.cmu.edu/Shibboleth.sso/Login?target=/Shibboleth.sso/Session`: the CMU sign-in page appears, and after signing in the Session page lists the attributes received: `eppn`, `mail`, `displayName`, `givenName`, `sn`. No `eppn` means the release or the scope check above; ask IT.
+3. On the server: `curl -sk --resolve countsfor.qatar.cmu.edu:443:127.0.0.1 https://countsfor.qatar.cmu.edu/Shibboleth.sso/Status` shows `<Status><OK/>`. Problems are in `/var/log/shibboleth/shibd.log` and `/var/log/apache2/countsfor_ssl_error.log`.
+
+**Switch `AUTH_MODE`:**
+
+```bash
+sudo cat /etc/apache2/countsfor-sso.conf     # the 64 hex characters after the name
+sudo editor /etc/countsfor/countsfor.env
+#   AUTH_MODE=shibboleth
+#   SHIB_PROXY_SECRET=<those 64 characters>
+sudo systemctl restart countsfor-api
+curl -s https://countsfor.qatar.cmu.edu/api/auth/methods
+#   "mode":"shibboleth", "login_url":"/api/auth/shibboleth"
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://countsfor.qatar.cmu.edu/api/auth/shibboleth
+#   302 to CMU's IdP: Apache protects the path
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'eppn: someone@andrew.cmu.edu' http://127.0.0.1:8000/api/auth/shibboleth
+#   302 to /?sso_error=unavailable: straight to Gunicorn, no secret, refused
+journalctl -u countsfor-api -n 5 | grep 'CMU sign-in refused'
+```
+
+Then in a private window: `https://countsfor.qatar.cmu.edu/` shows only **Sign in with Andrew ID** and **Continue as guest**; the button goes through the CMU sign-in page into the app (a new student sees onboarding; a faculty member or admin from the directory gets that role); **Sign out** returns to the landing page through `/Shibboleth.sso/Logout`. On Admin, sign-in activity lists these sign-ins with the method `shibboleth`.
+
+Accounts are matched by email, so everyone keeps their account, saved courses, flags and plans; old passwords are simply no longer used. To go back, set `AUTH_MODE=password` and restart the API; the Apache and SP parts can stay. To change the secret, edit both `/etc/apache2/countsfor-sso.conf` and `SHIB_PROXY_SECRET`, then `sudo apachectl configtest && sudo systemctl reload apache2 && sudo systemctl restart countsfor-api` (sign-ins fail in between with `sso_error=unavailable`).
+
 ---
 
 ## 16. Testing
@@ -2117,11 +2249,11 @@ python scripts/dev_server.py
 # open http://localhost:8765/tests/test.html
 ```
 
-### 16.2 Results on November 18, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration, the review fixes, the fixes of November 11 and 12, and the staff view, admin grant and navbar fixes of November 18)
+### 16.2 Results on November 18, 2026 (`cleanup` branch, after the wave A merges, the admin editor merge, the release integration, the review fixes, the fixes of November 11 and 12, the staff view, admin grant and navbar fixes of November 18, and the CMU sign-in work of the `sso` branch)
 
 | Suite | Result |
 |---|---|
-| `python -m pytest backend/tests` | **247 passed, 6 failed** (the known failures below) |
+| `python -m pytest backend/tests` | **337 passed, 5 failed** (the known failures below; 247 passed and 6 failed before the CMU sign-in work, which added `test_shibboleth.py` and the register tests and replaced `test_register_faculty_from_seed`) |
 | `python -m pytest backend/scraper/tests` | 295 passed |
 | `node scripts/run-data-tests.js` | 251 passed (profile 51/51, data 86/86, minors 9/9, course edits 14/14, utils 5/5, dash guard 3/3, minors file 8/8, app views 51/51, admin editor 13/13, catalog data 11/11) |
 
@@ -2132,7 +2264,6 @@ Known failures (all pre-date the admin page; the tests are stale, the code is th
 | `test_auth.py::test_google_signin_marks_seeded_faculty_complete` | Relies on a seed mechanism the tests no longer wire up (`TestConfig.SEED_USERS_PATH = ""` and the directory skips default files under `TESTING`), so the user stays a student. |
 | `test_auth.py::test_patch_me_accepts_consistent_advisor_minor` | Faculty roles may no longer have `advisor_scope`. |
 | `test_auth.py::test_google_signin_syncs_directory_role_on_relogin` | Monkeypatches `backend.auth.load_merged_directory`, which no longer exists there. |
-| `test_auth.py::test_register_faculty_from_seed` | Same seed issue. |
 | `test_users.py::test_area_head_can_patch_user_role` | User management is now admin only (403). |
 | `test_users.py::test_seeded_professor_skips_incomplete_on_login` | Same seed issue. |
 
@@ -2142,6 +2273,7 @@ Fixing these tests (by writing a temp seed file and setting `SEED_USERS_PATH` in
 
 - `backend/tests/conftest.py`: `app` fixture builds `create_app(TestConfig)`, drops and recreates all tables and runs migrations per test. Fixtures `student`, `professor`, `area_head`, `advisor`, `admin`. `login(client, user)` puts `uid` into the session directly.
 - Google sign-in tests patch `id_token.verify_oauth2_token`.
+- `backend/tests/test_shibboleth.py`: CMU sign-in. It plays Apache's part by sending the attribute headers and `X-CountsFor-SSO-Secret` (config class `ShibConfig`): the route is 404 in password mode; a missing, empty or wrong secret is refused and logged, and compared with `hmac.compare_digest`; shibboleth mode does not start without a 32 character secret; no eppn or mail, and foreign domains, are refused; a new student is created and `/api/me` works on the session and returns `auth_token` (which also works alone); multi-valued, UTF-8 and renamed headers; an admin seed email gets admin; open redirect attempts in `next` end at `/app.html`; the password and Google routes answer `sso_only`; `/api/auth/methods` and logout in both modes. `test_auth.py` covers the register refusals (staff emails from the directory and the admin seed, existing accounts with and without a password) and the Google recovery path staff use instead.
 - `backend/tests/test_admin.py`, `test_course_overrides.py` (the change per program and minor, the path and minor checks, the merge per key, `stale_page`, the batch route, the audit details), `test_minor_overrides.py` (minor settings and the `/health` table list) and `test_migrate_override_paths.py` (12.7) cover the admin page. `test_request_bodies.py` sends the admin write routes and `/api/auth/login` JSON bodies that are not objects (a number, a list, a string, true) and expects 400 `invalid_body` (9.1).
 - `backend/tests/test_config.py`: cookie defaults, the production guards (no `SECRET_KEY` or `DATABASE_URL`), `TRUST_PROXY`, `SOC_JSON_PATH`, the SMTP relay check end to end, and that production never returns a reset token or reads `backend/.env`.
 - `backend/tests/test_env_example.py`: `backend/.env.example`, `deploy/countsfor.env.example` and `deploy/scraper.env.example` list exactly the variables the code reads. Add a new variable to the templates or this test fails.
@@ -2284,6 +2416,7 @@ Production secrets live in `/etc/countsfor/countsfor.env` on the server. Edit it
 | Database | local PostgreSQL | No password to rotate: `countsfor` connects by peer authentication over the Unix socket. If you switch to a TCP URL with a password, change it with `ALTER ROLE countsfor PASSWORD '...'` and update `DATABASE_URL` | Brief downtime |
 | SMTP password | The sending account (for Gmail: App passwords) | Create a new one, update `SMTP_PASS`, restart, revoke the old one | None |
 | `RESEND_API_KEY` | resend.com | Create a new key, update the env file, restart, delete the old key | None |
+| `SHIB_PROXY_SECRET` (CMU sign-in) | `/etc/countsfor/countsfor.env` and the `Define` in `/etc/apache2/countsfor-sso.conf` | Put the same new value (`openssl rand -hex 32`) in both, reload Apache, restart the API (15.22) | CMU sign-ins fail with `sso_error=unavailable` until both match; sessions are not affected |
 | Google OAuth | Google Cloud Console | The client ID is public; there is no client secret in use. If you must replace the client, update `GOOGLE_CLIENT_ID` in the env file and the `cf-google-client-id` meta in both HTML files together, and deploy | Google sign-in breaks until both match |
 | Local `backend/.env` | your laptop | Never commit it (gitignored) | None |
 
@@ -2339,6 +2472,9 @@ macOS AirPlay Receiver. Use 5050.
 **Different databases depending on how I start the server.**
 Fixed in `config.py`: relative SQLite URLs are anchored to `backend/instance/`. Use an absolute URL (`sqlite:////full/path.db`) if you want a database elsewhere.
 
+**Create account says "Faculty and staff confirm their address with Google".**
+The email is in the faculty directory or the admin list, and Create account cannot prove the address is theirs (7.1, 21.1). They use Forgot password, Continue with Google, then choose a password. Locally, create the account before you list the address (7.3).
+
 **I changed someone's role in the Users tab and it reverted.**
 Expected; see 7.1. Use the directory.
 
@@ -2384,14 +2520,15 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 ### 21.1 Security issues (fix first)
 
-1. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
-2. **The daily scraper can rewrite the code it runs next to.** On the server `countsfor` owns every deployed file (15.3, 15.4): the API code, `backend/.venv` and the served JS, and the same user runs the scraper, from cron, with no sandbox, on HTML fetched from the SOC servlet. The API is sandboxed (`ProtectSystem=strict`); the scraper is not. A bug exploited in the scrape could change the API code (run on the next restart) or the served JS (every visitor, and the sign-in tokens in their browser storage). The scraper only needs to write `backend/data/`, `frontend/data/` and `backend/var/`. Two ways to close this, not done because each changes the deploy and must be tested on the server: deploy the code as `root:countsfor` (folders 750, files 640, `frontend/` world-readable, `pip` run as root) and give `countsfor` write access only to those three folders; or run the update from a systemd service and timer with `ProtectSystem=strict` and `ReadWritePaths=` limited to them, in place of the cron line.
+1. **Create account does not prove that the person owns the address.** Until November 18, 2026 anyone could create a password account for any `@andrew.cmu.edu` address, a faculty or admin email from the directory included, and got that role at once (the directory is applied on every sign-in, 7.1); `register` also set a password on an existing account that had none, which took over Google-only accounts. **CMU sign-in closes this completely:** with `AUTH_MODE=shibboleth` (15.22) CMU's IdP proves who someone is and the password routes are off. **Password mode is now narrower:** `register` refuses every email with a non-student directory role (403 `staff_email`) and every email that already has an account (409); faculty, staff and passwordless accounts get a password only through Google or the emailed reset link, which do prove ownership. What remains in password mode: someone can register a **student** address that has no account yet and use it as that student (saved courses, onboarding, shared plans in that name), and if that address is later added to the directory, the squatter's password account gets the new role at its next sign-in. Accounts created through the hole before November 18 are unchanged: list faculty and admin accounts with a password and no Google link (`SELECT email, role FROM users WHERE role <> 'student' AND password_hash IS NOT NULL AND google_sub IS NULL;`) and check each one with its owner. The fix is to switch to CMU sign-in.
+2. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
+3. **The daily scraper can rewrite the code it runs next to.** On the server `countsfor` owns every deployed file (15.3, 15.4): the API code, `backend/.venv` and the served JS, and the same user runs the scraper, from cron, with no sandbox, on HTML fetched from the SOC servlet. The API is sandboxed (`ProtectSystem=strict`); the scraper is not. A bug exploited in the scrape could change the API code (run on the next restart) or the served JS (every visitor, and the sign-in tokens in their browser storage). The scraper only needs to write `backend/data/`, `frontend/data/` and `backend/var/`. Two ways to close this, not done because each changes the deploy and must be tested on the server: deploy the code as `root:countsfor` (folders 750, files 640, `frontend/` world-readable, `pip` run as root) and give `countsfor` write access only to those three folders; or run the update from a systemd service and timer with `ProtectSystem=strict` and `ReadWritePaths=` limited to them, in place of the cron line.
 
 ### 21.2 Operational and data issues
 
 1. **The move to the CMU-Q server is not done.** Production is still the old site from `main` on GitHub Pages and Render, whose web service answered 503 "suspended by its owner" on November 11, 2026, and the old scrape workflow still commits to `main` with the old parser. Follow 15.15.
 2. **Saved data under the old Psychology numbers.** The catalog has no rows for the old Psychology numbers that the department's renumbering list retires (14.6), nor for 85-253 and 85-261; their mappings moved to the new numbers. Wishlist items, flags, schedule plan items, search counts and admin course edits saved under them in production must be moved with 15.8 step 8 when the database is imported.
-3. **6 backend tests fail** (16.2). The tests are stale, not the code. No CI runs any tests.
+3. **5 backend tests fail** (16.2). The tests are stale, not the code. No CI runs any tests.
 4. Role edits in the Users tab do not persist (7.1). Either make `PATCH /api/users` also write a directory entry, or show a warning in the UI.
 5. Whether production has an email provider for password resets is not known (on Render the values were set only in the dashboard). Decide at the cutover (15.6).
 6. The deploy files (15) have not been run on the real server yet; the certificate names, the time zone and outbound network access are unknown until then.
@@ -2417,7 +2554,8 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 - Minors: the open questions of the minors review (double counting where the Scotty page and the audit differ, codes not in the catalog) are noted in each minor's "About this minor"; settle them with the advisors and update `frontend/data/minors.json`.
 - Server-side storage of a user's own schedule plans (today they are browser-only, which also means they do not survive a change of site address, 15.15).
 - UX review (`docs/archive/UX_REVIEW_2026-07-17.md`): dark theme parity, copy consistency, accessibility (keyboard navigation of the tree, ARIA for typeahead), slimmer boot payload.
-- Not done yet: CMU Andrew SSO (Shibboleth, needs IT; easier now that the site is on a CMU-Q server), ML-based offering prediction (current `predictOffering()` is rule-based), deduplication of `courses.json`.
+- CMU Andrew SSO (Shibboleth): built on November 18, 2026 (`AUTH_MODE=shibboleth`, `GET /api/auth/shibboleth`, the Apache blocks and `deploy/shibboleth/`), waiting on IT to register the SP and confirm the IdP details; then follow 15.22 and switch the mode. Once it runs, decide whether to delete the password and Google code (the routes, the reset tokens, the landing views) or keep it as the fallback mode, and whether to read the affiliation attributes (student, faculty, staff) at all; roles come from the directory today.
+- Not done yet: ML-based offering prediction (current `predictOffering()` is rule-based), deduplication of `courses.json`.
 - Analytics Phase 2 (feature usage counts, onboarding funnel) and Phase 3 (weekly digest, semester report): proposals in `docs/analytics-plan/`. Phase 1 (section 13) is live.
 
 ---
@@ -2445,7 +2583,8 @@ No secret values belong in this file or in git. Hand secrets over in person or t
 ### 23.1 Accounts and access the successor needs
 
 - [ ] **CMU-Q server**: an account with `sudo` on the Ubuntu server, and the name of the IT contact who manages it, its DNS (`countsfor.qatar.cmu.edu`), its certificate (renewal date) and its backups.
-- [ ] **Server secrets**: the filled-in `/etc/countsfor/countsfor.env` (`SECRET_KEY`, email credentials) in a password manager.
+- [ ] **Server secrets**: the filled-in `/etc/countsfor/countsfor.env` (`SECRET_KEY`, email credentials, `SHIB_PROXY_SECRET`) in a password manager; with CMU sign-in also `/etc/apache2/countsfor-sso.conf` and the SP keys `/etc/shibboleth/sp-*-key.pem` (15.22).
+- [ ] **CMU sign-in**: the IT contact who registered the SP (`https://countsfor.qatar.cmu.edu/shibboleth`) with CMU's IdP and who changes the released attributes.
 - [ ] **GitHub**: admin (or at least write) access to `Adicmu/Countsfor-Summer-26`. Consider transferring the repo to a CMU-Q organization so it does not depend on a personal account.
 - [ ] **GitHub fork and working repo**: decide what happens to `Hindjendara/Countsfor-Summer-26` and `Hindjendara/CMUQ-CountsFor` (which holds the `cleanup` branch and serves the GitHub Pages test copy, 15.21). Once the server's cron scrape runs, the fork's scrape is not needed.
 - [ ] **Render (until it is retired)**: membership on the Render account or team that owns the `countsfor-summer-26` web service and the `CountsFor_Summer_2026` database, including billing (paid `starter` plans). Record who pays, and delete both after the cutover (15.15 step 9).
