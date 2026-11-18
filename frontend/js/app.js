@@ -1325,8 +1325,17 @@ const App = {
     this._refreshFilters();
     if (this._homeView === 'home') this._loadPopularCourses();
     if (this._homeView === 'plan') {
+      // The plan views draw the whole shell again, navbar included: keep the
+      // Filters popover open and the focus on the semester select, so the
+      // keyboard can go on stepping through the semesters.
+      const filters = document.getElementById('navbarFiltersPanel');
+      const wasOpen = !!filters && filters.classList.contains('open');
+      const fromSelect = !!document.activeElement && document.activeElement.id === 'semesterSelect';
       if (this._planDetailId) this.openPlanDetail(this._planDetailId);
       else this.showPlanView();
+      if (wasOpen) this.toggleFiltersPopover(true);
+      const select = fromSelect && document.getElementById('semesterSelect');
+      if (select) select.focus();
     }
     this._refreshNavPlanCount();
     showToast('Showing ' + semesterLabel(code));

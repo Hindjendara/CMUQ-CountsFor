@@ -1171,6 +1171,36 @@ test('navbar: Escape closes the Filters popover and gives the focus back to the 
   assertTrue(document.activeElement === document.body);
 });
 
+// The plan views draw the whole shell again on a semester change.
+test('plan view: a semester change from the Filters popover keeps it open and the focus on the semester select', () => {
+  const { App, document } = loadPlanApp();
+  filtersPopoverDom(document);
+  App._semesters = { codes: ['F26', 'F25'], defaultCode: 'F26' };
+  App.togglePlanSection('15-112', 'F26', 'W', 'Qatar');
+  const views = { 'the schedules list': () => App.showPlanView(), 'a schedule': () => App.openPlanDetail(App._ensureActivePlan(false).id) };
+  for (const [view, open] of Object.entries(views)) {
+    open();
+    App.toggleFiltersPopover();
+    const before = document.getElementById('semesterSelect');
+    before.focus();
+    const next = App.activeSemester === 'F26' ? 'F25' : 'F26';
+    App.setSemester(next);
+    assertEqual(App.activeSemester, next, view);
+    const select = document.getElementById('semesterSelect');
+    assertTrue(select !== before, view + ': the shell was drawn again');
+    assertTrue(document.getElementById('navbarFiltersPanel').classList.contains('open'), view + ': the popover stays open');
+    assertEqual(document.getElementById('filtersToggle').getAttribute('aria-expanded'), 'true', view);
+    assertTrue(document.activeElement === select, view + ': the focus is on the semester select');
+  }
+
+  // A change from elsewhere (the Show Fall 2026 button) leaves the popover closed and the focus alone.
+  App.toggleFiltersPopover(false);
+  document.activeElement = document.body;
+  App.setSemester('F25');
+  assertFalse(document.getElementById('navbarFiltersPanel').classList.contains('open'));
+  assertTrue(document.activeElement === document.body);
+});
+
 // The navbar plan label is drawn before the catalog loads; it must follow the catalog and the semester.
 test('navbar: the plan label shows the units once the catalog loads and follows a semester switch on home', async () => {
   const env = loadApp();
