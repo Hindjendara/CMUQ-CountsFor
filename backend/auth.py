@@ -1,16 +1,31 @@
-"""Auth routes: Google Sign-In, logout, /api/me.
+"""Auth routes: sign-in, logout, /api/me.
 
-Frontend posts the Google ID token (JWT from Google Identity Services) to
-/api/auth/google. We verify it, upsert the user, and set a signed session
-cookie. Subsequent requests carry the cookie automatically (with CORS
-`credentials: 'include'`).
+Two modes, chosen by AUTH_MODE (backend/config.py):
+
+  password    email + password (register, login, forgot, reset, set-password)
+              and Google Sign-In: the frontend posts the Google ID token (JWT
+              from Google Identity Services) to /api/auth/google, which verifies it.
+  shibboleth  CMU single sign-on only. Apache (mod_shib) protects
+              GET /api/auth/shibboleth and passes the SAML attributes as request
+              headers, together with a shared secret that proves the request came
+              through that protected location. The password and Google routes
+              answer 403 sso_only.
+
+Every sign-in upserts the user, applies the directory role and sets a signed
+session cookie; the JSON answers also carry a bearer `auth_token` (tokens.py).
+GET /api/auth/methods tells the landing page which mode is on.
 """
 import hashlib
+import hmac
+import logging
 import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from functools import wraps
+from urllib.parse import unquote
 
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, abort, current_app, jsonify, redirect, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from google.oauth2 import id_token
@@ -18,6 +33,7 @@ from google.auth.transport import requests as google_requests
 
 from .activity import mark_signed_in, record_visit
 from .cmu import email_in_domain, normalize_cmu_email
+from .config import AUTH_MODES
 from .directory import resolve_directory_entry
 from .db import db
 from .email_util import send_password_reset_email
@@ -27,9 +43,82 @@ from .tokens import make_auth_token
 
 
 bp = Blueprint("auth", __name__, url_prefix="/api")
+log = logging.getLogger(__name__)
 
 MIN_PASSWORD_LEN = 8
 GENERIC_RESET_MESSAGE = "If an account exists for that email, a reset link has been sent."
+
+# Password registration is refused for faculty and staff emails (any directory
+# role other than student): register cannot prove the person owns the address,
+# and the directory would hand the new account that role at once. Google sign-in
+# proves ownership, so they set a password through the Google recovery flow.
+STAFF_REGISTER_MESSAGE = (
+    "Faculty and staff set up their account with Google. "
+    "Open Forgot password and use Continue with Google."
+)
+ACCOUNT_EXISTS_MESSAGE = (
+    "An account already exists for this email. "
+    "Open Forgot password to set a password, or use Continue with Google."
+)
+
+# ── CMU sign-in (Shibboleth) ─────────────────────────────────
+SSO_LOGIN_PATH = "/api/auth/shibboleth"
+# Set by Apache inside <Location /api/auth/shibboleth> only (deploy/countsfor.conf).
+SSO_SECRET_HEADER = "X-CountsFor-SSO-Secret"
+MIN_SSO_SECRET_LEN = 32
+SSO_DEFAULT_NEXT = "/app.html"
+SSO_LANDING = "/"
+SSO_ONLY_MESSAGE = "Sign in with your Andrew ID."
+MAX_NAME_LEN = 200  # users.name is VARCHAR(200)
+
+# A path on this site: one leading "/", then only characters a URL may carry
+# unescaped (no backslash, space, control character or "#").
+_SITE_PATH_RE = re.compile(r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*$")
+
+
+def auth_mode() -> str:
+    return (current_app.config.get("AUTH_MODE") or "password").strip().lower()
+
+
+def is_site_path(value: str) -> bool:
+    """True for a same-site relative path such as /app.html?share_plan=x.
+
+    Refuses "//host" and "/\\host" (browsers read both as another host), any
+    scheme, and the same tricks hidden behind percent-encoding (/%2F%2Fhost).
+    """
+    if not value or len(value) > 2048 or not _SITE_PATH_RE.match(value):
+        return False
+    decoded = unquote(value)
+    return not (decoded.startswith("//") or decoded.startswith("/\\"))
+
+
+def check_auth_settings(config) -> None:
+    """Refuse to start with an unsafe sign-in setup. Called by create_app()."""
+    mode = (config.get("AUTH_MODE") or "password").strip().lower()
+    if mode not in AUTH_MODES:
+        raise RuntimeError(f"AUTH_MODE must be password or shibboleth, got {mode!r}.")
+    if mode != "shibboleth":
+        return
+    if len(config.get("SHIB_PROXY_SECRET") or "") < MIN_SSO_SECRET_LEN:
+        raise RuntimeError(
+            "AUTH_MODE=shibboleth needs SHIB_PROXY_SECRET: at least "
+            f"{MIN_SSO_SECRET_LEN} characters, the same value Apache sends in "
+            f"{SSO_SECRET_HEADER} (README 15.22). Refusing to start."
+        )
+    if not (config.get("SHIB_HEADER_EPPN") or config.get("SHIB_HEADER_MAIL")):
+        raise RuntimeError("AUTH_MODE=shibboleth needs SHIB_HEADER_EPPN or SHIB_HEADER_MAIL.")
+    if not is_site_path(config.get("SHIB_LOGOUT_URL") or ""):
+        raise RuntimeError("SHIB_LOGOUT_URL must be a path on this site, starting with one '/'.")
+
+
+def _password_mode_only(fn):
+    """403 sso_only in shibboleth mode: the route belongs to password sign-in."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if auth_mode() == "shibboleth":
+            return jsonify(error="sso_only", message=SSO_ONLY_MESSAGE), 403
+        return fn(*args, **kwargs)
+    return wrapper
 
 
 def _hash_password(password: str) -> str:
@@ -313,10 +402,27 @@ def _upsert_user_from_login(
     return user
 
 
+def _is_staff_email(email: str) -> bool:
+    """True when the directory gives this email any role other than student
+    (a row without a role counts as professor, as in _apply_seed)."""
+    entry = resolve_directory_entry(email)
+    if not entry:
+        return False
+    return (entry.get("role") or "professor").strip().lower() != "student"
+
+
 # ── Register / login / password reset ────────────────────────
 @bp.route("/auth/register", methods=["POST"])
+@_password_mode_only
 def register():
-    """Create an account with @andrew.cmu.edu email and password."""
+    """Create an account with @andrew.cmu.edu email and password.
+
+    Register cannot prove that the caller owns the address, so it only creates
+    new student accounts: a faculty or staff email (403 staff_email) and an email
+    that already has an account, with or without a password (409), are refused.
+    Those people prove ownership with Google instead (Forgot password, Continue
+    with Google, then set-password).
+    """
     data = request.get_json(silent=True) or {}
     email = normalize_cmu_email(data.get("email") or "")
     if not email:
@@ -328,6 +434,15 @@ def register():
         allowed_domain = current_app.config.get("ALLOWED_EMAIL_DOMAIN") or "andrew.cmu.edu"
         return jsonify(error="domain_not_allowed", message=f"Only {allowed_domain} accounts are allowed."), 403
 
+    if _is_staff_email(email):
+        return jsonify(error="staff_email", message=STAFF_REGISTER_MESSAGE), 403
+
+    existing = db.session.query(User).filter_by(email=email).one_or_none()
+    if existing:
+        if existing.password_hash:
+            return jsonify(error="email_taken", message="An account with this email already exists. Sign in instead."), 409
+        return jsonify(error="account_exists", message=ACCOUNT_EXISTS_MESSAGE), 409
+
     password = data.get("password") or ""
     err = _validate_password(password)
     if err:
@@ -337,17 +452,8 @@ def register():
     if password != confirm:
         return jsonify(error="password_mismatch", message="Passwords do not match."), 400
 
-    existing = db.session.query(User).filter_by(email=email).one_or_none()
-    if existing:
-        if existing.password_hash:
-            return jsonify(error="email_taken", message="An account with this email already exists. Sign in instead."), 409
-        existing.password_hash = _hash_password(password)
-        if not existing.name:
-            existing.name = (data.get("name") or "").strip() or email.split("@", 1)[0].replace(".", " ").title()
-        user = _finalize_user(existing, email, method="register")
-    else:
-        name = (data.get("name") or "").strip() or email.split("@", 1)[0].replace(".", " ").title()
-        user = _create_user_with_password(email, name, password)
+    name = (data.get("name") or "").strip() or email.split("@", 1)[0].replace(".", " ").title()
+    user = _create_user_with_password(email, name, password)
 
     if not user.password_hash:
         return jsonify(error="server_error", message="Account could not be created. Try again."), 500
@@ -362,6 +468,7 @@ def register():
 
 
 @bp.route("/auth/login", methods=["POST"])
+@_password_mode_only
 def login():
     """Sign in with @andrew.cmu.edu email and password."""
     data = request.get_json(silent=True) or {}
@@ -376,20 +483,19 @@ def login():
     if user is None:
         return jsonify(error="invalid_credentials", message="Email or password is incorrect."), 401
     if not user.password_hash:
+        # Create account no longer sets a password on an existing account (it
+        # cannot prove ownership), so both cases point to Forgot password.
         if user.google_sub:
             return jsonify(
                 error="no_password_set",
                 message=(
-                    "This account uses Google sign-in. Use Continue with Google, "
-                    "or open Create account to set a password for this email."
+                    "This account signs in with Google. Open Forgot password "
+                    "and use Continue with Google to set a password."
                 ),
             ), 401
         return jsonify(
             error="no_password_set",
-            message=(
-                "No password is saved for this email yet. Open Create account to set one, "
-                "then sign in with that password."
-            ),
+            message="No password is set for this account yet. Open Forgot password to set one.",
         ), 401
     if not _password_ok(user, password):
         return jsonify(error="invalid_credentials", message="Email or password is incorrect."), 401
@@ -400,6 +506,7 @@ def login():
 
 
 @bp.route("/auth/forgot-password", methods=["POST"])
+@_password_mode_only
 def forgot_password():
     """Start a password reset. Returns a token in dev when EXPOSE_RESET_TOKEN=1
     (never in production: the token would let anyone reset any account)."""
@@ -444,6 +551,7 @@ def forgot_password():
 
 
 @bp.route("/auth/reset-password", methods=["POST"])
+@_password_mode_only
 def reset_password():
     """Set a new password using the token from the reset email."""
     data = request.get_json(silent=True) or {}
@@ -470,6 +578,7 @@ def reset_password():
 
 
 @bp.route("/auth/set-password", methods=["POST"])
+@_password_mode_only
 @require_login
 def set_password():
     """Set/replace the signed-in user's password without a reset token.
@@ -493,6 +602,7 @@ def set_password():
 
 # ── Google Sign-In ───────────────────────────────────────────
 @bp.route("/auth/google", methods=["POST"])
+@_password_mode_only
 def google_signin():
     """Body: { "credential": "<Google ID token JWT>" }
     Verifies the token, finds/creates the user, sets the session cookie.
@@ -534,10 +644,121 @@ def google_signin():
     return jsonify(_auth_payload(user))
 
 
+# ── CMU sign-in (Shibboleth) ─────────────────────────────────
+def _utf8(value: str) -> str:
+    """WSGI hands header values over as latin-1; mod_shib sends UTF-8 bytes."""
+    try:
+        return value.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return value
+
+
+def _shib_attr(header: str | None) -> str:
+    """First value of an attribute header, or "". mod_shib joins the values of a
+    multi-valued attribute with ";" and escapes a ";" inside a value as "\\;"."""
+    if not header:
+        return ""
+    raw = request.headers.get(header) or ""
+    first = re.split(r"(?<!\\);", raw, maxsplit=1)[0].replace("\\;", ";")
+    return _utf8(first).strip()
+
+
+def _shib_name(email: str) -> str:
+    cfg = current_app.config
+    name = _shib_attr(cfg.get("SHIB_HEADER_DISPLAY_NAME"))
+    if not name:
+        parts = (_shib_attr(cfg.get("SHIB_HEADER_GIVEN_NAME")), _shib_attr(cfg.get("SHIB_HEADER_SURNAME")))
+        name = " ".join(p for p in parts if p)
+    name = " ".join(name.split())[:MAX_NAME_LEN]
+    return name or email.split("@", 1)[0]
+
+
+def _sso_next(raw: str | None) -> str:
+    """Where to send the browser after CMU sign-in: `next` when it is a path on
+    this site outside /api and /Shibboleth.sso, else /app.html."""
+    value = raw or ""
+    if not is_site_path(value):
+        return SSO_DEFAULT_NEXT
+    path = unquote(value.split("?", 1)[0]).lower()
+    if path == "/api" or path.startswith("/api/") or path.startswith("/shibboleth.sso"):
+        return SSO_DEFAULT_NEXT
+    return value
+
+
+def _sso_failed(code: str):
+    """Back to the landing page, which explains the code (js/landing.js)."""
+    return redirect(f"{SSO_LANDING}?sso_error={code}", code=302)
+
+
+@bp.route("/auth/shibboleth", methods=["GET"])
+def shibboleth_signin():
+    """CMU single sign-on. Apache protects this path with mod_shib (a Shibboleth
+    session is required) and passes the SAML attributes as request headers, plus
+    SSO_SECRET_HEADER, which it sets only inside that protected location. A
+    request without the right secret did not come through it, so its identity
+    headers are ignored. Answers with a redirect, never JSON: to `next` (default
+    /app.html) on success, to /?sso_error=<code> on failure."""
+    if auth_mode() != "shibboleth":
+        abort(404)
+    cfg = current_app.config
+    secret = cfg.get("SHIB_PROXY_SECRET") or ""
+    sent = request.headers.get(SSO_SECRET_HEADER) or ""
+    if len(secret) < MIN_SSO_SECRET_LEN:
+        log.error("CMU sign-in refused: SHIB_PROXY_SECRET is not set on the server.")
+        return _sso_failed("unavailable")
+    if not sent:
+        log.warning(
+            "CMU sign-in refused: no %s header (request from %s did not pass Apache's "
+            "protected location).", SSO_SECRET_HEADER, request.remote_addr,
+        )
+        return _sso_failed("unavailable")
+    if not hmac.compare_digest(sent.encode("utf-8"), secret.encode("utf-8")):
+        log.warning(
+            "CMU sign-in refused: wrong %s header (request from %s). Apache's value and "
+            "SHIB_PROXY_SECRET differ, or someone is forging it.", SSO_SECRET_HEADER, request.remote_addr,
+        )
+        return _sso_failed("unavailable")
+
+    # eppn is the Andrew identity; mail is only a fallback for an IdP that does not release it.
+    raw_id = _shib_attr(cfg.get("SHIB_HEADER_EPPN")) or _shib_attr(cfg.get("SHIB_HEADER_MAIL"))
+    if not raw_id:
+        log.warning("CMU sign-in refused: the IdP released neither eppn nor mail.")
+        return _sso_failed("identity")
+    email = normalize_cmu_email(raw_id)
+    if not email or not _email_allowed(email):
+        log.info("CMU sign-in refused: %r is not an allowed domain.", raw_id.rpartition("@")[2])
+        return _sso_failed("domain")
+
+    user = _upsert_user_from_login(email, _shib_name(email), method="shibboleth")
+    session.clear()
+    _write_session(user)
+    return redirect(_sso_next(request.args.get("next")), code=302)
+
+
+@bp.route("/auth/methods", methods=["GET"])
+def auth_methods():
+    """Public: which sign-in methods are on, for the landing page."""
+    sso = auth_mode() == "shibboleth"
+    return jsonify(
+        mode="shibboleth" if sso else "password",
+        methods={
+            "password": not sso,
+            "google": not sso and bool(current_app.config.get("GOOGLE_CLIENT_ID")),
+            "shibboleth": sso,
+        },
+        login_url=SSO_LOGIN_PATH if sso else None,
+        logout_url=current_app.config.get("SHIB_LOGOUT_URL") if sso else None,
+    )
+
+
 # ── Logout ───────────────────────────────────────────────────
 @bp.route("/auth/logout", methods=["POST"])
 def logout():
+    """Clear the session. In shibboleth mode the answer also names the SP logout
+    URL, where the frontend sends the browser to end the Shibboleth session."""
     session.clear()
+    if auth_mode() == "shibboleth":
+        return jsonify(ok=True, logout_url=current_app.config.get("SHIB_LOGOUT_URL"))
     return jsonify(ok=True)
 
 

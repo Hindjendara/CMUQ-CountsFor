@@ -1,7 +1,18 @@
 """Directory API — name + email adds grant faculty view on login."""
+from unittest.mock import patch
+
 from backend.db import db
 from backend.models import DirectoryEntry, User
 from .conftest import login
+
+
+def _google_sign_in(client, email):
+    """Sign in through /api/auth/google with Google's token check mocked.
+    Faculty and staff sign in this way (or with CMU sign-in): password
+    registration is refused for their emails (README 21.1)."""
+    payload = {"sub": "g-" + email, "email": email, "email_verified": True, "name": email.split("@")[0]}
+    with patch("backend.auth.id_token.verify_oauth2_token", return_value=payload):
+        return client.post("/api/auth/google", json={"credential": "stub"})
 
 
 def test_add_directory_entry_name_email_only(client, professor):
@@ -30,6 +41,8 @@ def test_directory_entry_grants_faculty_view_on_login(client, professor):
         json={"name": "Listed Person", "email": "listed@andrew.cmu.edu"},
     )
 
+    # A password account for a listed email is refused: register cannot prove
+    # the caller owns the address.
     r = client.post(
         "/api/auth/register",
         json={
@@ -39,7 +52,11 @@ def test_directory_entry_grants_faculty_view_on_login(client, professor):
             "name": "Listed Person",
         },
     )
-    assert r.status_code == 201, r.get_json()
+    assert r.status_code == 403, r.get_json()
+    assert r.get_json()["error"] == "staff_email"
+
+    r = _google_sign_in(client, "listed@andrew.cmu.edu")
+    assert r.status_code == 200, r.get_json()
     body = r.get_json()
     assert body["role_group"] == "faculty"
     assert body["role"] == "professor"
@@ -100,7 +117,10 @@ def test_admin_seed_sign_in_makes_admin(app, client, tmp_path):
     ]}))
     app.config["ADMIN_SEED_PATH"] = str(admins)
     r = client.post("/api/auth/register", json={"email": "boss@andrew.cmu.edu", "password": "a-long-password-1", "name": "Boss"})
-    assert r.status_code in (200, 201), r.get_json()
+    assert r.status_code == 403, r.get_json()
+    assert r.get_json()["error"] == "staff_email"
+    r = _google_sign_in(client, "boss@andrew.cmu.edu")
+    assert r.status_code == 200, r.get_json()
     me = client.get("/api/me").get_json()
     assert me["role"] == "admin" and me["role_group"] == "admin"
 

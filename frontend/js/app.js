@@ -692,7 +692,7 @@ const App = {
       try { await this._syncLocalToServer(); } catch {}
     }
 
-    await apiLogout();
+    const loggedOut = await apiLogout();
     if (typeof clearAuthToken === 'function') clearAuthToken();
     // Belt and braces in case api.js did not load. Both buckets, because a
     // "Keep me signed in" token lives in localStorage and would otherwise survive
@@ -712,7 +712,7 @@ const App = {
     this.authMode = 'login';
     this.profile = null;
     this.selectedCourse = null;
-    location.href = 'index.html';
+    location.href = afterLogoutUrl(loggedOut, 'index.html');
   },
 
   _cancelOnboarding() {
@@ -6154,6 +6154,7 @@ const App = {
   _signIns: { days: 7, q: '', group: '', show: '', sort: 'last_seen', dir: 'desc', data: null },
 
   SIGN_IN_METHOD_LABELS: {
+    shibboleth: 'Andrew ID',
     google: 'Google',
     password: 'Password',
     email_link: 'Email link',

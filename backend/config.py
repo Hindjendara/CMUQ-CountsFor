@@ -115,6 +115,19 @@ def _samesite(default: str) -> str:
     return raw
 
 
+AUTH_MODES = ("password", "shibboleth")
+
+
+def _auth_mode() -> str:
+    """AUTH_MODE: password (default) or shibboleth. Anything else stops the app."""
+    raw = os.environ.get("AUTH_MODE", "").strip().lower()
+    if not raw:
+        return "password"
+    if raw not in AUTH_MODES:
+        raise RuntimeError(f"AUTH_MODE must be password or shibboleth, got {raw!r}.")
+    return raw
+
+
 class Config:
     IS_PRODUCTION = is_production()
 
@@ -161,6 +174,30 @@ class Config:
     # Unset means the default file; an empty string disables it.
     ADMIN_SEED_PATH = os.environ.get("ADMIN_SEED_PATH")
 
+    # ── CMU sign-in (Shibboleth) ──────────────────────────────
+    # AUTH_MODE=password: email + password and Google (the default).
+    # AUTH_MODE=shibboleth: only CMU single sign-on. The password and Google
+    # routes answer 403 sso_only; GET /api/auth/shibboleth signs people in from
+    # the SAML attributes that Apache (mod_shib) passes as request headers.
+    AUTH_MODE = _auth_mode()
+    # Shared with Apache, which sets it in the X-CountsFor-SSO-Secret header only
+    # inside the protected /api/auth/shibboleth location. Without the right value
+    # the route trusts no identity header. create_app() refuses to start in
+    # shibboleth mode when it is shorter than 32 characters.
+    SHIB_PROXY_SECRET = os.environ.get("SHIB_PROXY_SECRET", "").strip()
+    # Request header names for the attributes (mod_shib with ShibUseHeaders On
+    # names them after the attribute ids in attribute-map.xml). An empty value
+    # turns that attribute off. eppn is used first, mail only when eppn is absent.
+    SHIB_HEADER_EPPN = os.environ.get("SHIB_HEADER_EPPN", "eppn").strip()
+    SHIB_HEADER_MAIL = os.environ.get("SHIB_HEADER_MAIL", "mail").strip()
+    SHIB_HEADER_DISPLAY_NAME = os.environ.get("SHIB_HEADER_DISPLAY_NAME", "displayName").strip()
+    SHIB_HEADER_GIVEN_NAME = os.environ.get("SHIB_HEADER_GIVEN_NAME", "givenName").strip()
+    SHIB_HEADER_SURNAME = os.environ.get("SHIB_HEADER_SURNAME", "sn").strip()
+    # Where the browser goes after signing out in shibboleth mode: the SP's
+    # logout handler, which ends the Shibboleth session and returns to the site.
+    # Must be a path on this site (start with one "/").
+    SHIB_LOGOUT_URL = os.environ.get("SHIB_LOGOUT_URL", "/Shibboleth.sso/Logout?return=/").strip()
+
     # ── Course data ───────────────────────────────────────────
     # The private SOC scrape (written by backend/scraper/scrape_soc.py). The admin
     # overview reads its last_scrape date. The scraper takes the same variable.
@@ -203,5 +240,15 @@ class TestConfig(Config):
     FRONTEND_ORIGINS = ["http://localhost:8765"]
     SEED_USERS_PATH = ""
     ADMIN_SEED_PATH = ""
+    # Password mode in tests, whatever the developer's environment says.
+    # backend/tests/test_shibboleth.py turns shibboleth mode on in a subclass.
+    AUTH_MODE = "password"
+    SHIB_PROXY_SECRET = ""
+    SHIB_HEADER_EPPN = "eppn"
+    SHIB_HEADER_MAIL = "mail"
+    SHIB_HEADER_DISPLAY_NAME = "displayName"
+    SHIB_HEADER_GIVEN_NAME = "givenName"
+    SHIB_HEADER_SURNAME = "sn"
+    SHIB_LOGOUT_URL = "/Shibboleth.sso/Logout?return=/"
     # Tests opt in via monkeypatch when they need the raw reset token in responses.
     EXPOSE_RESET_TOKEN = os.environ.get("EXPOSE_RESET_TOKEN", "")

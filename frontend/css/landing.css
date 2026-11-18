@@ -711,6 +711,17 @@ body::before{
   pointer-events: none;
 }
 
+/* CMU sign-in (view "sso"): the button is a link to the login URL. */
+.landing-sso-actions {
+  padding-top: clamp(12px, 2vh, 20px);
+}
+
+a.landing-sso-btn,
+a.landing-sso-btn:visited {
+  color: #fff;
+  text-decoration: none;
+}
+
 .landing-submit-spinner {
   width: 16px;
   height: 16px;

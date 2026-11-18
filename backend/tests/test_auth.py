@@ -527,7 +527,9 @@ def test_register_and_login(client):
     assert ok.get_json()["email"] == "newbie@andrew.cmu.edu"
 
 
-def test_register_faculty_from_seed(client, tmp_path):
+def test_register_refuses_a_faculty_email_from_the_seed(client, tmp_path):
+    """Register cannot prove the caller owns the address, and the seed would
+    make the new account a professor at once, so it is refused (README 21.1)."""
     seed = tmp_path / "seed.json"
     seed.write_text(json.dumps([
         {"email": "fac@andrew.cmu.edu", "name": "Faculty One",
@@ -544,10 +546,97 @@ def test_register_faculty_from_seed(client, tmp_path):
             "password": "facultypass",
             "confirm_password": "facultypass",
         })
+        assert c.get("/api/me").status_code == 401
+    assert r.status_code == 403, r.get_json()
+    assert r.get_json()["error"] == "staff_email"
+    assert "Forgot password" in r.get_json()["message"]
+    with app.app_context():
+        assert db.session.query(User).filter_by(email="fac@andrew.cmu.edu").count() == 0
+
+
+# ── Register refuses what it cannot prove (README 21.1) ─────
+
+def _register(client, email, password="password12"):
+    return client.post("/api/auth/register", json={
+        "email": email, "password": password, "confirm_password": password,
+    })
+
+
+def _directory_row(app, email, role):
+    from backend.models import DirectoryEntry
+    with app.app_context():
+        db.session.add(DirectoryEntry(email=email, name="Listed", role=role,
+                                      department="Dean's Office", primary_program="AS"))
+        db.session.commit()
+
+
+@pytest.mark.parametrize("role", ["professor", "advisor", "area_head", "associate_area_head", "admin"])
+def test_register_refuses_every_staff_role_in_the_directory(client, app, role):
+    _directory_row(app, "staff@andrew.cmu.edu", role)
+    r = _register(client, "staff@andrew.cmu.edu")
+    assert r.status_code == 403, r.get_json()
+    assert r.get_json()["error"] == "staff_email"
+    assert client.get("/api/me").status_code == 401
+    with app.app_context():
+        assert db.session.query(User).filter_by(email="staff@andrew.cmu.edu").count() == 0
+
+
+def test_register_refuses_an_admin_from_the_admin_seed(client, app, tmp_path):
+    admins = tmp_path / "admins.json"
+    admins.write_text(json.dumps([{"email": "boss@andrew.cmu.edu", "role": "admin",
+                                   "primary_program": "CS", "department": "Computer Science"}]))
+    app.config["ADMIN_SEED_PATH"] = str(admins)
+    r = _register(client, "Boss@qatar.cmu.edu")
+    assert r.status_code == 403, r.get_json()
+    assert r.get_json()["error"] == "staff_email"
+    assert client.get("/api/me").status_code == 401
+
+
+def test_register_allows_an_email_the_directory_lists_as_student(client, app):
+    """A revoked staff member (directory role student) registers like any student."""
+    _directory_row(app, "former@andrew.cmu.edu", "student")
+    r = _register(client, "former@andrew.cmu.edu")
+    assert r.status_code == 201, r.get_json()
+    assert r.get_json()["role"] == "student"
+
+
+def test_register_refuses_an_existing_account_without_a_password(client, app):
+    """Register used to set a password on a Google-only account: a takeover."""
+    _make_user(app, "googleonly@andrew.cmu.edu", name="Google Only")
+    r = _register(client, "googleonly@andrew.cmu.edu", "attacker-pass1")
+    assert r.status_code == 409, r.get_json()
     body = r.get_json()
-    assert r.status_code == 201
-    assert body["role"] == "professor"
-    assert body["profile_completed"] is True
+    assert body["error"] == "account_exists"
+    assert "Forgot password" in body["message"] and "Google" in body["message"]
+    assert client.get("/api/me").status_code == 401
+    with app.app_context():
+        u = db.session.query(User).filter_by(email="googleonly@andrew.cmu.edu").one()
+        assert u.password_hash is None
+    signin = client.post("/api/auth/login", json={"email": "googleonly@andrew.cmu.edu", "password": "attacker-pass1"})
+    assert signin.status_code == 401
+
+
+def test_register_still_refuses_an_existing_password_account(client):
+    assert _register(client, "taken@andrew.cmu.edu").status_code == 201
+    client.post("/api/auth/logout")
+    r = _register(client, "taken@andrew.cmu.edu", "otherpass99")
+    assert r.status_code == 409
+    assert r.get_json()["error"] == "email_taken"
+
+
+def test_staff_set_a_password_through_google_recovery(client, app):
+    """The path the 403 message points to: Google proves ownership, then
+    set-password, then password sign-in with the directory role."""
+    _directory_row(app, "prof2@andrew.cmu.edu", "professor")
+    with patch("backend.auth.id_token.verify_oauth2_token",
+               return_value=_fake_google_payload(email="prof2@andrew.cmu.edu", sub="g-prof2")):
+        g = client.post("/api/auth/google", json={"credential": "stub"})
+    assert g.status_code == 200 and g.get_json()["role"] == "professor"
+    assert client.post("/api/auth/set-password", json={"password": "facultypass9"}).status_code == 200
+    client.post("/api/auth/logout")
+    ok = client.post("/api/auth/login", json={"email": "prof2@andrew.cmu.edu", "password": "facultypass9"})
+    assert ok.status_code == 200, ok.get_json()
+    assert ok.get_json()["role"] == "professor"
 
 
 def test_forgot_and_reset_password(client, monkeypatch):
@@ -663,31 +752,39 @@ def test_register_login_normalizes_cmu_domain(client, tmp_path):
 
     app = create_app(SeedConfig)
     with app.test_client() as c:
-        c.post("/api/auth/register", json={
+        # The alias is normalized before the directory lookup, so it is refused too.
+        staff = c.post("/api/auth/register", json={
             "email": "fac@cmu.edu",
             "password": "password12",
             "confirm_password": "password12",
         })
+        reg = c.post("/api/auth/register", json={
+            "email": "stu@cmu.edu",
+            "password": "password12",
+            "confirm_password": "password12",
+        })
         c.post("/api/auth/logout")
-        ok = c.post("/api/auth/login", json={"email": "fac@cmu.edu", "password": "password12"})
+        ok = c.post("/api/auth/login", json={"email": "Stu@Qatar.cmu.edu", "password": "password12"})
+    assert staff.status_code == 403 and staff.get_json()["error"] == "staff_email"
+    assert reg.status_code == 201, reg.get_json()
     body = ok.get_json()
     assert ok.status_code == 200
-    assert body["email"] == "fac@andrew.cmu.edu"
-    assert body["role"] == "professor"
-    assert body["role_group"] == "faculty"
+    assert body["email"] == "stu@andrew.cmu.edu"
+    assert body["role"] == "student"
 
 
 def test_login_passwordless_user_gets_clear_error(client, app):
-    """Users without password_hash need Create account, not generic 401."""
-    _make_user(app, "googleonly@andrew.cmu.edu", name="Google Only", google_sub=None)
-    r = client.post("/api/auth/login", json={
-        "email": "googleonly@andrew.cmu.edu",
-        "password": "anypassword1",
-    })
-    assert r.status_code == 401
-    body = r.get_json()
-    assert body["error"] == "no_password_set"
-    assert "Create account" in body["message"]
+    """Users without password_hash are sent to Forgot password (Create account
+    no longer sets a password on an existing account), not a generic 401."""
+    _make_user(app, "nopass@andrew.cmu.edu", name="No Password", google_sub=None)
+    _make_user(app, "googleonly@andrew.cmu.edu", name="Google Only")
+    for email in ("nopass@andrew.cmu.edu", "googleonly@andrew.cmu.edu"):
+        r = client.post("/api/auth/login", json={"email": email, "password": "anypassword1"})
+        assert r.status_code == 401
+        body = r.get_json()
+        assert body["error"] == "no_password_set"
+        assert "Forgot password" in body["message"]
+        assert "Create account" not in body["message"]
 
 
 def test_login_with_bearer_token_without_session_cookie(client):
@@ -719,18 +816,14 @@ def test_faculty_directory_reapplied_on_login(client, tmp_path):
         SEED_USERS_PATH = str(seed)
 
     app = create_app(SeedConfig)
+    # A faculty password account (set after Google recovery, or made before
+    # register refused staff emails) whose stored role went stale.
+    from werkzeug.security import generate_password_hash
+    with app.app_context():
+        db.session.add(User(email="prof@andrew.cmu.edu", name="Prof", role="student",
+                            profile_completed=True, password_hash=generate_password_hash("password12")))
+        db.session.commit()
     with app.test_client() as c:
-        c.post("/api/auth/register", json={
-            "email": "prof@andrew.cmu.edu",
-            "password": "password12",
-            "confirm_password": "password12",
-        })
-        with app.app_context():
-            u = db.session.query(User).filter_by(email="prof@andrew.cmu.edu").one()
-            u.role = "student"
-            u.profile_completed = True
-            db.session.commit()
-        c.post("/api/auth/logout")
         ok = c.post("/api/auth/login", json={"email": "prof@andrew.cmu.edu", "password": "password12"})
     assert ok.get_json()["role"] == "professor"
     assert ok.get_json()["role_group"] == "faculty"

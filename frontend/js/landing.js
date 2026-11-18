@@ -1,6 +1,11 @@
 /**
  * CountsFor landing page (index.html): sign in, create account, forgot and
  * reset password, and guest mode. Shares js/utils.js and js/api.js with the app.
+ *
+ * With CMU sign-in on (GET /api/auth/methods says mode "shibboleth") the card
+ * shows one "Sign in with Andrew ID" button instead of the password views.
+ * When that answer does not come (no API, as on the GitHub Pages test copy)
+ * the page works exactly as before.
  */
 (function () {
   'use strict';
@@ -31,7 +36,17 @@
     resetToken: '',
     recovered: false,       // true after Google verified the user in the recovery flow
     backendUnreachable: false,
+    sso: null,              // { loginUrl } when the server uses CMU sign-in (view 'sso')
+    ssoError: '',           // ?sso_error= code from a failed CMU sign-in
   };
+
+  // /api/auth/shibboleth sends a failed CMU sign-in back here as /?sso_error=<code>.
+  const SSO_ERROR_MESSAGES = {
+    domain: 'Only Andrew accounts can sign in to CountsFor.',
+    identity: 'CMU sign-in did not share your Andrew ID. Try again later.',
+    unavailable: 'CMU sign-in is not available right now. Try again later, or continue as a guest.',
+  };
+  const SSO_ERROR_DEFAULT = 'CMU sign-in did not finish. Try again.';
 
   function isNetworkError(r) {
     return !r || r.status === 0 || r.error === 'network';
@@ -438,7 +453,26 @@
     const v = state.view;
     let inner = '';
 
-    if (v === 'register') {
+    if (v === 'sso') {
+      // CMU sign-in: a plain link to the login URL, which Apache sends through
+      // the CMU sign-in page and back to the app. No form, nothing to type.
+      inner = panelWrap(
+        '<div class="landing-card__top">' +
+        '<div class="landing-panel-head landing-panel-head--signin">' +
+        '<h2 class="landing-panel-title" id="panel-title-sso">Welcome</h2>' +
+        '<p class="landing-panel-lead">Use your Andrew ID and password on the CMU sign-in page.</p>' +
+        '</div>' +
+        backendWarnHtml() +
+        '</div>' +
+        '<div class="landing-card__body">' +
+        formErrorHtml() +
+        '<div class="landing-form-actions landing-sso-actions">' +
+        '<a class="landing-submit landing-sso-btn" id="cfSsoBtn" href="' + esc(ssoLoginHref()) + '">Sign in with Andrew ID</a>' +
+        '</div>' +
+        '</div>',
+        'sso'
+      );
+    } else if (v === 'register') {
       inner = panelWrap(
         '<div class="landing-card__top">' +
         tabsHtml('register') +
@@ -568,6 +602,10 @@
     if (intro) intro.hidden = (v === 'forgot' || v === 'reset');
 
     if (v === 'forgot') mountGoogleRecover();
+    if (v === 'sso' && state.ssoError) {
+      const known = Object.prototype.hasOwnProperty.call(SSO_ERROR_MESSAGES, state.ssoError);
+      setFormError(known ? SSO_ERROR_MESSAGES[state.ssoError] : SSO_ERROR_DEFAULT);
+    }
 
     if (opts.focus !== false) {
       const focusIds = {
@@ -605,6 +643,49 @@
     location.href = APP_URL;
   }
 
+  // The CMU sign-in link: the login URL with `next` set to the app on this site
+  // (keeping a shared plan link), where the server sends the browser afterwards.
+  function ssoLoginHref() {
+    let next = location.pathname.replace(/[^/]*$/, '') + APP_URL;
+    let sharePlan = new URLSearchParams(location.search).get('share_plan') || '';
+    if (!sharePlan) {
+      try { sharePlan = sessionStorage.getItem('cf_pending_share_plan') || ''; } catch (e) { /* storage blocked */ }
+    }
+    if (sharePlan) next += '?share_plan=' + encodeURIComponent(sharePlan);
+    const url = state.sso.loginUrl;
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'next=' + encodeURIComponent(next);
+  }
+
+  // { loginUrl } when the server uses CMU sign-in, else null. Null also when the
+  // API cannot be reached or answers something else (the GitHub Pages copy
+  // answers 404), so the page then behaves exactly as before.
+  async function loadSsoSettings() {
+    const r = await reach(apiAuthMethods());
+    const d = r && r.ok ? r.data : null;
+    if (d && d.mode === 'shibboleth' && isSitePath(d.login_url)) return { loginUrl: d.login_url };
+    return null;
+  }
+
+  // Shown on the forgot view when sign-in or Create account sends someone there
+  // (the server's own messages say "Open Forgot password", which is where they are).
+  const FORGOT_REASONS = {
+    no_password_set: 'No password is set for this account yet. Send a reset link, or use Continue with Google below.',
+    account_exists: 'An account already exists for this email. Send a reset link, or use Continue with Google below.',
+    staff_email: 'Faculty and staff confirm their address with Google. Use Continue with Google below, then choose a password.',
+  };
+
+  // Opens the forgot view with a message and the email filled in. It is the way
+  // to a password for an account without one, and for faculty and staff, whom
+  // Create account refuses: email reset, or Continue with Google.
+  function showForgotWith(message, email) {
+    state.view = 'forgot';
+    renderPanel({ focus: false });
+    const input = document.getElementById('cfForgotEmail');
+    if (input && email) input.value = email;
+    updateSubmitState('forgot');
+    setFormError(message);
+  }
+
   async function onLogin(event) {
     event.preventDefault();
     setFormError('');
@@ -635,9 +716,8 @@
       state.backendUnreachable = false;
       const msg = authErrorMessage(r, 'Email or password is incorrect.');
       if (r.data && r.data.error === 'no_password_set') {
-        setFormError(msg);
-        state.view = 'register';
-        renderPanel({ focus: false });
+        showForgotWith(FORGOT_REASONS.no_password_set, body.email);
+        return;
       } else if (r.status === 401) {
         setFieldMsg('cfLoginPass', 'cfLoginPassMsg', msg, 'error');
       } else {
@@ -692,7 +772,13 @@
         return;
       }
       const msg = authErrorMessage(r, 'Registration failed.');
-      if (r.data && r.data.error === 'email_taken') {
+      const code = r.data && r.data.error;
+      if (code === 'staff_email' || code === 'account_exists') {
+        // Create account cannot prove the address is theirs: Forgot password can.
+        showForgotWith(FORGOT_REASONS[code], regBody.email);
+        return;
+      }
+      if (code === 'email_taken') {
         setFieldMsg('cfRegEmail', 'cfRegEmailMsg', msg, 'error');
       } else {
         setFormError(msg);
@@ -901,7 +987,7 @@
     location.href = APP_URL;
   }
 
-  function init() {
+  async function init() {
     const guestBtn = document.getElementById('cfGuestBtn');
     if (guestBtn) guestBtn.addEventListener('click', enterGuestMode);
 
@@ -915,6 +1001,18 @@
       state.resetToken = resetTok;
       state.view = 'reset';
     }
+    // Shown once: drop the code from the address so a reload does not repeat it.
+    state.ssoError = params.get('sso_error') || '';
+    if (state.ssoError && typeof history !== 'undefined' && history.replaceState) {
+      params.delete('sso_error');
+      const query = params.toString();
+      history.replaceState({}, '', location.pathname + (query ? '?' + query : '') + location.hash);
+    }
+
+    // Ask the server which sign-in it uses before drawing the card, so the
+    // password form never flashes up on a CMU sign-in server.
+    state.sso = await loadSsoSettings();
+    if (state.sso) state.view = 'sso';
 
     renderPanel();
     probeSession();

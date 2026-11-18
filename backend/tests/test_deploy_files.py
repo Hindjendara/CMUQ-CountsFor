@@ -21,6 +21,13 @@ SERVICE = DEPLOY / "countsfor-api.service"
 CRON = DEPLOY / "countsfor.cron"
 LOGROTATE = DEPLOY / "countsfor.logrotate"
 RUN_SCRAPE = REPO_ROOT / "backend" / "scraper" / "run_scrape.sh"
+SHIB_SP = DEPLOY / "shibboleth" / "shibboleth2.xml"
+SHIB_MAP = DEPLOY / "shibboleth" / "attribute-map.xml"
+
+
+def _deploy_files() -> list[Path]:
+    """Every file under deploy/, subfolders (deploy/shibboleth/) included."""
+    return sorted(p for p in DEPLOY.rglob("*") if p.is_file())
 
 # Paths under the deploy root that are made on the server, not shipped in git.
 RUNTIME_ONLY = (
@@ -65,8 +72,10 @@ def _option(args: list[str], name: str) -> str:
 # ── Every file ─────────────────────────────────────────────────────────────
 
 def test_deploy_files_and_scraper_script_use_lf_line_endings():
-    for path in (APACHE, SERVICE, CRON, LOGROTATE, RUN_SCRAPE,
-                 DEPLOY / "countsfor.env.example", DEPLOY / "scraper.env.example"):
+    files = _deploy_files() + [RUN_SCRAPE]
+    assert {APACHE, SERVICE, CRON, LOGROTATE, SHIB_SP, SHIB_MAP,
+            DEPLOY / "countsfor.env.example", DEPLOY / "scraper.env.example"} <= set(files)
+    for path in files:
         data = path.read_bytes()
         assert b"\r" not in data, f"{path.name} has CR line endings"
         assert data.endswith(b"\n"), f"{path.name} must end with a newline"
@@ -74,7 +83,7 @@ def test_deploy_files_and_scraper_script_use_lf_line_endings():
 
 def test_every_deploy_root_path_exists_in_the_repo():
     checked = 0
-    for path in sorted(DEPLOY.iterdir()) + [RUN_SCRAPE]:
+    for path in _deploy_files() + [RUN_SCRAPE]:
         for match in _DEPLOY_PATH.finditer(_text(path)):
             rel = (match.group(1) or "/").strip("/").rstrip(".,:")
             if any(p.search(rel) for p in RUNTIME_ONLY):
@@ -183,6 +192,107 @@ def test_apache_serves_the_precompressed_catalog_once():
     # The scraper writes exactly that file next to the catalog.
     update_data = _text(REPO_ROOT / "backend" / "scraper" / "update_data.py")
     assert 'with_name("courses.json.gz")' in update_data
+
+
+# ── CMU sign-in (Shibboleth) ───────────────────────────────────────────────
+
+_SHIB_LINE = re.compile(
+    r"^(AuthType shibboleth|ShibRequestSetting|ShibUseHeaders|Require shib-session|SetHandler shib"
+    r"|Include /etc/apache2/countsfor-sso\.conf|RequestHeader set X-CountsFor-SSO-Secret"
+    r"|<Location /Shibboleth\.sso>|<Location /api/auth/shibboleth>|<IfDefine !COUNTSFOR_SSO_SECRET>)"
+)
+
+
+def test_apache_shibboleth_lines_only_load_with_mod_shib():
+    """Apache must start (and the site work in password mode) before
+    libapache2-mod-shib is installed: every Shibboleth line is in <IfModule mod_shib>."""
+    stack: list[str] = []
+    found = 0
+    for line in _active_lines(APACHE):
+        if _SHIB_LINE.match(line):
+            assert "IfModule mod_shib" in stack, f"outside <IfModule mod_shib>: {line}"
+            found += 1
+        if re.match(r"^</\w+>$", line):
+            stack.pop()
+        elif m := re.match(r"^<(\w+)(?:\s+([^>]*))?>$", line):
+            stack.append(f"{m.group(1)} {m.group(2) or ''}".strip())
+    assert found == 10
+
+
+def test_apache_protects_the_sso_route_and_alone_sends_the_secret():
+    from backend.auth import SSO_LOGIN_PATH, SSO_SECRET_HEADER
+    conf = _text(APACHE)
+    block = re.search(rf"<Location {re.escape(SSO_LOGIN_PATH)}>(.*?)</Location>", conf, re.S)
+    assert block, f"no <Location {SSO_LOGIN_PATH}> block"
+    lines = [line.strip() for line in block.group(1).splitlines()
+             if line.strip() and not line.strip().startswith("#")]
+    assert lines == [
+        "AuthType shibboleth",
+        "ShibRequestSetting requireSession 1",
+        "ShibUseHeaders On",
+        "Require shib-session",
+        f'RequestHeader set {SSO_SECRET_HEADER} "${{COUNTSFOR_SSO_SECRET}}"',
+    ]
+    # Set in that block only, and taken from the root-only include, which must
+    # exist (Include, not IncludeOptional) and define the value.
+    active = _active_lines(APACHE)
+    assert sum(SSO_SECRET_HEADER in line for line in active) == 1
+    assert "Include /etc/apache2/countsfor-sso.conf" in active
+    assert not any(line.startswith("IncludeOptional") for line in active)
+    assert re.search(r"<IfDefine !COUNTSFOR_SSO_SECRET>\s*Error ", conf)
+    # The SP's handlers belong to mod_shib, and nothing proxies them.
+    handler = re.search(r"<Location /Shibboleth\.sso>\s*SetHandler shib\s*</Location>", conf)
+    assert handler, "/Shibboleth.sso must be handled by mod_shib"
+    assert not any("Shibboleth.sso" in line for line in active if line.startswith("ProxyPass"))
+    # The protected path is a real API route.
+    from backend.app import create_app
+    from backend.config import TestConfig
+    rules = {r.rule for r in create_app(TestConfig, bootstrap_db=False).url_map.iter_rules()}
+    assert SSO_LOGIN_PATH in rules
+
+
+_SP_NS = {"sp": "urn:mace:shibboleth:3.0:native:sp:config"}
+
+
+def test_shibboleth_sp_template_names_this_site():
+    import xml.etree.ElementTree as ET
+    from backend.config import TestConfig
+    root = ET.parse(SHIB_SP).getroot()
+    app = root.find("sp:ApplicationDefaults", _SP_NS)
+    assert app.get("entityID") == "https://countsfor.qatar.cmu.edu/shibboleth"
+    sessions = app.find("sp:Sessions", _SP_NS)
+    assert sessions.get("handlerURL") == "/Shibboleth.sso"
+    assert (sessions.get("handlerSSL"), sessions.get("cookieProps"), sessions.get("redirectLimit")) == (
+        "true", "https", "exact")
+    sso = sessions.find("sp:SSO", _SP_NS)
+    assert sso.get("entityID") == "https://login.cmu.edu/idp/shibboleth"
+    assert sso.text.split() == ["SAML2"]
+    handlers = {h.get("type"): h for h in sessions.findall("sp:Handler", _SP_NS)}
+    assert handlers["MetadataGenerator"].get("Location") == "/Metadata"
+    assert handlers["Session"].get("showAttributeValues") == "false"
+    assert handlers["Status"].get("acl") == "127.0.0.1 ::1"
+    # The API sends the browser to this SP's logout handler on sign out.
+    assert TestConfig.SHIB_LOGOUT_URL.startswith(sessions.get("handlerURL") + "/Logout?return=")
+    assert "CHANGE_ME" in _text(SHIB_SP)
+
+
+def test_shibboleth_attribute_map_gives_the_header_names_the_api_reads():
+    import xml.etree.ElementTree as ET
+    from backend.config import TestConfig as C
+    root = ET.parse(SHIB_MAP).getroot()
+    ids = {a.get("name"): a.get("id") for a in root}
+    assert ids["urn:oid:1.3.6.1.4.1.5923.1.1.1.6"] == C.SHIB_HEADER_EPPN == "eppn"
+    assert ids["urn:oid:0.9.2342.19200300.100.1.3"] == C.SHIB_HEADER_MAIL == "mail"
+    assert ids["urn:oid:2.16.840.1.113730.3.1.241"] == C.SHIB_HEADER_DISPLAY_NAME == "displayName"
+    assert ids["urn:oid:2.5.4.42"] == C.SHIB_HEADER_GIVEN_NAME == "givenName"
+    assert ids["urn:oid:2.5.4.4"] == C.SHIB_HEADER_SURNAME == "sn"
+    assert "urn:oid:1.3.6.1.4.1.5923.1.1.1.1" in ids  # eduPersonAffiliation
+
+
+def test_server_env_starts_in_password_mode():
+    lines = _active_lines(DEPLOY / "countsfor.env.example")
+    assert "AUTH_MODE=password" in lines
+    assert not any(line.startswith("SHIB_PROXY_SECRET=") for line in lines)
 
 
 # ── systemd ────────────────────────────────────────────────────────────────

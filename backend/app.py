@@ -47,6 +47,11 @@ def create_app(config_class=Config, *, bootstrap_db: bool | None = None) -> Flas
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # AUTH_MODE=shibboleth without SHIB_PROXY_SECRET (or with a bad logout URL)
+    # stops here, so neither gunicorn nor bootstrap_db runs with it.
+    from .auth import check_auth_settings
+    check_auth_settings(app.config)
+
     if app.config.get("TRUST_PROXY"):
         # One trusted proxy (Apache) in front: take the client address and scheme
         # from its X-Forwarded-For / X-Forwarded-Proto headers.
