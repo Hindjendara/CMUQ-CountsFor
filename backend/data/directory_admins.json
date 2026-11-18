@@ -2,11 +2,11 @@
   "note": "CountsFor admins. Merged over data/faculty_directory.json at sign-in (backend/directory.py). A directory entry added on the Admin page (directory_entries table) still wins over this file. Takes effect at the person's next sign-in after deploy.",
   "people": [
     {
-      "email": "avivek@andrew.cmu.edu",
-      "name": "Aditya Vivek",
+      "email": "spessoa@andrew.cmu.edu",
+      "name": "Silvia Pessoa",
       "role": "admin",
-      "primary_program": "CS",
-      "department": "Computer Science"
+      "primary_program": "AS",
+      "department": "Humanities and Social Sciences (H&SS)"
     }
   ]
 }
