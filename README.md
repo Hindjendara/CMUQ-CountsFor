@@ -2,7 +2,7 @@
 
 A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Students, faculty and advisors look up any course and see exactly which major, minor and Gen Ed requirements it counts for, plan schedules, save courses and flag catalog mistakes. Admins edit the catalog and see usage.
 
-**Real home:** `https://countsfor.qatar.cmu.edu` on a CMU-Q Ubuntu server ([section 15](#15-deploy-to-the-cmu-q-server)), not live yet. **Production until then:** [adicmu.github.io/Countsfor-Summer-26](https://adicmu.github.io/Countsfor-Summer-26/) (GitHub Pages, built from `main`), whose API on Render (`https://countsfor-summer-26.onrender.com`) answered 503 "This service has been suspended by its owner" on November 11, 2026, so nothing there that needs the server worked that day. **Test copy** of the `cleanup` frontend, guest only: [hindjendara.github.io/CMUQ-CountsFor](https://hindjendara.github.io/CMUQ-CountsFor/) ([15.21](#1521-test-copy-on-github-pages)). **Repos:** [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26) (`main`) and [Hindjendara/CMUQ-CountsFor](https://github.com/Hindjendara/CMUQ-CountsFor) (`cleanup` and the test copy, [17.1](#171-remotes)).
+**Real home:** `https://countsfor.qatar.cmu.edu` on a CMU-Q Ubuntu server ([section 15](#15-deploy-to-the-cmu-q-server)), which CMU-Q IT set up on November 18, 2026. **Repo:** [Hindjendara/CMUQ-CountsFor](https://github.com/Hindjendara/CMUQ-CountsFor) (`main`, [17.1](#171-remotes)). The original repo, [Adicmu/Countsfor-Summer-26](https://github.com/Adicmu/Countsfor-Summer-26), and its old site on GitHub Pages and Render are no longer used; its Render API answered 503 "This service has been suspended by its owner" on November 11, 2026. **Test copy** of the frontend, guest only: [hindjendara.github.io/CMUQ-CountsFor](https://hindjendara.github.io/CMUQ-CountsFor/) ([15.21](#1521-test-copy-on-github-pages)).
 
 **Quick start:** see [section 5](#5-local-setup-from-a-fresh-mac). In short, from the repo root: create a virtualenv in `.venv` and `pip install -r backend/requirements.txt`, copy `backend/.env.example` to `backend/.env`, run the API with `python -m backend.app` (port 5050), serve the site with `python scripts/dev_server.py` (port 8765; it serves `frontend/` and proxies `/api` to the API), and open `http://localhost:8765/`.
 
@@ -10,7 +10,7 @@ A role-aware curriculum explorer for Carnegie Mellon University in Qatar. Studen
 
 This README is the project's complete maintainer manual. It was written so that a new student developer can take over CountsFor alone, with no access to the original authors. Every statement was checked against the code on the `cleanup` branch in November 2026 unless it is explicitly marked as uncertain. If anything else in the repo disagrees with this file, trust this file and the code, and then fix whichever is wrong.
 
-> **Where things stand (November 11, 2026).** The `cleanup` branch moves CountsFor from GitHub Pages and Render to a CMU-Q server: the repo is split into `frontend/` (the static site) and `backend/` (the Flask API, the scraper and private data), every setting comes from the environment, the site calls the API by relative path, a system cron job replaces the GitHub Actions scrape, and `deploy/` holds the server files (systemd, Apache, cron, logrotate, environment templates). The branch is **not merged into `main` yet**; it is on Hind's working repo, `Hindjendara/CMUQ-CountsFor` (pushed November 10, 2026; newer commits were made after that push, 15.4). Until someone carries out the cutover in [15.15](#1515-cutover-from-github-pages-and-render), production is the old site from `main`, with the old layout: its pages still load on GitHub Pages, but on November 11, 2026 its API on Render answered 503 "This service has been suspended by its owner", so signing in and everything else that needs the server failed there. A guest-only test copy of the `cleanup` frontend runs on GitHub Pages ([15.21](#1521-test-copy-on-github-pages)); the CMU-Q server is CountsFor's real home. Sections that describe the old hosting say so.
+> **Where things stand (November 18, 2026).** CountsFor lives in `Hindjendara/CMUQ-CountsFor`. Its `main` holds the move from GitHub Pages and Render to a CMU-Q server (the `cleanup` branch, merged on November 18, 2026): the repo is split into `frontend/` (the static site) and `backend/` (the Flask API, the scraper and private data), every setting comes from the environment, the site calls the API by relative path, a system cron job replaces the GitHub Actions scrape, and `deploy/` holds the server files (systemd, Apache, cron, logrotate, Shibboleth, environment templates). CMU-Q IT set up the server on November 18, 2026 (Ubuntu 24.04, Apache with the certificate in `/etc/apache2`, local PostgreSQL); installing CountsFor on it and importing the Render database are the next steps ([15.15](#1515-cutover-from-github-pages-and-render)). The original repo `Adicmu/Countsfor-Summer-26` is no longer used: its old site still loads on GitHub Pages, but its API on Render has answered 503 "suspended by its owner" since November 11, 2026. A guest-only test copy of the frontend runs on GitHub Pages ([15.21](#1521-test-copy-on-github-pages)). Sections that describe the old hosting say so.
 
 Paths in this file are relative to the repo root (`frontend/js/app.js`, `backend/auth.py`). Inside the frontend sections, `js/`, `css/` and `tests/` mean `frontend/js/`, `frontend/css/` and `frontend/tests/`, because that is how the pages refer to them.
 
@@ -68,8 +68,9 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 
 ### 1.2 Stakeholders and people
 
-- **Aditya Vivek** (GitHub `Adicmu`): original author and owner of the main repo `Adicmu/Countsfor-Summer-26`. CMU-Q student.
-- **Hind Jendara** (GitHub `Hindjendara`): co-developer. Owns the fork `Hindjendara/Countsfor-Summer-26` (git remote `hind`) and the working repo `Hindjendara/CMUQ-CountsFor` where the `cleanup` branch was made (17.1). GS requirement data is expected to come from her (see `MAJOR_ORDER` in `frontend/js/data.js`).
+- **Aditya Vivek** (GitHub `Adicmu`): original author. CountsFor lived in his repo `Adicmu/Countsfor-Summer-26` until November 2026; that repo, its GitHub Pages site and its Render services are no longer used (15.15). CMU-Q student.
+- **Hind Jendara** (GitHub `Hindjendara`): co-developer and owner of the project repo `Hindjendara/CMUQ-CountsFor` (17.1), where the `cleanup` branch was made and merged. Her older fork `Hindjendara/Countsfor-Summer-26` is not used. GS requirement data is expected to come from her (see `MAJOR_ORDER` in `frontend/js/data.js`).
+- **Prof. Silvia Pessoa** (`spessoa@andrew.cmu.edu`): CountsFor admin, the only person in `backend/data/directory_admins.json`; she gives other people admin or faculty access on the Admin page (19.7).
 - CMU-Q faculty, area heads and advisors: the faculty directory in `backend/data/faculty_directory.json` (65 people scraped from the public CMU-Q People page) decides who gets faculty access.
 - CMU-Q IT: runs the Ubuntu server CountsFor is moving to and owns the `countsfor.qatar.cmu.edu` hostname and its certificate (see [15.2](#152-prerequisites)).
 - Upstream data source: the course-to-requirement mappings originally came from the older open-source project [open-cmuq/CountsFor](https://github.com/open-cmuq/CountsFor) (credited in `README.md`).
@@ -368,12 +369,11 @@ Python 3.11 and 3.13 also work for local development and tests; if you use one o
 ### 5.2 Clone
 
 ```bash
-git clone https://github.com/Adicmu/Countsfor-Summer-26.git CountsFor
+git clone https://github.com/Hindjendara/CMUQ-CountsFor.git CountsFor
 cd CountsFor
-git remote add hind https://github.com/Hindjendara/Countsfor-Summer-26.git   # optional, partner fork
 ```
 
-The repo history is large (about 145 MB packed) because the old daily scrape committed multi-megabyte data files and old screenshots remain in history. Until the cutover (15.15), the new layout described here is on the `cleanup` branch, not on `main`: `git checkout cleanup` if you have it.
+The repo history is large (about 145 MB packed) because the old daily scrape committed multi-megabyte data files and old screenshots remain in history. The layout described here is on `main` since November 18, 2026.
 
 ### 5.3 Python environment
 
@@ -1425,7 +1425,7 @@ The old to new paths are in `backend/data/requirement_path_renames.json`. The pi
 
 CountsFor's new home is an Ubuntu 24.04 server at CMU-Q, `https://countsfor.qatar.cmu.edu`. Apache serves the static frontend over HTTPS and proxies `/api` to the Flask API, which runs under Gunicorn on `127.0.0.1:8000`. The database is a local PostgreSQL. A system cron job runs the scraper once a day.
 
-> **Status on November 11, 2026: not deployed yet.** Everything below is written from the files in `deploy/` and checked against the code, but nobody has run it on the real server yet. Production is still the old site from `main` (15.20) until the cutover (15.15), but that day its API on Render answered 503 "This service has been suspended by its owner": read the note at the top of 15.8 before you plan the import. The `cleanup` frontend can be tried as a guest on the GitHub Pages test copy (15.21), which has no API. When you do the first deploy, correct this section wherever reality differs, and record the date.
+> **Status on November 18, 2026: server handed over, CountsFor not installed yet.** CMU-Q IT set up the server that day: Ubuntu 24.04, Apache with the certificate and key in `/etc/apache2`, a local PostgreSQL, Gunicorn on `127.0.0.1:8000` behind Apache, a system cron job for the scraper, and the folders `/var/www/html/countsfor/frontend` and `/var/www/html/countsfor/backend` (the layout of 15.1). The project members sign in to it over SSH with their Andrew credentials. Everything below is written from the files in `deploy/` and checked against the code, but has not run on the server yet; the Render API has answered 503 "This service has been suspended by its owner" since November 11, 2026, so read the note at the top of 15.8 before you plan the import. When you do the first deploy, correct this section wherever reality differs, and record the date.
 
 The first deploy goes through 15.2 to 15.14 in order. Later deploys only need 15.16. CMU sign-in (Shibboleth) is a separate step, 15.22: the site runs in password mode until it is done.
 
@@ -1493,22 +1493,13 @@ sudo install -d -m 750 -o root -g countsfor /etc/countsfor
 Keep a clean checkout on the server under your own account and copy from it with rsync. Deploy committed code only.
 
 ```bash
-git clone https://github.com/Adicmu/Countsfor-Summer-26.git ~/countsfor-src
+git clone https://github.com/Hindjendara/CMUQ-CountsFor.git ~/countsfor-src
 cd ~/countsfor-src
 git checkout main
 git status --short         # must print nothing
 ```
 
-**Before the merge (the rehearsal, 15.15 step 1)** `main` still has the old layout. The `cleanup` branch is on Hind's working repo, `Hindjendara/CMUQ-CountsFor` (public, 17.1), and on no branch of the main repo. It was pushed there on November 10, 2026 (`5106dd7`), and the checkout it was made in had newer commits on November 11: push them first, with `git push origin cleanup` in that checkout (`git status` there shows how far the branch is ahead of `origin/cleanup`). Then clone that repo and check out `cleanup` instead of `main`:
-
-```bash
-git clone https://github.com/Hindjendara/CMUQ-CountsFor.git ~/countsfor-src
-cd ~/countsfor-src
-git checkout cleanup
-git status --short         # must print nothing
-```
-
-After the merge, replace that checkout with a fresh clone of the main repo on `main`, as above (`rm -rf ~/countsfor-src` first). Whichever repo you use, the server must be able to clone it (a private repo needs a deploy key or token).
+The repo is public, so the server clones it without a key. If it is ever made private, the server needs a deploy key or a token.
 
 First deploy:
 
@@ -1968,28 +1959,15 @@ In the Google Cloud Console, **APIs & Services**, **Credentials**, the OAuth 2.0
 
 ### 15.15 Cutover from GitHub Pages and Render
 
-As of November 11, 2026 production is still the old site: GitHub Pages serves the frontend from `main`, and the GitHub Actions scrape still commits data to `main`. Render holds the API and the database, but that day its web service answered 503 "This service has been suspended by its owner", so the old site could not sign anyone in or reach anything else on the server. Nothing has been deployed to the CMU-Q server, and `cleanup` is not merged; a guest-only test copy of its frontend runs on GitHub Pages (15.21). The cutover, in order:
+On November 18, 2026 the project moved to `Hindjendara/CMUQ-CountsFor`: `cleanup` was merged into its `main` (a fast-forward), and the original repo `Adicmu/Countsfor-Summer-26`, with its GitHub Pages site and Render API, is no longer used. The old plan to merge `cleanup` into that repo's `main`, with its bot-commit conflicts, no longer applies. The same day CMU-Q IT handed over the server: Ubuntu 24.04, Apache with the certificate and key in `/etc/apache2`, a local PostgreSQL, Gunicorn on `127.0.0.1:8000` behind Apache, a cron job for the scraper, and the folders `/var/www/html/countsfor/frontend` and `/var/www/html/countsfor/backend`, exactly the layout of 15.1. The cutover, in order:
 
-1. **Rehearse** 15.2 to 15.14 on the server, deploying the `cleanup` branch (push it first, 15.4) and importing a current dump into `countsfor` (15.8, "Rehearsal"; read the note at the top of 15.8 first). The server can be fully tested, sign-in with existing accounts included, before anyone uses it.
-2. **Freeze `main`:** in the Render dashboard, turn off **Auto-Deploy** for the web service `countsfor-summer-26`; in the GitHub Actions tab, **disable** the "Scrape SOC" workflow. Render auto-deploys `main`, and its build command installed the root `requirements.txt`, which `cleanup` deletes, so a Render deploy of the merged `main` would most likely fail and keep the old version running (not tested). Turning it off removes the question.
-3. **Merge `cleanup` into `main`** and push. If `main` has not moved since `cleanup` was last updated (`git merge-base --is-ancestor main cleanup` succeeds), the merge is a fast-forward with no conflicts. Otherwise every bot commit on `main` changed `app.html` (the `?v=` tags), `data/courses.json`, `data/soc.json` and `data_all_courses.json`, which `cleanup` moved or deleted. A test merge of a simulated bot commit (November 8, 2026) gave modify/delete conflicts on `app.html` and `data_all_courses.json` and merged the bot's data changes into `backend/data/soc.json` and `frontend/data/courses.json`; real changes to the data can also conflict there. Take the `cleanup` side of every one of these files (its data comes from the fixed parser; the server rebuilds the data anyway):
-
-   ```bash
-   git checkout main && git merge cleanup
-   git checkout cleanup -- backend/data/soc.json frontend/data/courses.json frontend/app.html
-   git rm --ignore-unmatch app.html data_all_courses.json data/courses.json data/soc.json
-   git status --short          # no "UU", "AA", "DU" or "UD" lines left; take the cleanup side of any other
-   git diff --cached --stat cleanup   # should print nothing: the result equals cleanup
-   git commit --no-edit
-   ```
-
-   After the merge, GitHub Pages keeps serving its last build (its workflow is gone) and Render keeps the old API.
-4. **Stop writes:** on November 11, 2026 the Render web service was already suspended (`curl -s -o /dev/null -w '%{http_code}\n' https://countsfor-summer-26.onrender.com/health` printed 503). If it runs again by now, announce a short downtime, then in the Render dashboard **Suspend** the web service. While it is suspended, the old site shows "Could not reach the server" and nothing writes to the database.
-5. **Final database copy:** `sudo systemctl stop countsfor-api`, then drop and recreate the `countsfor` database, which holds the rehearsal import (the two commands at the end of 15.8 step 5), and run 15.8 steps 3 to 10 (recreate `~/.pg_service.conf` first, step 1, if you already removed it).
-6. **Deploy the merged `main`** (15.16) and start the API: `sudo systemctl start countsfor-api`. Run the checks in 15.13.
-7. **DNS and Google:** make sure IT points `countsfor.qatar.cmu.edu` at the server, and that the Google origin is in place (15.14).
-8. **Tell users:** everyone signs in again (sign-in tokens are kept per site). Accounts, saved courses, flags and shared plans moved with the database. Schedule plans that were never shared live only in the browser's storage for the old address and do not move; a student can carry one over by creating a share link on the old site before step 4 and opening it on the new site with the host changed (the link token is in the database).
-9. **Retire the old hosting**, once the new site has worked for a few days: unpublish GitHub Pages (repo **Settings**, **Pages**) or replace it with a page that links to the new address; keep the final dump in two places; then delete the Render web service and database (they are paid plans). Decide whether the GitHub Pages test copy (15.21) stays; if not, unpublish it in Hind's working repo (**Settings**, **Pages**). Update the top of this README, sections 15.20 and 15.21, and 23.1.
+1. **Install** 15.2 to 15.14 on the server from `main` of this repo, importing a current dump of the Render database (15.8; read its note first). The server can be fully tested, sign-in with existing accounts included, before anyone uses it.
+2. **Stop writes to Render:** the Render web service was already suspended on November 11, 2026 (`curl -s -o /dev/null -w '%{http_code}\n' https://countsfor-summer-26.onrender.com/health` printed 503). If it runs again, ask its owner to suspend it, so nothing writes to the database after the final copy.
+3. **Final database copy:** `sudo systemctl stop countsfor-api`, then drop and recreate the `countsfor` database, which holds the rehearsal import (the two commands at the end of 15.8 step 5), and run 15.8 steps 3 to 10 (recreate `~/.pg_service.conf` first, step 1, if you already removed it). Then check the admins (19.7): a `directory_entries` row with role `admin` wins over `directory_admins.json`.
+4. **Start the API:** `sudo systemctl start countsfor-api`. Run the checks in 15.13.
+5. **Sign-in:** CMU single sign-on (Shibboleth) once IT has registered the site (15.22). Until then the site runs in password mode; Google sign-in needs the server's origin in Google Cloud (15.14).
+6. **Tell users:** everyone signs in again (sign-in tokens are kept per site). Accounts, saved courses, flags and shared plans moved with the database. Schedule plans that were never shared live only in the browser's storage for the old address and do not move; a student can carry one over by creating a share link on the old site and opening it on the new site with the host changed (the link token is in the database).
+7. **Retire the old hosting**, once the new site has worked for a few days: ask the owner of `Adicmu/Countsfor-Summer-26` to unpublish its GitHub Pages site (or replace it with a page that links to the new address), disable its "Scrape SOC" workflow, and delete the Render web service and database once the final dump is kept in two places (they are paid plans). Decide whether the GitHub Pages test copy (15.21) stays; if not, unpublish it in **Settings**, **Pages** of this repo. Update the top of this README, sections 15.20 and 15.21, and 23.1.
 
 ### 15.16 Updating the code later
 
@@ -2106,15 +2084,15 @@ Until the server runs, the `cleanup` frontend can be tried at **[hindjendara.git
 - **No backend.** Every `/api` request answers 404 there (checked November 11, 2026), so the app runs as a guest: search, course cards, the requirement trees, the minors and the planner work, with plans and saved courses kept in the browser. Signing in, flags, shared plans and the admin pages need the server, and admin course edits and minor settings are not applied (the app shows the catalog and `minors.json` as they are).
 - **What it serves:** on November 11, 2026, `gh-pages` was `a116b27` ("Deploy cleanup 8b599b2 to GitHub Pages"), with the `cf-build` tag `release-2026-11-10b`. To see what it serves now, compare `curl -s https://hindjendara.github.io/CMUQ-CountsFor/app.html | grep cf-build` with `frontend/app.html`.
 
-To publish a commit (usually the tip of `cleanup`), use `scripts/publish_test_site.sh` with bash (Git Bash on Windows), from a checkout whose `origin` is Hind's working repo. After a frontend change, first give the pages a new cache tag and commit it: `python scripts/bump_cf_build.py release-$(date +%F)` (add a letter for a second release on the same day, as in `release-2026-11-10b`). Then:
+To publish a commit (usually the tip of `main`), use `scripts/publish_test_site.sh` with bash (Git Bash on Windows), from a checkout whose `origin` is Hind's working repo. After a frontend change, first give the pages a new cache tag and commit it: `python scripts/bump_cf_build.py release-$(date +%F)` (add a letter for a second release on the same day, as in `release-2026-11-10b`). Then:
 
 ```bash
 git remote -v                  # origin: Hindjendara/CMUQ-CountsFor only, for fetch and for push
 git status --short             # must print nothing: the script refuses otherwise
-scripts/publish_test_site.sh && git push origin cleanup   # the script checks every origin URL before it sends anything; the branch is pushed only if it succeeded
+scripts/publish_test_site.sh && git push origin main   # the script checks every origin URL before it sends anything; the branch is pushed only if it succeeded
 ```
 
-The script publishes HEAD. To publish another commit: `scripts/publish_test_site.sh [--no-wait] COMMIT`. The script's note that the commit is on no branch of `origin` is expected here, because the branch is pushed right after. If the script stops at the 5 minute live check, `gh-pages` already has the new copy: push the branch by hand (`git push origin cleanup`).
+The script publishes HEAD. To publish another commit: `scripts/publish_test_site.sh [--no-wait] COMMIT`. The script's note that the commit is on no branch of `origin` is expected here, because the branch is pushed right after. If the script stops at the 5 minute live check, `gh-pages` already has the new copy: push the branch by hand (`git push origin main`).
 
 The script:
 
@@ -2307,31 +2285,31 @@ There is no CI that runs the tests. On the server, the daily update runs the two
 
 | Repo | URL | Role |
 |---|---|---|
-| Main repo | `https://github.com/Adicmu/Countsfor-Summer-26.git` | Public, not a fork. GitHub Pages and Render are attached to its `main` until the cutover (15.15). A fresh clone calls it `origin`. |
-| Partner fork | `https://github.com/Hindjendara/Countsfor-Summer-26.git` | Hind's public fork (remote `hind` in 5.2). Its own scrape workflow commits data there. |
-| Hind's working repo | `https://github.com/Hindjendara/CMUQ-CountsFor.git` | Public. The checkout where the `cleanup` branch was made uses this as `origin` and the main repo as `adi`, with pushing to `adi` disabled. Its `gh-pages` branch is the GitHub Pages test copy (15.21). Check `git remote -v` in any checkout before you push. |
+| Project repo | `https://github.com/Hindjendara/CMUQ-CountsFor.git` | Public. The home of CountsFor since November 18, 2026: `main` is what the server runs (15.16). A fresh clone calls it `origin`. Its `gh-pages` branch is the GitHub Pages test copy (15.21). |
+| Original repo | `https://github.com/Adicmu/Countsfor-Summer-26.git` | No longer used. Its `main` has the old layout and feeds the old GitHub Pages site until its owner retires it (15.15). The checkout where `cleanup` was made has it as the remote `adi` with pushing disabled; never push to it. |
+| Old fork | `https://github.com/Hindjendara/Countsfor-Summer-26.git` | Hind's fork of the original repo. Not used. |
 
 ### 17.2 Branches (November 2026)
 
 | Branch | State |
 |---|---|
-| `main` | Production today (GitHub Pages and Render deploy it; the Render web service answered 503 "suspended by its owner" on November 11, 2026). Old layout (`js/`, `data/` at the root), Render and GitHub Actions files. Includes the admin page, course editor and sign-in analytics (November 3, 2026). The scrape bot still commits to it daily. |
-| `cleanup` | The work this README describes: dead code removal, the parser and data fixes, the Qatar overlay sections, the `frontend/` and `backend/` layout, environment-only configuration, the cron scraper, the `deploy/` files and the removal of the Render, GitHub Actions and Pages files. On Hind's working repo since November 10, 2026 (`origin/cleanup` in the checkout where it was made; push newer commits before you rely on that copy, 15.4), on no branch of the main repo, and not merged. Merge it at the cutover (15.15 step 3), not before. |
+| `main` | What the server runs. Since November 18, 2026 it holds the `cleanup` work (a fast-forward merge). Nothing commits data to it: the server keeps its own catalog (14.8). On the original repo, `main` is the old site with the old layout. |
+| `cleanup` | The move to the CMU-Q server and the November 2026 work: dead code removal, the parser and data fixes, the Qatar overlay sections, the `frontend/` and `backend/` layout, environment-only configuration, the cron scraper, the `deploy/` files, minors, the staff view, CMU sign-in. Merged into `main` on November 18, 2026; new work branches from `main`. |
 | `feat/admin-page` | Merged into `main` on November 3, 2026. Safe to delete. |
 | `feature/password-reset-email` | Merged (PR #13). Safe to delete. |
 | `feat/login-landing-guest-flags`, `feat/multiple-minors` | Old branches with open PRs #10 and #12 (June 2026). Each has one commit not on `main`, but guest mode, the landing page and multiple minors already exist on `main` in reworked form. Review, then close the PRs and delete the branches. |
 | `feat/ui-ux-overhaul`, `landing-copy-and-signin-fixes`, `roster-and-role-views-backup`, `worktree-role-aware-onboarding` | Local-only branches on the original laptop. |
-| `gh-pages` | On the main repo: stale, unused (15.20). On Hind's working repo: the GitHub Pages test copy; publish to it only with `scripts/publish_test_site.sh` (15.21). |
+| `gh-pages` | On this repo: the GitHub Pages test copy; publish to it only with `scripts/publish_test_site.sh` (15.21). On the original repo: stale, unused (15.20). |
 | `hind/main` | Fork main with its own SOC data commits. |
 | `hind/cursor/adicmu-pages-deploy` | Old experiment. |
 
 ### 17.3 How changes get merged
 
-Both styles appear in history. Thirteen pull requests exist on `Adicmu/Countsfor-Summer-26` (11 merged, 2 still open as of November 2026, including PR #9 from the fork `Hindjendara:main`), but since July most work was committed or merged directly into `main`. Recommended going forward:
+Both styles appear in history. Thirteen pull requests exist on the original repo `Adicmu/Countsfor-Summer-26` (11 merged, 2 still open as of November 2026, including PR #9 from the fork `Hindjendara:main`), but since July most work was committed or merged directly into `main`. Recommended going forward, on `Hindjendara/CMUQ-CountsFor`:
 
-1. Branch from the main repo's `main`: `git checkout -b feat/short-name origin/main`.
-2. Commit, push, open a PR on `Adicmu/Countsfor-Summer-26`.
-3. Before merging, `git fetch origin` and rebase or merge. Until the cutover the bot keeps committing data to `main`; after it, nothing commits data to git (the server keeps its own, 14.8), so conflicts in the data files stop.
+1. Branch from `main`: `git checkout -b feat/short-name origin/main`.
+2. Commit, push, open a PR on `Hindjendara/CMUQ-CountsFor`.
+3. Before merging, `git fetch origin` and rebase or merge. Nothing commits data to git any more (the server keeps its own, 14.8), so the data files do not conflict.
 4. Never resolve conflicts inside `frontend/data/courses.json` or `backend/data/soc.json` by hand; take one side whole (`git checkout --theirs frontend/data/courses.json`) and rebuild with `python backend/scraper/update_data.py --no-scrape` if needed.
 5. Deploy the merged `main` to the server (15.16). Merging does not deploy anything by itself any more.
 
@@ -2592,8 +2570,8 @@ No secret values belong in this file or in git. Hand secrets over in person or t
 - [ ] **CMU-Q server**: an account with `sudo` on the Ubuntu server, and the name of the IT contact who manages it, its DNS (`countsfor.qatar.cmu.edu`), its certificate (renewal date) and its backups.
 - [ ] **Server secrets**: the filled-in `/etc/countsfor/countsfor.env` (`SECRET_KEY`, email credentials, `SHIB_PROXY_SECRET`) in a password manager; with CMU sign-in also `/etc/apache2/countsfor-sso.conf` and the SP keys `/etc/shibboleth/sp-*-key.pem` (15.22).
 - [ ] **CMU sign-in**: the IT contact who registered the SP (`https://countsfor.qatar.cmu.edu/shibboleth`) with CMU's IdP and who changes the released attributes.
-- [ ] **GitHub**: admin (or at least write) access to `Adicmu/Countsfor-Summer-26`. Consider transferring the repo to a CMU-Q organization so it does not depend on a personal account.
-- [ ] **GitHub fork and working repo**: decide what happens to `Hindjendara/Countsfor-Summer-26` and `Hindjendara/CMUQ-CountsFor` (which holds the `cleanup` branch and serves the GitHub Pages test copy, 15.21). Once the server's cron scrape runs, the fork's scrape is not needed.
+- [ ] **GitHub**: admin (or at least write) access to `Hindjendara/CMUQ-CountsFor`, the project repo. Consider transferring it to a CMU-Q organization so it does not depend on a personal account.
+- [ ] **Old repos**: ask the owner of `Adicmu/Countsfor-Summer-26` to retire its GitHub Pages site and Render services (15.15). `Hindjendara/Countsfor-Summer-26` is not needed.
 - [ ] **Render (until it is retired)**: membership on the Render account or team that owns the `countsfor-summer-26` web service and the `CountsFor_Summer_2026` database, including billing (paid `starter` plans). Record who pays, and delete both after the cutover (15.15 step 9).
 - [ ] **Database**: `sudo -u countsfor psql -d countsfor` on the server, and the nightly dumps (15.17) copied somewhere off the server. Keep the final Render dump.
 - [ ] **Google Cloud**: owner or editor on the project that holds the OAuth client `378923997481-...` (to edit authorized origins and the consent screen).
