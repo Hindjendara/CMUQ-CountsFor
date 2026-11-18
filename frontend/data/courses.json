@@ -555643,7 +555643,13 @@
       "offered_pitts": false,
       "requirements": {
         "CS": [],
-        "IS": [],
+        "IS": [
+          {
+            "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Information Security & Privacy---Regulatory and Behavioral Core",
+            "type": false,
+            "major": "IS"
+          }
+        ],
         "BA": [
           {
             "requirement": "GenEd---University Core---Information Literacy",

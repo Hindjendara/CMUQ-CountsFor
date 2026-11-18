@@ -42,6 +42,21 @@
       }
     },
     {
+      "id": "is-security-privacy-67-365",
+      "note": "67-365 Human-Centered Security and Privacy: A Psychological and Usable Approach counts toward the IS Information Security & Privacy concentration (the IS program, 2026-11-18). Placed in the Regulatory and Behavioral Core, next to 17-334 Usable Privacy and Security (user's choice, 2026-11-18).",
+      "course_codes": ["67-365"],
+      "requirements": {
+        "IS": [
+          {
+            "requirement": "BS in Information Systems---Information systems concentration---IS Concentrations---Information Security & Privacy---Regulatory and Behavioral Core",
+            "type": false,
+            "major": "IS"
+          }
+        ]
+      },
+      "create_missing": false
+    },
+    {
       "id": "is-contextual-qatar-history",
       "note": "79-232 History of Qatar: IS Contextual Thinking.",
       "course_codes": ["79-232"],
