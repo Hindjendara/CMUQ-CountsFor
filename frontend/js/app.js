@@ -5,7 +5,7 @@
 const HOME_POPULAR_COURSES = ['15-122', '21-120', '36-200', '67-250', '82-112'];
 const HOME_SEARCH_CHIPS = ['15-122', 'Contextual Thinking', 'Intercultural and Global Inquiry', 'Probability'];
 const HOME_RECENT_MAPPINGS = [
-  { courses: '82-101 to 82-142', label: 'Modern Languages → IS/BA/BS/CS GenEd', major: 'IS', path: 'GenEd---Foundations---Intercultural and Global Inquiry' },
+  { courses: '82-101 to 82-142', label: 'Modern Languages → IS, BA, BS and CS Gen Ed', major: 'IS', path: 'GenEd---Foundations---Intercultural and Global Inquiry' },
   { courses: '79-286', label: 'Movers & Shakers → IS Contextual Thinking', major: 'IS', path: 'GenEd---Foundations---Contextual Thinking' },
 ];
 
@@ -734,7 +734,7 @@ const App = {
     if (p.role === 'admin') {
       return `
         <button class="role-badge rb-ah" onclick="App.editRole()" title="Click to change role">
-          <span class="rb-segment rb-primary">Admin <span class="rb-suffix">· Curriculum data</span></span>
+          <span class="rb-segment rb-primary">Admin</span>
           <span class="rb-edit-hint">Edit</span>
         </button>`;
     }
@@ -743,7 +743,7 @@ const App = {
     if (p.role === 'area_head' && (!p.primary || p.primary === 'AS')) {
       return `
         <button class="role-badge rb-ah" onclick="App.editRole()" title="Click to change role">
-          <span class="rb-segment rb-primary">${esc(roleLabel)} <span class="rb-suffix">· All programs</span></span>
+          <span class="rb-segment rb-primary">${esc(roleLabel)}</span>
           <span class="rb-edit-hint">Edit</span>
         </button>`;
     }
@@ -752,7 +752,7 @@ const App = {
     if (p.role === 'professor' && p.primary === 'AS') {
       return `
         <button class="role-badge rb-as" onclick="App.editRole()" title="Click to change role">
-          <span class="rb-segment rb-primary">Arts &amp; Sciences <span class="rb-suffix">· Faculty</span></span>
+          <span class="rb-segment rb-primary">A&amp;S <span class="rb-suffix">faculty</span></span>
           <span class="rb-edit-hint">Edit</span>
         </button>`;
     }
@@ -807,9 +807,9 @@ const App = {
 
     // Faculty-with-assigned-program (not "major")
     if (isFaculty(p) && p.primary && getRoleGroup(p) !== 'student') {
-      const progLabel = getProgramLabel(p.primary) || p.primary;
+      const progLabel = PROGRAM_LABEL[p.primary] || getProgramLabel(p.primary) || p.primary;
       return `
-        <button class="role-badge rb-${primaryLower}" onclick="App.editRole()" title="Click to change role">
+        <button class="role-badge rb-${primaryLower}" onclick="App.editRole()" title="${esc(getProgramLabel(p.primary) || p.primary)} ${esc(roleLabel)}">
           <span class="rb-segment rb-primary">${esc(progLabel)} <span class="rb-suffix">${esc(roleLabel)}</span></span>
           <span class="rb-edit-hint">Edit</span>
         </button>`;
