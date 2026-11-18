@@ -283,7 +283,7 @@ test('minor settings: only the changed values are saved; the header shows the re
   const edited = loadAdmin({ minorOverrides: [{ minor_code: 'psychology', fields: { max_with_major: 1, admin_note: 'Talk to the CMU-Q advisor first.' } }] });
   const html = edited.App._renderMinorSection('psychology', 'browse');
   assertTrue(html.includes('At most 1 course may also count toward a student&#039;s major. Courses may also count toward another minor without a limit.'), html.slice(0, 400));
-  assertTrue(html.includes('CMU-Q updated this limit'));
+  assertTrue(html.includes('Set by CMU-Q, in place of the audit rule.'));
   assertTrue(html.includes('Note from CMU-Q') && html.includes('Talk to the CMU-Q advisor first.'));
   assertTrue(html.includes('Edit minor settings'));
   edited.App._courseAdmin.view = 'minors';

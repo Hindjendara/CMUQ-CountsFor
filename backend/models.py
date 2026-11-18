@@ -228,6 +228,8 @@ class Flag(db.Model):
 
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
     admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Students see admin_notes only when an admin turns this on (flags.py).
+    admin_notes_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     resolved_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -253,6 +255,7 @@ class Flag(db.Model):
             "submitted_minor": self.submitted_minor,
             "status": self.status,
             "admin_notes": self.admin_notes,
+            "admin_notes_public": bool(self.admin_notes_public),
             "resolved_by": self.resolved_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

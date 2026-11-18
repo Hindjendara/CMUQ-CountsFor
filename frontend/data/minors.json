@@ -797,9 +797,7 @@
           "courses": ["21-270", "70-398", "70-428", "70-492", "70-495", "73-103", "73-337"],
           "select": null,
           "children": [],
-          "notes": [
-            "Any 3 courses from the list."
-          ]
+          "notes": []
         }
       ]
     },
@@ -1247,7 +1245,6 @@
           "select": null,
           "children": [],
           "notes": [
-            "Any 2 survey courses.",
             "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, 85-211 is now 85-110, 85-219 is now 85-170, 85-221 is now 85-130, 85-241 is now 85-150 and 85-251 is now 85-151."
           ]
         },

@@ -352,7 +352,7 @@ async function apiUpdateFlag(id, patch)   { return apiFetch('/api/flags/' + enco
 
 // ── Wishlist ─────────────────────────────────────────────────
 async function apiGetWishlist()                 { return apiFetch('/api/wishlist'); }
-async function apiGetWishlistRoster()           { return apiFetch('/api/wishlist/roster'); }
+async function apiGetWishlistInterest()         { return apiFetch('/api/wishlist/interest'); }
 async function apiAddWishlist(course_code, note) {
   const body = { course_code };
   if (note !== undefined) body.note = note;

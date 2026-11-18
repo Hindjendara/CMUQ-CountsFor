@@ -1,6 +1,8 @@
 """Flags API: faculty submit, faculty+admin resolve, students read-only.
 
 Students may list non-dismissed flags (to see flagged courses) but cannot POST.
+They see a flag's admin note only when an admin has made it visible
+(`admin_notes_public`); only admins can change that setting.
 All faculty (professor, area_head, associate_area_head, advisor) and admin share
 the same flag queue and may resolve flags.
 """
@@ -12,6 +14,7 @@ from .admin import record_event
 from .db import db
 from .models import Flag, FLAG_STATUSES
 from .permissions import (
+    is_admin,
     require_login,
     require_role_group,
     ROLE_GROUP_STUDENT,
@@ -128,7 +131,7 @@ def list_flags():
                 "reason_code": f.reason_code,
                 "reason_label": f.reason_label,
                 "status": f.status,
-                "admin_notes": f.admin_notes,
+                "admin_notes": f.admin_notes if f.admin_notes_public else None,
                 "updated_at": f.updated_at.isoformat() if f.updated_at else None,
             }
             for f in rows
@@ -156,11 +159,27 @@ def update_flag(flag_id: str):
         flag.status = data["status"]
         flag.resolved_by = g.user.id
 
+    admin = is_admin(g.user)
+    if "admin_notes_public" in data and not admin:
+        return jsonify(error="admin_only", message="Only an admin can show a note to students."), 403
+
     if "admin_notes" in data:
-        note = data["admin_notes"] or None
+        note = (data["admin_notes"] or "").strip() or None
         if note != flag.admin_notes:
             record_event(g.user, "flag.note", flag.course_code, flag_id=flag.id, note=note)
+            # A note changed by someone who is not an admin goes back to private,
+            # so students never see text no admin approved.
+            if not admin:
+                flag.admin_notes_public = False
         flag.admin_notes = note
+
+    if "admin_notes_public" in data:
+        public = bool(data["admin_notes_public"]) and bool(flag.admin_notes)
+        if public != bool(flag.admin_notes_public):
+            record_event(g.user, "flag.note_visibility", flag.course_code, flag_id=flag.id, public=public)
+        flag.admin_notes_public = public
+    if not flag.admin_notes:
+        flag.admin_notes_public = False
 
     db.session.commit()
     return jsonify(flag.to_dict())

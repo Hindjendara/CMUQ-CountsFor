@@ -12,6 +12,9 @@ const HOME_RECENT_MAPPINGS = [
 // The tab of the requirement map that lists every minor (App.activeMajor).
 const MINORS_TAB = 'MINORS';
 
+/** A minor note listing renumbered courses; the app shows "was 85-104" on each course instead. */
+const MINOR_RENUMBER_NOTE = /^Old numbers in the official file are shown as their current numbers: (.+)\.$/;
+
 const App = {
   // State
   courses: [],
@@ -765,7 +768,7 @@ const App = {
         const minorLabel = getMinorLabel(studentMinors[0]);
         return `
         <button class="role-badge rb-${primaryLower} ${cls}" onclick="App.editRole()" title="Click to change role">
-          <span class="rb-segment rb-primary">${PROGRAM_LABEL[p.primary]} <span class="rb-suffix">major</span></span>
+          <span class="rb-segment rb-primary">${PROGRAM_LABEL[p.primary]}</span>
           <span class="rb-divider"></span>
           <span class="rb-segment rb-secondary">${esc(minorLabel)} <span class="rb-suffix">minor</span></span>
           <span class="rb-edit-hint">Edit</span>
@@ -774,7 +777,7 @@ const App = {
       // Two or more minor names do not fit the navbar: show the count, name them in the tooltip.
       return `
         <button class="role-badge rb-${primaryLower} ${cls}" onclick="App.editRole()" title="${esc(this._minorNamesText(studentMinors))}. Click to change">
-          <span class="rb-segment rb-primary">${PROGRAM_LABEL[p.primary]} <span class="rb-suffix">major</span></span>
+          <span class="rb-segment rb-primary">${PROGRAM_LABEL[p.primary]}</span>
           <span class="rb-divider"></span>
           <span class="rb-segment rb-secondary">${studentMinors.length} <span class="rb-suffix">minors</span></span>
           <span class="rb-edit-hint">Edit</span>
@@ -913,8 +916,8 @@ const App = {
               </div>
               <div class="navbar-location-toggle">
                 <button class="loc-btn ${this.locationFilter==='all'?'active':''}" onclick="App.setLocation('all')">All</button>
-                <button class="loc-btn ${this.locationFilter==='qatar'?'active':''}" onclick="App.setLocation('qatar')">🇶🇦 Qatar</button>
-                <button class="loc-btn ${this.locationFilter==='pittsburgh'?'active':''}" onclick="App.setLocation('pittsburgh')">🇺🇸 Pittsburgh</button>
+                <button class="loc-btn ${this.locationFilter==='qatar'?'active':''}" onclick="App.setLocation('qatar')">Qatar</button>
+                <button class="loc-btn ${this.locationFilter==='pittsburgh'?'active':''}" onclick="App.setLocation('pittsburgh')">Pittsburgh</button>
               </div>
               <div class="navbar-modality-toggle">
                 ${MODALITY_OPTIONS.map(m => `<button class="mod-btn ${this.modalityFilter===m.id?'active':''}" onclick="App.setModalityFilter('${m.id}')">${esc(m.label)}</button>`).join('')}
@@ -924,14 +927,14 @@ const App = {
           <button class="theme-toggle" id="themeBtn" onclick="App.toggleTheme()" title="Toggle theme">${this.theme==='dark'?'☀️':'🌙'}</button>
           ${canManageUsers(this.authedUser) ? '<button class="nav-admin" onclick="App.showAdminConsole()" title="Users, faculty access, flags, insights and the activity log">Admin</button>' : ''}
           ${(canFlagCourses(this.profile) && this.authMode === 'authed' && !canManageUsers(this.authedUser)) ? '<button class="nav-admin" onclick="App.showFlagReview()" title="Review and resolve course flags">Flag review</button>' : ''}
-          ${(isFaculty(this.profile) && this.authMode === 'authed') ? '<button class="nav-admin" onclick="App.showStudentFavorites()" title="View student saved courses and notes">Student favorites</button>' : ''}
+          ${(isFaculty(this.profile) && this.authMode === 'authed') ? '<button class="nav-admin" onclick="App.showStudentsView()" title="Look up a student\'s programs and see which courses students save">Students</button>' : ''}
           ${this.authMode === 'authed' ? '<button class="nav-signout" onclick="App.signOut()" title="Sign out" aria-label="Sign out">Sign out</button>' : ''}
         </div>
       </nav>
 
       <div class="mobile-lens-toggle ${isSplit?'split-active':''}" id="mobileLensToggle">
-        <button class="mobile-lens-btn ${this.mobileLens==='lookup'?'active':''}" onclick="App.setMobileLens('lookup')">🔍 Course Lookup</button>
-        <button class="mobile-lens-btn ${this.mobileLens==='map'?'active':''}" onclick="App.setMobileLens('map')">🗂 Requirement Map</button>
+        <button class="mobile-lens-btn ${this.mobileLens==='lookup'?'active':''}" onclick="App.setMobileLens('lookup')">Course lookup</button>
+        <button class="mobile-lens-btn ${this.mobileLens==='map'?'active':''}" onclick="App.setMobileLens('map')">Requirement map</button>
       </div>
 
       <div class="main-layout ${isSplit?'layout-split':'layout-focused'}" id="mainLayout">
@@ -1986,7 +1989,11 @@ const App = {
     const p = this.profile && this.profile.primary;
     const studentMinors = isStudent(this.profile) ? getProfileMinors(this.profile) : [];
 
-    const lead = 'See what it counts for: View every major requirement and General Education category it fulfills, side by side.';
+    const lead = 'See which major requirements and Gen Ed categories a course counts for.';
+    // Students and guests: CountsFor is a guide, the degree audit is the record.
+    const auditNotice = (!this.profile || isStudent(this.profile))
+      ? '<p class="home-notice" role="note">CountsFor does not replace your degree audit. Check your plan in Stellic and with your advisor.</p>'
+      : '';
 
     let browseSub;
     if (vm === 'focused-single') {
@@ -2040,6 +2047,7 @@ const App = {
             </div>
 
             <div class="home-dock-slot ${dockHtml ? 'has-dock' : ''}" id="homeDock">${dockHtml}</div>
+            ${auditNotice}
           </section>
 
           ${quickStartHtml}
@@ -2143,8 +2151,8 @@ const App = {
 
   _popularSubText(peerScope, program) {
     if (peerScope) return `Top among ${program} students this semester`;
-    if (this.authMode === 'authed') return `Suggested courses. Be the first ${program} student to explore`;
-    return 'Suggested starter courses';
+    if (this.authMode === 'authed') return `Suggested for ${program} students`;
+    return 'Suggested courses';
   },
 
   _renderQuickStart(browseMajor) {
@@ -2645,7 +2653,7 @@ const App = {
     }
     const p = this._treeSubject();
     const studentTree = this._isStudentTree() && p.primary === this.activeMajor;
-    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
+    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Filtered by ${esc(this._activeFilterSummary().join(' · '))}</div>`;
     let html = this.viewingStudent ? this._viewedStudentBannerHtml()
       : (studentTree ? this._studentProgramsBarHtml() : '');
     const sections = this.treeSections[this.activeMajor];
@@ -2862,10 +2870,13 @@ const App = {
       }
     }
 
+    const was = inMinor ? this._minorFormerCodes(ctx.minor)[c.code] : null;
+    const wasHtml = was ? ` <span class="tr-leaf-was" title="The official minor list uses the old number ${esc(was)}">was ${esc(was)}</span>` : '';
+
     return `
       <div class="tr-leaf ${isActive ? 'active' : ''}" data-course-code="${esc(c.code)}">
         <span class="tr-leaf-code">${esc(c.code)}</span>
-        <span class="tr-leaf-name">${esc(c.name)}${notes.length ? `<span class="tr-leaf-notes">${notes.join('')}</span>` : ''}</span>
+        <span class="tr-leaf-name">${esc(c.name)}${wasHtml}${notes.length ? `<span class="tr-leaf-notes">${notes.join('')}</span>` : ''}</span>
         ${c.units ? `<span class="tr-leaf-units">${c.units}u</span>` : ''}
         ${alsoHtml}${mpChip}
         ${this._renderRowActions(fullCourse)}
@@ -3159,7 +3170,7 @@ const App = {
         <div class="wl-header">
           <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
           <div class="wl-title">Saved courses${courses.length ? ` <span class="wl-count">· ${courses.length}</span>` : ''}</div>
-          <p class="wl-hint">Add a note on each course. Faculty advisors can read these when you share favorites.</p>
+          <p class="wl-hint">Your saved courses and notes are private. Faculty see only how many students saved each course.</p>
         </div>
         <div class="wl-list">${rowsHtml}</div>
       </div>
@@ -4055,7 +4066,7 @@ const App = {
           <div class="adm-course"><span class="adm-course-code">${esc(f.course_code)}</span><span class="adm-course-name">${esc(f.course_name)}</span></div>
           <span class="adm-status adm-status-${esc(f.status)}">${esc(f.status)}</span>
           <div class="adm-reason">${esc(f.reason_label)}</div>
-          ${f.admin_notes ? `<div class="adm-notes adm-notes-admin">${esc(f.admin_notes)}</div>` : ''}
+          ${f.admin_notes ? `<div class="adm-notes adm-notes-admin"><strong>Note from CMU-Q:</strong> ${esc(f.admin_notes)}</div>` : ''}
         </div>`).join('')
       : '<div class="empty-state"><div class="empty-text">No flagged courses right now.</div></div>';
     el.innerHTML = `
@@ -4064,54 +4075,71 @@ const App = {
           <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
           <div class="adm-title">Flagged courses <span class="adm-count">· ${items.length}</span></div>
         </div>
-        <p class="adm-hint">Read-only. Students cannot submit flags. Faculty report and resolve issues.</p>
+        <p class="adm-hint">Courses that faculty reported for review. Their details may change once a report is resolved.</p>
         <div class="adm-list">${rows}</div>
       </div>`;
   },
 
-  async showStudentFavorites() {
+  /**
+   * Faculty: look up any student's major and minors (GET /api/users/students),
+   * and see how many students saved each course (GET /api/wishlist/interest).
+   * A student's own saved courses and notes stay private to that student.
+   */
+  async showStudentsView() {
     if (!isFaculty(this.profile) || this.authMode !== 'authed') {
       showToast('Faculty access required.');
       return;
     }
-    this._homeView = 'studentfavs';
+    this._homeView = 'students';
     const el = document.getElementById('leftBody');
     if (!el) return;
-    el.innerHTML = '<div class="empty-state"><div class="spinner"></div><div class="empty-text" style="margin-top:12px">Loading student favorites…</div></div>';
-    const r = await apiGetWishlistRoster();
-    if (!r.ok) {
-      el.innerHTML = `<div class="empty-state"><div class="empty-text">Could not load favorites: ${esc((r.data && r.data.message) || 'error')}</div></div>`;
-      return;
-    }
-    const students = (r.data && r.data.students) || [];
-    this._sfStudents = { roster: students, found: [] };
-    const blocks = students.length ? students.map((s, n) => {
-      const rows = (s.items || []).map(i => `
-        <li><strong>${esc(i.course_code)}</strong>${i.note ? `: <em>${esc(i.note)}</em>` : ''}</li>`).join('') || '<li class="sf-empty">No saved courses</li>';
-      return `
-        <div class="sf-student">
-          <div class="sf-student-head"><strong>${esc(s.name)}</strong> <span class="sf-email">${esc(s.email)}</span>${s.primary_program ? ` · ${esc(s.primary_program)}` : ''}${this._sfMinorsText(s)}
-            <button type="button" class="adm-btn sf-view" onclick="App._viewListedStudent('roster', ${n})" title="Open this student's major and minors in the requirement tree">View programs</button></div>
-          <ul class="sf-courses">${rows}</ul>
-        </div>`;
-    }).join('') : '<div class="empty-state"><div class="empty-text">No students have saved courses yet.</div></div>';
+    this._sfStudents = { found: [] };
     el.innerHTML = `
       <div class="adm-view">
         <div class="adm-header">
           <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
-          <div class="adm-title">Student favorites <span class="adm-count">· ${students.length} students</span></div>
+          <div class="adm-title">Students</div>
         </div>
-        <div class="sf-find">
-          <label class="sf-find-label" for="sfFind">Find any student to see their major and minors</label>
+        <section class="sf-find" aria-labelledby="sfFindLabel">
+          <label class="sf-find-label" id="sfFindLabel" for="sfFind">Find a student</label>
           <div class="adm-search-row">
-            <input type="search" class="adm-search" id="sfFind" placeholder="Name or andrew email" autocomplete="off"
+            <input type="search" class="adm-search" id="sfFind" placeholder="Name or Andrew email" autocomplete="off"
               onkeydown="if(event.key==='Enter'){App._findStudents(this.value);}" />
             <button type="button" class="adm-btn" onclick="App._findStudents(document.getElementById('sfFind').value)">Search</button>
           </div>
           <div id="sfFindResults" class="sf-find-results" aria-live="polite"></div>
-        </div>
-        <div class="sf-list">${blocks}</div>
+        </section>
+        <section class="sf-interest" aria-labelledby="sfInterestTitle">
+          <h3 class="sf-section-title" id="sfInterestTitle">Course interest</h3>
+          <p class="sf-section-sub">Number of students who saved each course. Names and notes are not shown.</p>
+          <div id="sfInterestBody"><div class="empty-text">Loading…</div></div>
+        </section>
       </div>`;
+    const r = await apiGetWishlistInterest();
+    const body = document.getElementById('sfInterestBody');
+    if (!body) return;
+    if (!r.ok) {
+      body.innerHTML = `<div class="empty-text">Could not load course interest: ${esc((r.data && r.data.message) || 'error')}</div>`;
+      return;
+    }
+    const courses = (r.data && r.data.courses) || [];
+    const total = (r.data && r.data.total_courses) || courses.length;
+    body.innerHTML = courses.length ? `
+      <ol class="sf-interest-list">${courses.map(i => {
+        const c = lookupCourse(this.courseIndex, i.course_code);
+        const n = Number(i.students) || 0;
+        return `
+        <li class="sf-interest-row">
+          <button type="button" class="sf-interest-course" onclick="App.selectCourseFromTree('${esc(i.course_code)}')">
+            <span class="sf-interest-code">${esc(i.course_code)}</span>
+            <span class="sf-interest-name">${esc(c ? c.course_name : '')}</span>
+          </button>
+          <span class="sf-interest-count">${n} student${n === 1 ? '' : 's'}</span>
+        </li>`;
+      }).join('')}
+      </ol>
+      ${total > courses.length ? `<div class="sf-find-more">Top ${courses.length} of ${total} saved courses.</div>` : ''}`
+      : '<div class="empty-text">No student has saved a course yet.</div>';
   },
 
   /** " · Psychology and Economics minors" after a student's name, or nothing. */
@@ -4120,7 +4148,7 @@ const App = {
     return minors.length ? ` · ${esc(joinWithAnd(minors))} minor${minors.length === 1 ? '' : 's'}` : '';
   },
 
-  /** Student favorites: search every student (GET /api/users/students) to open one. */
+  /** Students view: search every student (GET /api/users/students) to open one. */
   async _findStudents(query) {
     const out = document.getElementById('sfFindResults');
     if (!out) return;
@@ -4131,11 +4159,11 @@ const App = {
       return;
     }
     const found = (r.data && r.data.items) || [];
-    if (!this._sfStudents) this._sfStudents = { roster: [], found: [] };
+    if (!this._sfStudents) this._sfStudents = { found: [] };
     this._sfStudents.found = found;
     const total = (r.data && r.data.total) || found.length;
     out.innerHTML = found.length ? `
-      ${total > found.length ? `<div class="sf-find-more">Showing ${found.length} of ${total}. Type more of the name or email to narrow it.</div>` : ''}
+      ${total > found.length ? `<div class="sf-find-more">Showing ${found.length} of ${total}. Refine the search to narrow the list.</div>` : ''}
       <ul class="sf-find-list">${found.map((s, n) => `
         <li class="sf-find-row">
           <span><strong>${esc(s.name)}</strong> <span class="sf-email">${esc(s.email)}</span>${s.primary_program ? ` · ${esc(s.primary_program)}` : ''}${this._sfMinorsText(s)}</span>
@@ -7000,7 +7028,11 @@ const App = {
     const when = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
     const submitter = `${esc(f.submitted_by_name || f.submitted_by_email || 'Unknown')} <span class="adm-role">· ${esc(f.submitted_by_role || '')}${f.submitted_program ? ' · ' + esc(f.submitted_program) : ''}</span>`;
     const notes = f.notes ? `<div class="adm-notes"><strong>Notes:</strong> ${esc(f.notes)}</div>` : '';
-    const adminNotes = f.admin_notes ? `<div class="adm-notes adm-notes-admin"><strong>Admin:</strong> ${esc(f.admin_notes)}</div>` : '';
+    const adminNotes = f.admin_notes ? `
+      <div class="adm-notes adm-notes-admin"><strong>Admin note</strong>
+        <span class="adm-note-vis ${f.admin_notes_public ? 'is-public' : ''}">${f.admin_notes_public ? 'Visible to students' : 'Staff only'}</span>
+        <div>${esc(f.admin_notes)}</div></div>` : '';
+    const noteLabel = f.admin_notes ? 'Edit note' : 'Add note';
     // Read-only rows (faculty "My flags") show status + admin feedback but no
     // review controls — only admins can change a flag's state.
     const actions = readOnly ? '' : ((f.status === 'pending' || f.status === 'reviewed') ? `
@@ -7008,14 +7040,14 @@ const App = {
         <button class="adm-btn adm-btn-resolve"  onclick="App._setFlagStatus('${esc(f.id)}','resolved')">Resolve</button>
         <button class="adm-btn adm-btn-review"   onclick="App._setFlagStatus('${esc(f.id)}','reviewed')">Mark reviewed</button>
         <button class="adm-btn adm-btn-dismiss"  onclick="App._setFlagStatus('${esc(f.id)}','dismissed')">Dismiss</button>
-        <button class="adm-btn adm-btn-note"     onclick="App._promptFlagNote('${esc(f.id)}')">Add note…</button>
+        <button class="adm-btn adm-btn-note"     onclick="App._editFlagNote('${esc(f.id)}')">${noteLabel}</button>
       </div>` : `
       <div class="adm-actions">
         <button class="adm-btn" onclick="App._setFlagStatus('${esc(f.id)}','pending')">Reopen as pending</button>
-        <button class="adm-btn adm-btn-note" onclick="App._promptFlagNote('${esc(f.id)}')">Add note…</button>
+        <button class="adm-btn adm-btn-note" onclick="App._editFlagNote('${esc(f.id)}')">${noteLabel}</button>
       </div>`);
     return `
-      <div class="adm-row">
+      <div class="adm-row" data-flag-id="${esc(f.id)}">
         <div class="adm-row-head">
           <div class="adm-course">
             <span class="adm-course-code">${esc(f.course_code)}</span>
@@ -7046,15 +7078,45 @@ const App = {
     await this._loadFlagReview();
   },
 
-  async _promptFlagNote(id) {
-    const note = window.prompt('Admin note for this flag (leave empty to clear):', '');
-    if (note === null) return;  // cancelled
-    const r = await apiUpdateFlag(id, { admin_notes: note });
+  /** Open the note editor under a flag row. Only admins get the "Show this note to students" box. */
+  _editFlagNote(id) {
+    const f = ((this._adminState && this._adminState.items) || []).find(x => x.id === id);
+    const row = document.querySelector(`.adm-row[data-flag-id="${id}"]`);
+    if (!f || !row) return;
+    const existing = row.querySelector('.adm-note-editor');
+    if (existing) { existing.remove(); return; }
+    const admin = canManageUsers(this.authedUser);
+    const editor = document.createElement('div');
+    editor.className = 'adm-note-editor';
+    editor.innerHTML = `
+      <label class="adm-note-label" for="flagNote-${esc(id)}">Admin note</label>
+      <textarea class="adm-note-input" id="flagNote-${esc(id)}" rows="3" maxlength="2000">${esc(f.admin_notes || '')}</textarea>
+      ${admin ? `
+      <label class="adm-note-public">
+        <input type="checkbox" id="flagNotePublic-${esc(id)}" ${f.admin_notes_public ? 'checked' : ''} />
+        <span>Show this note to students</span>
+      </label>` : '<p class="adm-note-help">Students do not see this note unless an admin shows it.</p>'}
+      <div class="adm-actions">
+        <button type="button" class="adm-btn adm-btn-resolve" onclick="App._saveFlagNote('${esc(id)}')">Save note</button>
+        <button type="button" class="adm-btn" onclick="this.closest('.adm-note-editor').remove()">Cancel</button>
+      </div>`;
+    row.appendChild(editor);
+    const ta = editor.querySelector('textarea');
+    if (ta) ta.focus();
+  },
+
+  async _saveFlagNote(id) {
+    const ta = document.getElementById(`flagNote-${id}`);
+    if (!ta) return;
+    const patch = { admin_notes: ta.value };
+    const box = document.getElementById(`flagNotePublic-${id}`);
+    if (box && canManageUsers(this.authedUser)) patch.admin_notes_public = !!box.checked;
+    const r = await apiUpdateFlag(id, patch);
     if (!r.ok) {
       showToast((r.data && r.data.message) || 'Update failed.');
       return;
     }
-    showToast('Note saved');
+    showToast(r.data && r.data.admin_notes_public ? 'Note saved. Students can see it.' : 'Note saved.');
     await this._loadFlagReview();
   },
 
@@ -7089,7 +7151,7 @@ const App = {
   /**
    * Faculty and admins: open one student's major tree with the student's
    * minors below it, read only (README 8.10). s is a student as the users
-   * list, /api/users/students or the favorites roster give it:
+   * list or /api/users/students give it:
    * { name, email, primary_program, minor_codes }.
    */
   viewStudentPrograms(s) {
@@ -7198,6 +7260,29 @@ const App = {
     for (const node of m.tree.children || []) walk(node, 0);
   },
 
+  /**
+   * New code to old code for a minor whose official file uses old course
+   * numbers, read from its renumbering notes ("85-104 is now 85-190").
+   */
+  _minorFormerCodes(m) {
+    if (!m || !m.tree) return {};
+    if (!this._formerCodeCache) this._formerCodeCache = new WeakMap();
+    let map = this._formerCodeCache.get(m);
+    if (map) return map;
+    map = {};
+    const walk = node => {
+      for (const note of node.notes || []) {
+        const hit = MINOR_RENUMBER_NOTE.exec(note);
+        if (!hit) continue;
+        for (const pair of hit[1].matchAll(/(\d{2}-\d{3}) is now (\d{2}-\d{3})/g)) map[pair[2]] = pair[1];
+      }
+      for (const child of node.children || []) walk(child);
+    };
+    walk(m.tree);
+    this._formerCodeCache.set(m, map);
+    return map;
+  },
+
   /** A minor's text as HTML: escaped, with course codes ("85-170") kept whole at a line end. */
   _minorTextHtml(text) {
     return esc(text).replace(/\b\d{2}-\d{3}\b/g, '<span class="mn-code">$&</span>');
@@ -7211,7 +7296,10 @@ const App = {
     const archived = admin ? this._archivedCodesIn(node.missing) : [];
     if (archived.length) node = Object.assign({}, node, { missing: node.missing.filter(code => !archived.includes(code)) });
     const lines = [];
-    for (const note of node.notes || []) lines.push(`<div class="mn-node-note">${this._minorTextHtml(note)}</div>`);
+    for (const note of node.notes || []) {
+      if (MINOR_RENUMBER_NOTE.test(note)) continue;  // shown on each course instead (_minorFormerCodes)
+      lines.push(`<div class="mn-node-note">${this._minorTextHtml(note)}</div>`);
+    }
     if (node.missing && node.missing.length) {
       lines.push(`<div class="mn-node-note">Also listed, but not in the course catalog: ${this._minorTextHtml(joinWithAnd(node.missing))}.</div>`);
     }
@@ -7588,7 +7676,7 @@ const App = {
         <div class="empty-text">Choose a minor to see its full requirements.</div>
       </div>`;
     }
-    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Tree filtered: ${esc(this._activeFilterSummary().join(' · '))}</div>`;
+    const filterHint = `<div class="tree-filter-hint" aria-live="polite">Filtered by ${esc(this._activeFilterSummary().join(' · '))}</div>`;
     return filterHint + this._renderMinorSection(sel, 'browse');
   },
 
@@ -7669,13 +7757,12 @@ const App = {
     const dcHtml = `
       <div class="mn-dc">
         <div><span class="mn-dc-label">Double counting</span> ${esc(limitText)}</div>
-        ${ruleText ? `<div class="mn-dc-rule">${ruleLabel}: ${esc(ruleText)}</div>` : ''}
       </div>`;
 
     // Set on the admin page (applyMinorOverrides): a note from CMU-Q, and a limit that replaces the quoted rule.
     let adminHtml = '';
     if (dc.edited) {
-      adminHtml += `<div class="mn-dc-rule mn-dc-edited">${ruleText ? 'CMU-Q updated this limit, so it replaces the rule quoted above.' : 'CMU-Q set this limit.'}</div>`;
+      adminHtml += `<div class="mn-dc-rule mn-dc-edited">${ruleText ? `Set by CMU-Q, in place of the ${ruleLabel.toLowerCase()}.` : 'Set by CMU-Q.'}</div>`;
     }
     if (def.admin_note) adminHtml += `<div class="mn-admin-note" role="note"><span class="mn-dc-label">Note from CMU-Q</span> ${esc(def.admin_note)}</div>`;
 
@@ -7685,7 +7772,7 @@ const App = {
     const noCategories = !(m.tree.children || []).length;
     const aboutInner = (noCategories ? '' : group('Notes', def.notes))
       + group('Grades', def.grade_rules)
-      + group('Double counting', dc.notes);
+      + group('Double counting', [ruleText ? `${ruleLabel}: ${ruleText}` : '', ...(dc.notes || [])].filter(Boolean));
     const aboutHtml = aboutInner
       ? `<details class="mn-about"><summary>About this minor</summary>${aboutInner}</details>`
       : '';

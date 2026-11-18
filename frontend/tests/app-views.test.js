@@ -560,7 +560,7 @@ test('minors: picking in the Minors tab dropdown draws only the minor under it',
   App._onBrowseMinorPick('math');
   assertEqual(App.browseMinorCode, 'math');
   assertEqual(treeHtml(document), tree, 'the dropdown is not drawn again');
-  assertTrue(body.innerHTML.includes('id="mn-section-math"') && body.innerHTML.includes('Tree filtered'));
+  assertTrue(body.innerHTML.includes('id="mn-section-math"') && body.innerHTML.includes('Filtered by'));
   document.live.delete('mnBrowseBody');
   App._onBrowseMinorPick('economics');  // without the body (another tab drawn), the whole tab is drawn
   assertTrue(treeHtml(document).includes('id="mn-section-economics"'));
@@ -683,22 +683,26 @@ test('staff view: Admin, Users has View programs on student rows only', () => {
   assertTrue(treeHtml(document).includes('Viewing Alice Student'));
 });
 
-test('staff view: Student favorites names each student\'s minors, finds any student and opens one', async () => {
+test('staff view: the Students view finds any student and opens one; favorites stay private', async () => {
   const { App, document, ctx } = loadMinorsApp(STAFF('professor'));
   App.authMode = 'authed';
   const searches = [];
-  ctx.apiGetWishlistRoster = async () => ({ ok: true, data: { students: [
-    { user_id: 7, name: 'Alice Student', email: 'alice@andrew.cmu.edu', primary_program: 'CS', minor_codes: ['psychology'], items: [{ course_code: '85-110', note: '' }] },
-  ] } });
+  ctx.apiGetWishlistInterest = async () => ({ ok: true, data: { courses: [
+    { course_code: '85-110', students: 3 }, { course_code: '15-122', students: 1 },
+  ], total_courses: 5, students: 4 } });
   ctx.apiListStudents = async q => { searches.push(q); return { ok: true, data: { total: 1, items: [
     { id: 9, name: 'Bob Builder', email: 'bob@andrew.cmu.edu', primary_program: 'BA', minor_codes: ['economics'] },
   ] } }; };
-  await App.showStudentFavorites();
-  let left = document.getElementById('leftBody').innerHTML;
-  assertTrue(left.includes('Alice Student') && left.includes(' · Psychology minor'), 'the roster names the minors');
-  assertTrue(left.includes("App._viewListedStudent('roster', 0)") && left.includes('Find any student'));
-  assertTrue(left.includes('id="sfFindResults"'));
-  // The fake DOM makes elements only for ids under #app; give the results list one.
+  assertTrue(typeof App.showStudentFavorites === 'undefined', 'the per student favorites roster is gone');
+  // The fake DOM makes elements only for ids under #app; give the view's parts one.
+  document.live.set('sfInterestBody', { innerHTML: '' });
+  await App.showStudentsView();
+  const left = document.getElementById('leftBody').innerHTML;
+  assertTrue(left.includes('Find a student') && left.includes('id="sfFindResults"'));
+  assertTrue(left.includes('Course interest') && left.includes('Names and notes are not shown.'));
+  const interest = document.getElementById('sfInterestBody').innerHTML;
+  assertTrue(interest.includes('85-110') && interest.includes('3 students') && interest.includes('1 student<'), 'counts per course');
+  assertTrue(interest.includes('Top 2 of 5 saved courses.'));
   document.live.set('sfFindResults', { innerHTML: '' });
   await App._findStudents(' bob ');
   assertEqual(searches.pop(), 'bob');
@@ -708,6 +712,17 @@ test('staff view: Student favorites names each student\'s minors, finds any stud
   assertEqual(App.activeMajor, 'BA');
   const html = treeHtml(document);
   assertTrue(html.includes('Viewing Bob Builder') && html.includes('id="mn-section-economics"'));
+});
+
+test('minors: renumbered courses show their old number beside them, not a sentence above the list', () => {
+  const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology']));
+  App.renderTree();
+  const html = treeHtml(document);
+  assertFalse(html.includes('Old numbers in the official file'), 'the long note is not shown');
+  assertFalse(html.includes('Any 2 survey courses.'), 'no note that only repeats the badge');
+  assertTrue(/data-course-code="85-110"[\s\S]*?was 85-211/.test(html), '85-110 was 85-211');
+  const header = html.slice(html.indexOf('id="mn-section-psychology"'), html.indexOf('mn-about'));
+  assertFalse(header.includes('Audit rule:'), 'the quoted rule is under About this minor, not in the header');
 });
 
 async function loadSemesterApp(catalog, saved, socSemesters = SOC_SEMESTERS) {

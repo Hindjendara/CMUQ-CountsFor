@@ -63,14 +63,34 @@ def test_wishlists_are_user_isolated(app, client, student):
     assert r.get_json()["items"] == []
 
 
-def test_roster_names_each_students_minors(client, student, professor):
+def test_staff_see_only_anonymous_interest(app, client, student, professor):
+    from .conftest import _make_user, login as _login
+    bob = _make_user(app, "bob@andrew.cmu.edu", role="student")
+    _login(client, student)
+    assert client.post("/api/wishlist", json={"course_code": "15-112", "note": "private note"}).status_code in (200, 201)
+    assert client.post("/api/wishlist", json={"course_code": "85-110"}).status_code in (200, 201)
+    _login(client, bob)
+    assert client.post("/api/wishlist", json={"course_code": "15-112"}).status_code in (200, 201)
+
+    _login(client, professor)
+    assert client.get("/api/wishlist/roster").status_code in (404, 405)  # the route is gone
+    r = client.get("/api/wishlist/interest")
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()
+    assert body["courses"] == [
+        {"course_code": "15-112", "students": 2},
+        {"course_code": "85-110", "students": 1},
+    ]
+    assert body["students"] == 2 and body["total_courses"] == 2
+    text = r.get_data(as_text=True)
+    assert "alice" not in text and "bob" not in text and "private note" not in text
+
+    r = client.get("/api/wishlist/interest?limit=1")
+    assert r.get_json()["courses"] == [{"course_code": "15-112", "students": 2}]
+    assert r.get_json()["total_courses"] == 2
+
+
+def test_students_cannot_read_interest(client, student):
     from .conftest import login as _login
     _login(client, student)
-    assert client.patch("/api/me", json={"primary_program": "CS", "minor_codes": ["psychology"]}).status_code == 200
-    assert client.post("/api/wishlist", json={"course_code": "15-112"}).status_code in (200, 201)
-    _login(client, professor)
-    r = client.get("/api/wishlist/roster")
-    assert r.status_code == 200, r.get_json()
-    [entry] = r.get_json()["students"]
-    assert entry["email"] == "alice@andrew.cmu.edu"
-    assert entry["minor_codes"] == ["psychology"]
+    assert client.get("/api/wishlist/interest").status_code == 403

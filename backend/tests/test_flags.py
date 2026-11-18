@@ -155,3 +155,58 @@ def test_admin_patch_rejects_invalid_status(client, professor, admin):
     login(client, admin)
     r = client.patch(f"/api/flags/{flag_id}", json={"status": "weird"})
     assert r.status_code == 400
+
+
+# ── Admin notes: private unless an admin shows them to students ──
+
+def _student_note(client, student, flag_id):
+    login(client, student)
+    [item] = [f for f in client.get("/api/flags").get_json()["items"] if f["id"] == flag_id]
+    return item["admin_notes"]
+
+
+def test_admin_notes_are_private_by_default(client, student, professor, admin):
+    login(client, professor)
+    flag_id = client.post("/api/flags", json=VALID_FLAG).get_json()["id"]
+    login(client, admin)
+    r = client.patch(f"/api/flags/{flag_id}", json={"admin_notes": "Checked with the department."})
+    assert r.status_code == 200 and r.get_json()["admin_notes_public"] is False
+    assert _student_note(client, student, flag_id) is None
+
+
+def test_admin_can_show_a_note_to_students(client, student, professor, admin):
+    login(client, professor)
+    flag_id = client.post("/api/flags", json=VALID_FLAG).get_json()["id"]
+    login(client, admin)
+    r = client.patch(f"/api/flags/{flag_id}", json={"admin_notes": "Units fixed for Fall 2026.", "admin_notes_public": True})
+    assert r.status_code == 200 and r.get_json()["admin_notes_public"] is True
+    assert _student_note(client, student, flag_id) == "Units fixed for Fall 2026."
+    login(client, admin)
+    assert client.patch(f"/api/flags/{flag_id}", json={"admin_notes_public": False}).get_json()["admin_notes_public"] is False
+    assert _student_note(client, student, flag_id) is None
+
+
+def test_faculty_cannot_show_a_note_to_students(client, professor):
+    login(client, professor)
+    flag_id = client.post("/api/flags", json=VALID_FLAG).get_json()["id"]
+    r = client.patch(f"/api/flags/{flag_id}", json={"admin_notes": "x", "admin_notes_public": True})
+    assert r.status_code == 403 and r.get_json()["error"] == "admin_only"
+
+
+def test_a_note_changed_by_faculty_goes_back_to_private(client, student, professor, admin):
+    login(client, professor)
+    flag_id = client.post("/api/flags", json=VALID_FLAG).get_json()["id"]
+    login(client, admin)
+    client.patch(f"/api/flags/{flag_id}", json={"admin_notes": "Approved text.", "admin_notes_public": True})
+    login(client, professor)
+    r = client.patch(f"/api/flags/{flag_id}", json={"admin_notes": "Changed by faculty."})
+    assert r.status_code == 200 and r.get_json()["admin_notes_public"] is False
+    assert _student_note(client, student, flag_id) is None
+
+
+def test_an_empty_note_cannot_be_public(client, professor, admin):
+    login(client, professor)
+    flag_id = client.post("/api/flags", json=VALID_FLAG).get_json()["id"]
+    login(client, admin)
+    r = client.patch(f"/api/flags/{flag_id}", json={"admin_notes_public": True})
+    assert r.get_json()["admin_notes_public"] is False

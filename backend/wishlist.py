@@ -1,5 +1,10 @@
-"""Wishlist API: students save courses with optional notes; faculty view roster."""
+"""Wishlist API: students save courses with optional notes.
+
+A student's saved courses and notes are private to that student. Faculty and
+admins see only anonymous counts: how many students saved each course.
+"""
 from flask import Blueprint, g, jsonify, request
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from .db import db
@@ -22,32 +27,40 @@ def get_wishlist():
     return jsonify(items=[i.to_dict() for i in items])
 
 
-@bp.route("/roster", methods=["GET"])
+@bp.route("/interest", methods=["GET"])
 @require_role_group(ROLE_GROUP_FACULTY, ROLE_GROUP_ADMIN)
-def get_wishlist_roster():
-    """All students' saved courses with notes — for faculty advising."""
-    rows = (
-        db.session.query(WishlistItem, User)
+def get_wishlist_interest():
+    """How many students saved each course, most saved first. No names, no notes.
+
+    `limit` (default 50, max 500) caps the course list; `total_courses` counts
+    every saved course and `students` the students who saved at least one.
+    """
+    try:
+        limit = int(request.args.get("limit", "50") or "50")
+    except ValueError:
+        limit = 50
+    limit = min(500, max(1, limit))
+    students = func.count(func.distinct(WishlistItem.user_id))
+    base = (
+        db.session.query(WishlistItem.course_code, students)
         .join(User, User.id == WishlistItem.user_id)
         .filter(User.role == "student")
-        .order_by(User.name, WishlistItem.added_at.desc())
-        .all()
+        .group_by(WishlistItem.course_code)
     )
-    by_user: dict[int, dict] = {}
-    for item, user in rows:
-        bucket = by_user.setdefault(
-            user.id,
-            {
-                "user_id": user.id,
-                "name": user.name,
-                "email": user.email,
-                "primary_program": user.primary_program,
-                "minor_codes": user.minor_codes_list(),
-                "items": [],
-            },
-        )
-        bucket["items"].append(item.to_dict())
-    return jsonify(students=list(by_user.values()))
+    total_courses = base.count()
+    rows = base.order_by(students.desc(), WishlistItem.course_code).limit(limit).all()
+    saving = (
+        db.session.query(func.count(func.distinct(WishlistItem.user_id)))
+        .join(User, User.id == WishlistItem.user_id)
+        .filter(User.role == "student")
+        .scalar()
+        or 0
+    )
+    return jsonify(
+        courses=[{"course_code": code, "students": n} for code, n in rows],
+        total_courses=total_courses,
+        students=saving,
+    )
 
 
 @bp.route("", methods=["POST"])

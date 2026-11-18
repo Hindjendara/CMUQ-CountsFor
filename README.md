@@ -61,7 +61,7 @@ CountsFor is a web app for Carnegie Mellon University in Qatar (CMU-Q). It answe
 | Audience | What they do in CountsFor | Role(s) in the app |
 |---|---|---|
 | Students | Search courses, see what each counts for in their major and minors, save courses with notes ("Saved" list, internally "wishlist"), build weekly schedule plans and share them | `student` |
-| Faculty | Same browsing as students, plus report data problems ("flag" a course), see the flag queue, see students' saved-course roster for advising, manage the faculty directory | `professor`, `area_head`, `associate_area_head`, `advisor` (all share one permission group, `faculty`) |
+| Faculty | Same browsing as students, plus report data problems ("flag" a course), see the flag queue, look up a student's major and minors and see how many students saved each course (no names), manage the faculty directory | `professor`, `area_head`, `associate_area_head`, `advisor` (all share one permission group, `faculty`) |
 | Admins | Everything faculty can do, plus the Admin page: edit the course catalog, manage user roles, see usage insights and the audit log | `admin` |
 | Guests | Browse without an account (local only, nothing saved on a server) | none (demo mode) |
 
@@ -685,7 +685,7 @@ With `EXPOSE_RESET_TOKEN=1`, `POST /api/auth/forgot-password` returns `reset_url
 | Minor settings | `apiGetMinorOverrides` (10 s timeout, fetched with the course edits), `apiEditMinor`, `apiRevertMinor` | `/api/minors/overrides` |
 | Directory | `apiListStaffDirectory`, `apiAddStaffMember`, `apiUpsertDirectoryByEmail`, `apiRevokeDirectoryAccess`, `apiDeleteDirectoryEntry` | `/api/directory/entries` |
 | Flags | `apiCreateFlag`, `apiListFlags`, `apiUpdateFlag` | `/api/flags` |
-| Wishlist | `apiGetWishlist`, `apiGetWishlistRoster`, `apiAddWishlist`, `apiUpdateWishlistNote`, `apiRemoveWishlist` | `/api/wishlist` |
+| Wishlist | `apiGetWishlist`, `apiGetWishlistInterest`, `apiAddWishlist`, `apiUpdateWishlistNote`, `apiRemoveWishlist` | `/api/wishlist` |
 | Search analytics | `apiRecordCourseSearch`, `apiGetPopularCourses` (8 s timeout) | `/api/search-analytics` |
 | Plans | `apiGetPlans`, `apiSharePlan`, `apiCreatePlanShareLink`, `apiAcceptPlanShare` | `/api/plans` |
 
@@ -783,7 +783,13 @@ The navbar: the semester, campus and modality filters sit inline from 1280px and
 
 **Double counting.** A course in a minor's tree that also counts for the student's major is tagged "Also counts for CS" (a major requirement) or "Also counts for CS Gen Ed"; in the major tree a course a chosen minor can use is tagged "Also counts for Psychology minor". A course counts for the major through any of its rows for that major, older audit rows and rule rows included (14.10, 14.5.1). The header states the limit (`minorDoubleCountLimitText()`, from `minorDoubleCountRules()`): "At most 2 courses may also count toward your major or another minor", "No course may ..." with the categories that are free, "... without a limit" with the categories that may never be shared, or "Confirm double counting with your advisor" when the file states no rule (Biological Sciences, Student-defined). The limit is the file's (`max_with_major`, which equals `max_with_other_minors` in every file) unless an admin set one (12.6). The app does not check a student's courses against it: without course statuses it does not know which courses a student took, so there are no double counting warnings. The app offers every minor to every major, AI included, except to the majors a minor's `blocked_majors` names.
 
-**Staff view of one student.** Faculty and admins see any student's major and minors together in the same tree, read only (the original request's Step 3). A "View programs" button opens it: on every student row of Admin, Users (`_viewUserPrograms()`), on every student in Student favorites, and on every result of the "Find any student" search at the top of Student favorites (`_findStudents()`, `GET /api/users/students`, 9.5), so faculty reach students who saved no course too. `viewStudentPrograms()` sets `App.viewingStudent` (name, email, major, the known minor codes), opens the split view on the student's major and draws the tree as the student sees it, through `_treeSubject()` and `_isStudentTree()`: the major's cards, then one section per minor in the student's order (`_renderMinorSection(code, 'viewed')`), the "Also counts for" tags of that student's programs, and limit lines that say "this student's major". A banner above the tree names the student and the programs, with "Back to my view" (`exitStudentView()`); it stays on the other major tabs, which show only their own tree. There is no programs bar, no add or remove control, and nothing is saved: to change a student's programs, an admin uses the Users tab. A student without a major gets a toast instead. Tests: the "staff view" tests in `tests/app-views.test.js`, `test_users.py` and `test_wishlist.py`.
+**Staff view of one student.** Faculty and admins see any student's major and minors together in the same tree, read only (the original request's Step 3). A "View programs" button opens it: on every student row of Admin, Users (`_viewUserPrograms()`), and on every result of the "Find a student" search in the faculty **Students** view (navbar button Students, `showStudentsView()`, `_findStudents()`, `GET /api/users/students`, 9.5). `viewStudentPrograms()` sets `App.viewingStudent` (name, email, major, the known minor codes), opens the split view on the student's major and draws the tree as the student sees it, through `_treeSubject()` and `_isStudentTree()`: the major's cards, then one section per minor in the student's order (`_renderMinorSection(code, 'viewed')`), the "Also counts for" tags of that student's programs, and limit lines that say "this student's major". A banner above the tree names the student and the programs, with "Back to my view" (`exitStudentView()`); it stays on the other major tabs, which show only their own tree. There is no programs bar, no add or remove control, and nothing is saved: to change a student's programs, an admin uses the Users tab. A student without a major gets a toast instead. Tests: the "staff view" tests in `tests/app-views.test.js`, `test_users.py` and `test_wishlist.py`.
+
+**Saved courses are private.** Since November 18, 2026 a student's saved courses and notes are seen by that student only. The faculty Students view replaced the old Student favorites roster (every student's saved courses and notes, by name): below "Find a student" it lists **Course interest**, the number of students who saved each course, most saved first, with no names or notes (`GET /api/wishlist/interest`, 9.7). Admins see the same counts as "Most saved" on Admin, Insights. The student's Saved courses view says so ("Your saved courses and notes are private. Faculty see only how many students saved each course.").
+
+**Text in the minor sections.** The header shows the minor's units and one double counting line (the limit that applies, `minorDoubleCountLimitText()`); the rule quoted from the audit or catalog file is under "About this minor", Double counting. A note of the form "Old numbers in the official file are shown as their current numbers: 85-104 is now 85-190, ..." (`MINOR_RENUMBER_NOTE`) is not shown as a sentence: each listed course shows "was 85-104" after its name instead (`_minorFormerCodes()`). Two notes that only repeated the category's badge ("Any 2 survey courses." in Psychology, "Any 3 courses from the list." in Financial Management) were removed from `minors.json`.
+
+**Degree audit notice.** Students and guests see one line under the home page actions: "CountsFor does not replace your degree audit. Check your plan in Stellic and with your advisor." (`_renderHome()`, `.home-notice`). Staff do not see it.
 
 **Browse view.** Every role has a Minors tab after the major tabs: one dropdown (`#mnBrowsePick`, "Minor") lists all 17 minors, a student's own first under "Your minors", then "Other minors"; until one is chosen it shows "Choose a minor" and an empty state. Choosing one shows its full tree; only the part under the dropdown is drawn again, so the dropdown keeps the focus and its typing ("Psy" reaches Psychology) while the arrow keys move through the minors. Course codes in notes never break at their hyphen (`.mn-code`). Students also see an "Add to my minors" button there (or "Not open to BA majors"); an advisor with minor scope starts on their minor. Course cards list the minors a course counts for ("Psychology: Survey Courses or Psychology Elective", the student's own first), and the home search offers each minor ("Minor · Neuroscience minor").
 
@@ -863,11 +869,13 @@ Error shape everywhere: `{"error": "<code>", "message": "<human text>"}`.
 
 - Faculty and admin create flags. The client may send its own `flg-...` id (for idempotent migration from localStorage); a repeated id returns the existing flag with 200.
 - `GET /api/flags`: students see non-dismissed flags with fewer fields; faculty and admin see everything (`?mine=1` limits faculty to their own). Filters: `status`, `course`, `page`, `limit` (max 100).
-- `PATCH`: faculty and admin set `status` and `admin_notes`; changes write `flag.status` and `flag.note` audit rows.
+- A student sees a flag's `admin_notes` only when `admin_notes_public` is true; otherwise the field is `null`. New and existing notes start private.
+- `PATCH`: faculty and admin set `status` and `admin_notes`; changes write `flag.status` and `flag.note` audit rows. Only an admin may send `admin_notes_public` (anyone else gets 403 `admin_only`); a change writes a `flag.note_visibility` audit row. When someone who is not an admin changes the note text, the note goes back to private, so students never see text an admin did not approve. An empty note is never public.
+- On the page: each flag row has "Add note" or "Edit note", which opens an editor under the row. Admins also get a "Show this note to students" checkbox, and the row labels the note "Visible to students" or "Staff only". The student list labels a shown note "Note from CMU-Q".
 
 ### 9.7 Wishlist (`backend/wishlist.py`)
 
-Student-only CRUD on the caller's own saved courses with notes. `GET /api/wishlist/roster` gives faculty and admins every student's saved courses grouped by student (advising view), with each student's `primary_program` and `minor_codes` (8.10).
+Student-only CRUD on the caller's own saved courses with notes; no one else can read them. `GET /api/wishlist/interest` (faculty and admin) gives counts only: `courses` (`{course_code, students}`, the number of students who saved it, most first, then by code; `limit` default 50, max 500), `total_courses` and `students` (students with at least one saved course). Only users with role `student` are counted. The old `GET /api/wishlist/roster`, which listed every student's saved courses and notes by name, was removed on November 18, 2026.
 
 ### 9.8 Plans (`backend/plans.py`)
 
@@ -916,7 +924,7 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | GET | `/api/flags` | login (scoped by group) | `flags.py` | List flags |
 | PATCH | `/api/flags/<id>` | faculty, admin | `flags.py` | Change status or notes |
 | GET | `/api/wishlist` | role `student` | `wishlist.py` | Own saved courses |
-| GET | `/api/wishlist/roster` | faculty, admin | `wishlist.py` | All students' saved courses |
+| GET | `/api/wishlist/interest` | faculty, admin | `wishlist.py` | Number of students who saved each course (no names) |
 | POST | `/api/wishlist` | role `student` | `wishlist.py` | Save a course (upsert note) |
 | PATCH | `/api/wishlist/<code>` | role `student` | `wishlist.py` | Edit note |
 | DELETE | `/api/wishlist/<code>` | role `student` | `wishlist.py` | Remove (204) |
@@ -963,7 +971,7 @@ All `/api/*` routes return JSON. "Login" means any signed-in user. Files are und
 | `user_minors` | `UserMinor` | `user_id`, `minor_code` (unique pair) | Multiple minors. |
 | `directory_entries` | `DirectoryEntry` | `email` (unique), `name`, `role`, `department`, `primary_program`, `picture_url`, `added_by_id` | Editable directory layer. |
 | `password_reset_tokens` | `PasswordResetToken` | `user_id`, `token_hash` (unique), `expires_at`, `used` | |
-| `flags` | `Flag` | string `id` (`flg-...`), `course_code`, `reason_code`, `notes`, submitter snapshot, `status`, `admin_notes`, `resolved_by` | |
+| `flags` | `Flag` | string `id` (`flg-...`), `course_code`, `reason_code`, `notes`, submitter snapshot, `status`, `admin_notes`, `admin_notes_public` (added November 18, 2026 by `run_migrations()`, default false), `resolved_by` | |
 | `wishlist_items` | `WishlistItem` | `user_id`, `course_code` (unique pair), `note` | |
 | `schedule_plans` | `SchedulePlan` | string `id`, `user_id`, `name`, `shared_from_*` | |
 | `schedule_plan_items` | `SchedulePlanItem` | `plan_id`, `offering_id` (unique pair), section details | |
@@ -2291,7 +2299,7 @@ Until the cutover the old API reads its secrets from the Render dashboard (web s
 
 ### 19.7 Give someone admin (production)
 
-**Permanent admins** (the project owners): add them to `backend/data/directory_admins.json` (email, name, `role: "admin"`, `primary_program`, `department`), merge to `main` and deploy it (15.16; before the cutover Render redeploys `main` by itself), then have them sign out and in. As of November 2026 it lists `avivek@andrew.cmu.edu`. Remove people from this file when they leave.
+**Permanent admins** (the project owners): add them to `backend/data/directory_admins.json` (email, name, `role: "admin"`, `primary_program`, `department`), merge to `main` and deploy it (15.16; before the cutover Render redeploys `main` by itself), then have them sign out and in. Since November 18, 2026 it lists only `spessoa@andrew.cmu.edu` (Silvia Pessoa), who adds other admins from the Admin page. Remove people from this file when they leave. A `directory_entries` row with role admin wins over this file, so after importing the Render database check that table too (15.8).
 
 **Anyone else:**
 
@@ -2384,8 +2392,7 @@ Merging does not deploy anything: copy the code to the server (15.16). Apache ma
 
 ### 21.1 Security issues (fix first)
 
-1. Students can read `admin_notes` on non-dismissed flags (`GET /api/flags`). Decide whether notes should be private.
-2. **The daily scraper can rewrite the code it runs next to.** On the server `countsfor` owns every deployed file (15.3, 15.4): the API code, `backend/.venv` and the served JS, and the same user runs the scraper, from cron, with no sandbox, on HTML fetched from the SOC servlet. The API is sandboxed (`ProtectSystem=strict`); the scraper is not. A bug exploited in the scrape could change the API code (run on the next restart) or the served JS (every visitor, and the sign-in tokens in their browser storage). The scraper only needs to write `backend/data/`, `frontend/data/` and `backend/var/`. Two ways to close this, not done because each changes the deploy and must be tested on the server: deploy the code as `root:countsfor` (folders 750, files 640, `frontend/` world-readable, `pip` run as root) and give `countsfor` write access only to those three folders; or run the update from a systemd service and timer with `ProtectSystem=strict` and `ReadWritePaths=` limited to them, in place of the cron line.
+1. **The daily scraper can rewrite the code it runs next to.** On the server `countsfor` owns every deployed file (15.3, 15.4): the API code, `backend/.venv` and the served JS, and the same user runs the scraper, from cron, with no sandbox, on HTML fetched from the SOC servlet. The API is sandboxed (`ProtectSystem=strict`); the scraper is not. A bug exploited in the scrape could change the API code (run on the next restart) or the served JS (every visitor, and the sign-in tokens in their browser storage). The scraper only needs to write `backend/data/`, `frontend/data/` and `backend/var/`. Two ways to close this, not done because each changes the deploy and must be tested on the server: deploy the code as `root:countsfor` (folders 750, files 640, `frontend/` world-readable, `pip` run as root) and give `countsfor` write access only to those three folders; or run the update from a systemd service and timer with `ProtectSystem=strict` and `ReadWritePaths=` limited to them, in place of the cron line.
 
 ### 21.2 Operational and data issues
 

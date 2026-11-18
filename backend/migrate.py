@@ -164,6 +164,16 @@ def run_migrations() -> list[str]:
     if _add_column_if_missing("wishlist_items", "note", "note TEXT"):
         log.append("Added wishlist_items.note")
 
+    # Admin notes on flags were readable by students; now only when an admin
+    # chooses. Existing notes start private.
+    if _add_column_if_missing(
+        "flags",
+        "admin_notes_public",
+        "admin_notes_public BOOLEAN NOT NULL DEFAULT 0",
+        "admin_notes_public BOOLEAN NOT NULL DEFAULT FALSE",
+    ):
+        log.append("Added flags.admin_notes_public")
+
     backfilled = _backfill_sign_in_history()
     if backfilled:
         log.append(f"Backfilled {backfilled} sign-in events from users.last_login")
