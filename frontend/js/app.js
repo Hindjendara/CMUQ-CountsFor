@@ -1204,12 +1204,20 @@ const App = {
       }
     });
 
-    // ESC closes modals / overlays
+    // ESC closes modals / overlays, and the Filters popover (the focus goes
+    // back to the Filters button when it was in the popover).
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.closeFlagModal();
         this.closeSharePlanModal();
         this.closeDirectoryPanel();
+        const filters = document.getElementById('navbarFiltersPanel');
+        if (filters && filters.classList.contains('open')) {
+          const focusInside = filters.contains(document.activeElement);
+          this.toggleFiltersPopover(false);
+          const toggle = document.getElementById('filtersToggle');
+          if (focusInside && toggle) toggle.focus();
+        }
       }
     });
   },
@@ -1318,8 +1326,17 @@ const App = {
     this._refreshFilters();
     if (this._homeView === 'home') this._loadPopularCourses();
     if (this._homeView === 'plan') {
+      // The plan views draw the whole shell again, navbar included: keep the
+      // Filters popover open and the focus on the semester select, so the
+      // keyboard can go on stepping through the semesters.
+      const filters = document.getElementById('navbarFiltersPanel');
+      const wasOpen = !!filters && filters.classList.contains('open');
+      const fromSelect = !!document.activeElement && document.activeElement.id === 'semesterSelect';
       if (this._planDetailId) this.openPlanDetail(this._planDetailId);
       else this.showPlanView();
+      if (wasOpen) this.toggleFiltersPopover(true);
+      const select = fromSelect && document.getElementById('semesterSelect');
+      if (select) select.focus();
     }
     this._refreshNavPlanCount();
     showToast('Showing ' + semesterLabel(code));
@@ -1656,11 +1673,13 @@ const App = {
     this.enterExplorer(r.major, r.path);
   },
 
-  toggleFiltersPopover() {
+  // The Filters button toggles the popover; toggleFiltersPopover(true) or
+  // (false) opens or closes it.
+  toggleFiltersPopover(force) {
     const panel = document.getElementById('navbarFiltersPanel');
     const toggle = document.getElementById('filtersToggle');
     if (!panel || !toggle) return;
-    const open = panel.classList.toggle('open');
+    const open = typeof force === 'boolean' ? panel.classList.toggle('open', force) : panel.classList.toggle('open');
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   },
 
