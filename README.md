@@ -2071,9 +2071,10 @@ To publish a commit (usually the tip of `cleanup`), use `scripts/publish_test_si
 ```bash
 git remote -v                  # origin: Hindjendara/CMUQ-CountsFor only, for fetch and for push
 git status --short             # must print nothing: the script refuses otherwise
-git push origin cleanup        # so the commit the test copy names is on GitHub too
-scripts/publish_test_site.sh   # publishes HEAD; or: scripts/publish_test_site.sh [--no-wait] COMMIT
+scripts/publish_test_site.sh && git push origin cleanup   # the script checks every origin URL before it sends anything; the branch is pushed only if it succeeded
 ```
+
+The script publishes HEAD. To publish another commit: `scripts/publish_test_site.sh [--no-wait] COMMIT`. The script's note that the commit is on no branch of `origin` is expected here, because the branch is pushed right after. If the script stops at the 5 minute live check, `gh-pages` already has the new copy: push the branch by hand (`git push origin cleanup`).
 
 The script:
 
@@ -2082,7 +2083,7 @@ The script:
 3. Commits that tree on top of the `gh-pages` it has just fetched and pushes it as a fast-forward. It never forces: if `gh-pages` moved in the meantime, the push is refused, nothing changes, and you run it again. If the copy already matches the commit, it publishes nothing.
 4. Waits up to 5 minutes until the live `app.html` shows the commit's `cf-build` tag (`--no-wait` skips this). GitHub's "pages build and deployment" run usually takes a minute or two; if the wait runs out, look at that run in the repo's **Actions** tab.
 
-GitHub Pages lets browsers keep each file for 10 minutes (`Cache-Control: max-age=600`), so after a frontend change a returning visitor can get old files mixed with new ones unless the `?v=` tags changed: bump them, as above, before you publish. The script warns when the published copy already had the same `cf-build` tag, and notes when the commit is on no branch of `origin`. Never publish to the main repo, and never force-push `gh-pages`.
+GitHub Pages lets browsers keep each file for 10 minutes (`Cache-Control: max-age=600`), so after a frontend change a returning visitor can get old files mixed with new ones unless the `?v=` tags changed: bump them, as above, before you publish. The script warns when the published copy already had the same `cf-build` tag, and notes when the commit is on no branch of `origin` (expected with the block above). Never publish to the main repo, and never force-push `gh-pages`.
 
 ---
 
