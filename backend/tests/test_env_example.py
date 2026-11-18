@@ -106,7 +106,7 @@ def test_scraper_env_example_matches_pipeline_reads():
 
 
 def test_examples_hold_no_real_secrets():
-    secret_names = ("SECRET_KEY", "RESEND_API_KEY", "SMTP_PASS")
+    secret_names = ("SECRET_KEY", "RESEND_API_KEY", "SMTP_PASS", "SHIB_PROXY_SECRET")
     for path in (APP_EXAMPLE, SERVER_APP_EXAMPLE, SERVER_SCRAPER_EXAMPLE):
         for line in path.read_text(encoding="utf-8").splitlines():
             m = re.match(r"^\s*#?\s*([A-Z_]+)=(.*)$", line)
