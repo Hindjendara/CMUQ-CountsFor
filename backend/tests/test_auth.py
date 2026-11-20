@@ -897,3 +897,16 @@ def test_allowed_domain_rejects_other_domain():
     for r in (reg, g):
         assert r.status_code == 403, r.get_json()
         assert r.get_json()["error"] == "domain_not_allowed"
+
+
+def test_andrew_id_alone_signs_in_and_registers(client):
+    """The forms may send the Andrew ID alone; it means andrewid@andrew.cmu.edu."""
+    r = client.post("/api/auth/register", json={"email": "newid", "password": "longenough1", "confirm_password": "longenough1"})
+    assert r.status_code == 201 and r.get_json()["email"] == "newid@andrew.cmu.edu"
+    client.post("/api/auth/logout")
+    r = client.post("/api/auth/login", json={"email": "NewID", "password": "longenough1"})
+    assert r.status_code == 200 and r.get_json()["email"] == "newid@andrew.cmu.edu"
+    r = client.post("/api/auth/login", json={"email": "newid@andrew.cmu.edu", "password": "longenough1"})
+    assert r.status_code == 200
+    r = client.post("/api/auth/login", json={"email": "not an id", "password": "longenough1"})
+    assert r.status_code == 400 and r.get_json()["message"] == "Enter your Andrew ID."

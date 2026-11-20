@@ -1107,6 +1107,7 @@ const App = {
         if (action === 'plan-delete') this.deletePlan(actionBtn.dataset.planId);
         if (action === 'plan-rename') this._promptRenamePlan(actionBtn.dataset.planId);
         if (action === 'plan-share') this.openSharePlanModal(actionBtn.dataset.planId);
+        if (action === 'plan-image') this.downloadPlanImage(actionBtn.dataset.planId);
         return;
       }
 
@@ -3701,6 +3702,248 @@ const App = {
     return total;
   },
 
+  // ── Schedule image (PNG) ──────────────────────────────────
+  // The week of the open schedule, drawn on a canvas in the browser, to share
+  // outside CountsFor: the title and semester, the day columns with the timed
+  // sections (the same colors and side by side layout as the calendar), the
+  // sections with no time, and the courses with their names and units.
+
+  /** The schedule as a canvas (2x for sharp text), or null when it has no section in the semester shown. */
+  _planImageCanvas(planId) {
+    const plan = this._getPlanRecord(planId);
+    if (!plan || typeof document === 'undefined') return null;
+    const items = this._getPlanItemsForSemester(this.activeSemester, planId);
+    if (!items.length) return null;
+
+    const palette = this._planBlockPalette();
+    const color = {};
+    let ci = 0;
+    for (const it of items) if (!color[it.course_code]) color[it.course_code] = palette[ci++ % palette.length];
+    const timed = [];
+    const tba = [];
+    for (const it of items) {
+      const parsed = parseDaysTimes(it.days_times);
+      (parsed.parseable ? timed : tba).push({ item: it, parsed });
+    }
+    // The hours shown: the planned sections, in whole hours, at least 8 AM to 5 PM.
+    let startMin = 8 * 60;
+    let endMin = 17 * 60;
+    for (const { parsed } of timed) {
+      startMin = Math.min(startMin, Math.floor(parsed.startMin / 60) * 60);
+      endMin = Math.max(endMin, Math.ceil(parsed.endMin / 60) * 60);
+    }
+    startMin = Math.max(startMin, PLAN_CAL_START_MIN);
+    endMin = Math.min(endMin, PLAN_CAL_END_MIN);
+
+    const codes = Object.keys(color);
+    const units = this._planUnitsTotal(items);
+    const courseCount = this._countPlannedCourses(this.activeSemester, planId);
+    // The CMU-Q week (Sunday to Thursday), plus Friday only when a section meets then.
+    const days = PLAN_DAY_COLUMNS.filter(d => d.code !== 'F' || timed.some(({ parsed }) => parsed.days.includes('F')));
+    const conflictPairs = countPlanConflictPairs(items, this._planOfferingKeyOf());
+    const W = 1200;
+    const pad = 36;
+    const timeW = 72;
+    const headH = 92;
+    const dayHeadH = 34;
+    const hourH = 72;
+    const gridLeft = pad + timeW;
+    const gridW = W - pad - gridLeft;
+    const colW = gridW / days.length;
+    const gridTop = pad + headH + dayHeadH;
+    const gridH = ((endMin - startMin) / 60) * hourH;
+    const listTop = gridTop + gridH + 30;
+    const listH = 26 + codes.length * 26 + (tba.length ? 34 + tba.length * 24 : 0);
+    const H = listTop + listH + 48;
+
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = W * scale;
+    canvas.height = Math.ceil(H * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.scale(scale, scale);
+    const FONT = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+    const font = (size, weight = 400) => { ctx.font = `${weight} ${size}px ${FONT}`; };
+    const fit = (text, maxW) => {
+      let t = String(text);
+      if (ctx.measureText(t).width <= maxW) return t;
+      while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+      return t + '…';
+    };
+    // "8:30 to 9:45 AM" when both ends are in the same half of the day, else both in full.
+    const span = (a, b) => {
+      const [ta, tb] = [formatPlanMinutes(a), formatPlanMinutes(b)];
+      const same = ta.slice(-2) === tb.slice(-2);
+      return same ? `${ta.slice(0, -3)} to ${tb}` : `${ta} to ${tb}`;
+    };
+    const box = (x, y, w, h, r) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    };
+
+    // Page
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = 'alphabetic';
+
+    // Title, semester and totals; the CountsFor name on the right
+    ctx.fillStyle = '#111827';
+    font(28, 800);
+    ctx.textAlign = 'left';
+    ctx.fillText(fit(plan.name, W - pad * 2 - 260), pad, pad + 32);
+    ctx.fillStyle = '#4B5563';
+    font(15, 500);
+    const summary = `${semesterLabel(this.activeSemester)} · ${courseCount} course${courseCount === 1 ? '' : 's'} · ${units || 0} units`;
+    ctx.fillText(summary, pad, pad + 60);
+    if (conflictPairs) {
+      const x = pad + ctx.measureText(summary).width;
+      ctx.fillStyle = '#C41230';
+      font(15, 700);
+      ctx.fillText(` · ${conflictPairs} time conflict${conflictPairs === 1 ? '' : 's'}`, x, pad + 60);
+    }
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#C41230';
+    font(22, 800);
+    ctx.fillText('CountsFor', W - pad, pad + 30);
+    ctx.fillStyle = '#6B7280';
+    font(12, 500);
+    ctx.fillText('Carnegie Mellon University in Qatar', W - pad, pad + 50);
+    ctx.fillStyle = '#C41230';
+    ctx.fillRect(pad, pad + headH - 14, W - pad * 2, 2);
+
+    // Day headers
+    font(13, 700);
+    ctx.fillStyle = '#374151';
+    ctx.textAlign = 'center';
+    days.forEach((d, i) => ctx.fillText(d.label, gridLeft + colW * i + colW / 2, gridTop - 12));
+
+    // Hour lines and labels, then the day columns
+    ctx.textAlign = 'right';
+    font(11, 500);
+    for (let m = startMin; m <= endMin; m += 60) {
+      const y = gridTop + ((m - startMin) / 60) * hourH;
+      ctx.fillStyle = '#9CA3AF';
+      ctx.fillText(formatPlanMinutes(m), gridLeft - 10, y + 4);
+      ctx.fillStyle = '#E5E7EB';
+      ctx.fillRect(gridLeft, y, gridW, 1);
+    }
+    for (let i = 0; i <= days.length; i++) {
+      ctx.fillStyle = '#E5E7EB';
+      ctx.fillRect(gridLeft + colW * i, gridTop, 1, gridH);
+    }
+
+    // The timed sections
+    days.forEach((d, di) => {
+      const laid = layoutPlanDayBlocks(timed.filter(({ parsed }) => parsed.days.includes(d.code)));
+      for (const { item, parsed, col, totalCols } of laid) {
+        const c = color[item.course_code];
+        const w = colW / totalCols;
+        const x = gridLeft + colW * di + w * col + 3;
+        const bw = w - 6;
+        const y = gridTop + ((parsed.startMin - startMin) / 60) * hourH + 2;
+        const bh = Math.max(((parsed.endMin - parsed.startMin) / 60) * hourH - 4, 18);
+        box(x, y, bw, bh, 7);
+        ctx.fillStyle = c.bg;
+        ctx.fill();
+        ctx.fillStyle = c.border;
+        ctx.fillRect(x, y + 3, 4, bh - 6);
+        ctx.save();
+        box(x, y, bw, bh, 7);
+        ctx.clip();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = c.text;
+        font(13, 800);
+        ctx.fillText(fit(item.course_code, bw - 16), x + 10, y + 18);
+        font(11, 600);
+        if (bh > 34) ctx.fillText(fit(planSectionLabel(item.section), bw - 16), x + 10, y + 33);
+        font(11, 500);
+        if (bh > 50) ctx.fillText(fit(span(parsed.startMin, parsed.endMin), bw - 16), x + 10, y + 48);
+        ctx.restore();
+      }
+    });
+
+    // Courses, then the sections with no time
+    let y = listTop;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#111827';
+    font(15, 800);
+    ctx.fillText('Courses', pad, y);
+    y += 26;
+    for (const code of codes) {
+      const c = lookupCourse(this.courseIndex, code);
+      box(pad, y - 12, 14, 14, 3);
+      ctx.fillStyle = color[code].border;
+      ctx.fill();
+      ctx.fillStyle = '#111827';
+      font(13, 700);
+      ctx.fillText(code, pad + 24, y);
+      ctx.fillStyle = '#374151';
+      font(13, 400);
+      const unitsText = c && c.units ? `${c.units} units` : '';
+      ctx.fillText(fit(c ? c.course_name : '', W - pad * 2 - 200), pad + 96, y);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#6B7280';
+      ctx.fillText(unitsText, W - pad, y);
+      ctx.textAlign = 'left';
+      y += 26;
+    }
+    if (tba.length) {
+      y += 8;
+      ctx.fillStyle = '#111827';
+      font(15, 800);
+      ctx.fillText('No time listed', pad, y);
+      y += 26;
+      font(13, 400);
+      ctx.fillStyle = '#374151';
+      for (const { item } of tba) {
+        ctx.fillText(`${item.course_code} · ${planSectionLabel(item.section)}`, pad, y);
+        y += 24;
+      }
+    }
+
+    // Footer
+    ctx.fillStyle = '#9CA3AF';
+    font(11, 500);
+    ctx.textAlign = 'left';
+    ctx.fillText('Made with CountsFor. Check your plan in Stellic and with your advisor.', pad, H - 20);
+    ctx.textAlign = 'right';
+    ctx.fillText(new Date().toLocaleDateString(), W - pad, H - 20);
+    return canvas;
+  },
+
+  /** Download the open schedule as a PNG named after it and the semester. */
+  downloadPlanImage(planId) {
+    const plan = this._getPlanRecord(planId);
+    const canvas = plan ? this._planImageCanvas(planId) : null;
+    if (!canvas) {
+      showToast('Add a course to this schedule first.');
+      return;
+    }
+    const name = `${plan.name} ${semesterLabel(this.activeSemester)}`
+      .replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Schedule';
+    canvas.toBlob(blob => {
+      if (!blob) {
+        showToast('Could not create the image.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name + '.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('Schedule image downloaded.');
+    }, 'image/png');
+  },
+
   _planBlockPalette() {
     return [
       { bg: '#FECDD3', border: '#C41230', text: '#7F1024' },
@@ -4062,6 +4305,7 @@ const App = {
           <p class="plan-lead">Search above and tap <strong>+ Plan</strong> to add a course, or open a course card and pick a section.</p>
           <div class="plan-detail-actions">
             <button type="button" class="plan-share-btn" data-action="plan-share" data-plan-id="${esc(plan.id)}">Share schedule</button>
+            <button type="button" class="plan-share-btn plan-image-btn" data-action="plan-image" data-plan-id="${esc(plan.id)}" title="Save this week as a PNG image to share outside CountsFor">Download image</button>
           </div>
           <div class="plan-stats">
             <span class="plan-stat">${courseCount} course${courseCount === 1 ? '' : 's'}</span>

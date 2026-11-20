@@ -156,7 +156,8 @@ def test_success_publishes_the_staged_files(deploy, monkeypatch):
     assert not (deploy.staging / "requirement_buckets.json").exists()
     assert (deploy.soc.parent / "soc.json.prev").read_bytes() == old_soc
     assert (deploy.courses.parent / "courses.json.prev").read_bytes() == old_courses
-    assert gzip.decompress(deploy.gz.read_bytes()) == deploy.courses.read_bytes()
+    assert json.loads(gzip.decompress(deploy.gz.read_bytes())) == json.loads(deploy.courses.read_bytes())
+    assert gzip.decompress(deploy.gz.read_bytes()) == update_data.compact_json(deploy.courses.read_bytes())
     # no temp files left beside the live files, staged copies cleaned up
     assert not [p for p in deploy.courses.parent.iterdir() if p.name.endswith(".tmp")]
     assert not [p for p in deploy.soc.parent.iterdir() if p.name.endswith(".tmp")]
@@ -232,7 +233,8 @@ def test_unchanged_catalog_is_not_rewritten_but_soc_is_promoted(deploy, monkeypa
     assert read_json(deploy.soc) == NEW_SOC
     assert (deploy.soc.parent / "soc.json.prev").exists()
     # the .gz did not exist yet, so it is written from the unchanged catalog
-    assert gzip.decompress(deploy.gz.read_bytes()) == deploy.courses.read_bytes()
+    assert json.loads(gzip.decompress(deploy.gz.read_bytes())) == json.loads(deploy.courses.read_bytes())
+    assert gzip.decompress(deploy.gz.read_bytes()) == update_data.compact_json(deploy.courses.read_bytes())
 
     # a second run leaves both the catalog and its .gz alone
     os.utime(deploy.gz, (old, old))
@@ -248,7 +250,8 @@ def test_stale_gz_is_rewritten_when_catalog_is_unchanged(deploy, monkeypatch):
     deploy.gz.write_bytes(gzip.compress(b'{"courses": []}'))
     deploy.fake_steps(monkeypatch)
     assert update_data.main(["--skip-tests", "--no-scrape"]) == 0
-    assert gzip.decompress(deploy.gz.read_bytes()) == deploy.courses.read_bytes()
+    assert json.loads(gzip.decompress(deploy.gz.read_bytes())) == json.loads(deploy.courses.read_bytes())
+    assert gzip.decompress(deploy.gz.read_bytes()) == update_data.compact_json(deploy.courses.read_bytes())
 
 
 def test_no_scrape_skips_the_scrape_and_keeps_soc(deploy, monkeypatch):
@@ -523,7 +526,8 @@ def test_real_steps_on_repo_data_with_a_fake_scrape(deploy, monkeypatch):
     assert update_data.main([]) == 0
 
     assert read_json(deploy.soc)["metadata"]["last_scrape"] == "2099-01-01T00:00:00+00:00"
-    assert gzip.decompress(deploy.gz.read_bytes()) == deploy.courses.read_bytes()
+    assert json.loads(gzip.decompress(deploy.gz.read_bytes())) == json.loads(deploy.courses.read_bytes())
+    assert gzip.decompress(deploy.gz.read_bytes()) == update_data.compact_json(deploy.courses.read_bytes())
     buckets = read_json(deploy.buckets)
     assert update_data.check_buckets(buckets) == []
     assert set(buckets) == {"CS", "IS", "BA", "BS", "AI"}

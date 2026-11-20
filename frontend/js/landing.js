@@ -93,8 +93,8 @@
       clearFieldMsg(inputId, msgId);
       return false;
     }
-    if (!isCmuEmail(val)) {
-      setFieldMsg(inputId, msgId, 'Use your @andrew.cmu.edu email address.', 'error');
+    if (!andrewEmailFromInput(val)) {
+      setFieldMsg(inputId, msgId, 'Enter your Andrew ID, for example andrewid.', 'error');
       return false;
     }
     clearFieldMsg(inputId, msgId);
@@ -161,14 +161,14 @@
     if (view === 'signin') {
       const email = (document.getElementById('cfLoginEmail')?.value || '').trim();
       const pass = document.getElementById('cfLoginPass')?.value || '';
-      const emailOk = isCmuEmail(email);
+      const emailOk = !!andrewEmailFromInput(email);
       ready = emailOk && pass.length > 0;
       if (email && !emailOk) validateAndrewField('cfLoginEmail', 'cfLoginEmailMsg');
     } else if (view === 'register') {
       const email = (document.getElementById('cfRegEmail')?.value || '').trim();
       const pass = document.getElementById('cfRegPass')?.value || '';
       const confirm = document.getElementById('cfRegPass2')?.value || '';
-      const emailOk = isCmuEmail(email);
+      const emailOk = !!andrewEmailFromInput(email);
       const passOk = pass.length >= 8;
       const matchOk = passOk && confirm.length > 0 && pass === confirm;
       ready = emailOk && passOk && matchOk;
@@ -176,7 +176,7 @@
       if (confirm) validatePasswordMatch('cfRegPass', 'cfRegPass2', 'cfRegPass2Msg');
     } else if (view === 'forgot') {
       const email = (document.getElementById('cfForgotEmail')?.value || '').trim();
-      ready = isCmuEmail(email);
+      ready = !!andrewEmailFromInput(email);
     } else if (view === 'reset') {
       const pass = document.getElementById('cfResetPass')?.value || '';
       const confirm = document.getElementById('cfResetPass2')?.value || '';
@@ -296,15 +296,20 @@
     );
   }
 
+  // The Andrew ID field: the ID alone, with "@andrew.cmu.edu" shown after it
+  // (hidden once the person types a full address, which works too).
   function emailField(id, label) {
     return (
       '<div class="landing-field-group">' +
       '<label class="landing-label" for="' + id + '">' + label + '</label>' +
-      '<input class="landing-input" id="' +
+      '<div class="landing-id-wrap">' +
+      '<input class="landing-input landing-id-input" id="' +
       id +
-      '" type="email" autocomplete="email" placeholder="you@andrew.cmu.edu" required aria-describedby="' +
+      '" type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="andrewid" required aria-describedby="' +
       id +
-      'Msg" aria-invalid="false" />' +
+      'Suffix ' + id + 'Msg" aria-invalid="false" oninput="this.parentNode.classList.toggle(\'has-at\', this.value.indexOf(\'@\') >= 0)" />' +
+      '<span class="landing-id-suffix" id="' + id + 'Suffix" aria-hidden="false">@andrew.cmu.edu</span>' +
+      '</div>' +
       '<p class="landing-field-msg" id="' +
       id +
       'Msg" role="alert"></p>' +
@@ -478,7 +483,7 @@
         '<label class="landing-label" for="cfRegName">Full name</label>' +
         '<input class="landing-input" id="cfRegName" type="text" autocomplete="name" placeholder="Your name" />' +
         '</div>' +
-        emailField('cfRegEmail', 'Andrew email') +
+        emailField('cfRegEmail', 'Andrew ID') +
         passwordField('cfRegPass', 'Password', { autocomplete: 'new-password', hint: 'At least 8 characters' }) +
         passwordField('cfRegPass2', 'Confirm password', { autocomplete: 'new-password' }) +
         '</div>' +
@@ -502,7 +507,7 @@
         '<div class="landing-card__body" id="cfForgotBody">' +
         '<form class="landing-form" id="cfAuthForm" novalidate>' +
         formErrorHtml() +
-        emailField('cfForgotEmail', 'Andrew email') +
+        emailField('cfForgotEmail', 'Andrew ID') +
         '<div class="landing-form-actions">' +
         '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Send reset link</button>' +
         '</div>' +
@@ -550,7 +555,7 @@
         '<div class="landing-card__body">' +
         '<form class="landing-form" id="cfAuthForm" novalidate>' +
         formErrorHtml() +
-        emailField('cfLoginEmail', 'Andrew email') +
+        emailField('cfLoginEmail', 'Andrew ID') +
         passwordField('cfLoginPass', 'Password', { autocomplete: 'current-password' }) +
         '<div class="landing-forgot-row">' +
         '<label class="landing-remember">' +
@@ -691,7 +696,7 @@
     // Read the checkbox before any await, while the panel is still on screen.
     const persist = wantsPersistentSession();
     setLoading(true, 'Sign in');
-    const body = { email: normalizeCmuEmail(email) || email, password };
+    const body = { email: andrewEmailFromInput(email) || email, password };
     const r = await reach(apiLogin(body));
     setLoading(false, 'Sign in');
     if (isUnreachable(r)) {
@@ -745,7 +750,7 @@
     if (!validatePasswordMatch('cfRegPass', 'cfRegPass2', 'cfRegPass2Msg')) return;
     setLoading(true, 'Create account');
     const regBody = {
-      email: normalizeCmuEmail(email) || email,
+      email: andrewEmailFromInput(email) || email,
       password,
       confirm_password: confirm,
       name: name || undefined,
@@ -849,7 +854,7 @@
     const email = (document.getElementById('cfForgotEmail')?.value || '').trim();
     if (!validateAndrewField('cfForgotEmail', 'cfForgotEmailMsg')) return;
     setLoading(true, 'Send reset link');
-    const r = await reach(apiForgotPassword(normalizeCmuEmail(email) || email));
+    const r = await reach(apiForgotPassword(andrewEmailFromInput(email) || email));
     setLoading(false, 'Send reset link');
     if (!r.ok) {
       if (handleAuthNetworkFailure(r)) {

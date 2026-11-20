@@ -364,11 +364,19 @@ def gzip_bytes(data: bytes) -> bytes:
     return gzip.compress(data, compresslevel=9, mtime=0)
 
 
+def compact_json(data: bytes) -> bytes:
+    """The same JSON without indentation or spaces. courses.json stays indented
+    (readable, and its git diffs stay useful); the .gz that browsers get holds
+    this: about 10 % smaller sent and a third less text to parse."""
+    return json.dumps(json.loads(data), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
 def gz_matches(gz_path: Path, data: bytes) -> bool:
+    """True when the .gz holds the compact form of this catalog."""
     try:
         with open(gz_path, "rb") as f:
-            return gzip.decompress(f.read()) == data
-    except (OSError, EOFError, gzip.BadGzipFile):
+            return gzip.decompress(f.read()) == compact_json(data)
+    except (OSError, EOFError, gzip.BadGzipFile, ValueError):
         return False
 
 
@@ -399,7 +407,7 @@ def promote(paths: Paths) -> dict[str, bool]:
         if courses_changed:
             swaps.append((_copy_temp(paths.staged_courses, paths.live_courses), paths.live_courses))
         if gz_needed:
-            swaps.append((_write_temp(paths.live_gz, gzip_bytes(new_catalog)), paths.live_gz))
+            swaps.append((_write_temp(paths.live_gz, gzip_bytes(compact_json(new_catalog))), paths.live_gz))
         if buckets_changed:
             swaps.append((_copy_temp(paths.staged_buckets, paths.live_buckets), paths.live_buckets))
         if soc_changed:

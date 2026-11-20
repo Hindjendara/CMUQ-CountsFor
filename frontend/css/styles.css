@@ -4499,3 +4499,6 @@ button.adm-stat { display: flex; flex-direction: column; justify-content: flex-s
 /* Saved courses: the code and the name open the course. */
 .wl-view .wl-code, .wl-view .wl-name { cursor: pointer; }
 .wl-view .wl-name:hover, .wl-view .wl-code:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Schedule actions: Share schedule and Download image side by side. */
+.plan-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }

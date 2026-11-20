@@ -255,6 +255,16 @@ test('no arrows on buttons: the onboarding Continue and the landing buttons', ()
   assertTrue(app.includes('onclick="App._finishOnboarding()">Continue</button>'));
 });
 
+test('the sign-in page prefetches the app scripts, styles and data at the URLs app.html uses', () => {
+  const app = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
+  const landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const prefetch = [...landing.matchAll(/<link rel="prefetch" href="([^"]+)"/g)].map(m => m[1]).sort();
+  const used = [...app.matchAll(/<script src="(js\/[^"]+)"/g), ...app.matchAll(/<link rel="stylesheet" href="(css\/[^"]+)"/g),
+    ...app.matchAll(/<link rel="preload" href="([^"]+)"/g)].map(m => m[1]).sort();
+  assertEqual(prefetch, used);
+  assertFalse(app.includes('accounts.google.com/gsi/client'), 'the app page does not load Google sign-in');
+});
+
 test('app.html preloads the catalog and the minors at the exact URLs js/api.js fetches', () => {
   const html = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
   const tag = /<meta name="cf-build" content="([^"]+)"/.exec(html)[1];

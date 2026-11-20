@@ -574,6 +574,29 @@ body::before{
   padding-right: 72px;
 }
 
+/* Andrew ID: the domain shown after the ID, inside the field. */
+.landing-id-wrap {
+  position: relative;
+}
+.landing-id-wrap .landing-id-input {
+  padding-right: 132px;
+}
+.landing-id-suffix {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: clamp(13px, 1.8vh, 15px);
+  color: #6b7580;
+  pointer-events: none;
+}
+.landing-id-wrap.has-at .landing-id-input {
+  padding-right: 14px;
+}
+.landing-id-wrap.has-at .landing-id-suffix {
+  display: none;
+}
+
 .landing-pass-toggle {
   position: absolute;
   top: 50%;

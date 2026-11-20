@@ -21,6 +21,18 @@ function normalizeCmuEmail(raw) {
   return null;
 }
 
+/**
+ * What a person typed in a sign-in form, as the Andrew address: an Andrew ID
+ * alone ("hjendara") becomes hjendara@andrew.cmu.edu, an address goes through
+ * normalizeCmuEmail. null when it is neither. Twin of andrew_email_from_input
+ * in backend/cmu.py.
+ */
+function andrewEmailFromInput(raw) {
+  const v = (raw || '').trim().toLowerCase();
+  if (!v.includes('@')) return /^[a-z0-9]{1,30}$/.test(v) ? v + '@andrew.cmu.edu' : null;
+  return normalizeCmuEmail(v);
+}
+
 function isCmuEmail(raw) {
   return normalizeCmuEmail(raw) !== null;
 }

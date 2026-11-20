@@ -879,6 +879,17 @@ test('conflicts: other courses and other offerings of one course still conflict 
 // ── normalizeCmuEmail (js/utils.js) ──────────────────────
 // Same cases as backend/tests/test_cmu.py: the two checks must agree.
 
+test('andrewEmailFromInput: an Andrew ID alone means the Andrew address; addresses still work', () => {
+  assertEqual(andrewEmailFromInput('hjendara'), 'hjendara@andrew.cmu.edu');
+  assertEqual(andrewEmailFromInput('  SPessoa '), 'spessoa@andrew.cmu.edu');
+  assertEqual(andrewEmailFromInput('stamimi2'), 'stamimi2@andrew.cmu.edu');
+  assertEqual(andrewEmailFromInput('hjendara@andrew.cmu.edu'), 'hjendara@andrew.cmu.edu');
+  assertEqual(andrewEmailFromInput('hjendara@qatar.cmu.edu'), 'hjendara@andrew.cmu.edu');
+  assertEqual(andrewEmailFromInput('someone@gmail.com'), null);
+  assertEqual(andrewEmailFromInput('two words'), null);
+  assertEqual(andrewEmailFromInput(''), null);
+});
+
 test('normalizeCmuEmail: maps CMU aliases to the Andrew address', () => {
   assertEqual(normalizeCmuEmail('alice@andrew.cmu.edu'), 'alice@andrew.cmu.edu');
   assertEqual(normalizeCmuEmail('  Alice@Andrew.CMU.edu  '), 'alice@andrew.cmu.edu');

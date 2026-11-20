@@ -29,6 +29,20 @@ def normalize_cmu_email(raw: str) -> str | None:
     return email
 
 
+# An Andrew ID on its own: lowercase letters and digits (CMU's IDs are at most 8).
+_ANDREW_ID_RE = re.compile(r"^[a-z0-9]{1,30}$")
+
+
+def andrew_email_from_input(raw: str) -> str | None:
+    """What a person typed in a sign-in form, as the Andrew address: an Andrew
+    ID alone ("hjendara") becomes hjendara@andrew.cmu.edu, an address goes
+    through normalize_cmu_email. None when it is neither."""
+    value = (raw or "").strip().lower()
+    if "@" not in value:
+        return f"{value}@andrew.cmu.edu" if _ANDREW_ID_RE.match(value) else None
+    return normalize_cmu_email(value)
+
+
 def email_in_domain(email: str, allowed_domain: str | None) -> bool:
     """True when no domain restriction is set, or the email is in that domain."""
     allowed = (allowed_domain or "").strip().lower()

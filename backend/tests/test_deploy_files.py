@@ -187,7 +187,8 @@ def test_apache_serves_the_precompressed_catalog_once():
     assert block, "no FilesMatch block for .json.gz"
     body = block.group(1)
     for needle in ("ForceType application/json", "Content-Encoding gzip",
-                   "Vary Accept-Encoding", "no-gzip", 'Cache-Control "no-cache"'):
+                   "Vary Accept-Encoding", "no-gzip",
+                   'Cache-Control "public, max-age=600, stale-while-revalidate=86400"'):
         assert needle in body
     # The scraper writes exactly that file next to the catalog.
     update_data = _text(REPO_ROOT / "backend" / "scraper" / "update_data.py")
@@ -383,3 +384,22 @@ def test_scraper_script_refuses_to_run_as_another_user():
 def test_logrotate_covers_the_cron_log_folder():
     assert _text(LOGROTATE).count("{") == _text(LOGROTATE).count("}") == 1
     assert "/var/log/countsfor/*.log {" in _text(LOGROTATE)
+
+
+def test_apache_caches_tagged_scripts_and_lets_the_catalog_be_reused():
+    conf = _text(APACHE)
+    html = re.search(r'<FilesMatch "\\.html\$">(.*?)</FilesMatch>', conf, re.S)
+    assert html and 'Cache-Control "no-cache"' in html.group(1)
+    code = re.search(r'<FilesMatch "\\.\(js\|css\)\$">(.*?)</FilesMatch>', conf, re.S)
+    assert code, "no FilesMatch block for js and css"
+    body = code.group(1)
+    assert '<If "%{QUERY_STRING} =~ /(^|&)v=/">' in body
+    assert 'Cache-Control "public, max-age=31536000, immutable"' in body
+    assert "<Else>" in body and 'Cache-Control "no-cache"' in body
+    data = re.search(r'<FilesMatch "\\.json\$">\s*Header set Cache-Control "([^"]+)"', conf)
+    assert data and data.group(1) == "public, max-age=600, stale-while-revalidate=86400"
+    # Every script and stylesheet of the pages carries the tag, so it is cached.
+    for page in ("app.html", "index.html"):
+        text = _text(REPO_ROOT / "frontend" / page)
+        for ref in re.findall(r'(?:src|href)="((?:js|css)/[^"]+)"', text):
+            assert "?v=" in ref, (page, ref)

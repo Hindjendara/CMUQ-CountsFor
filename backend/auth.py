@@ -32,7 +32,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from .activity import mark_signed_in, record_visit
-from .cmu import email_in_domain, normalize_cmu_email
+from .cmu import andrew_email_from_input, email_in_domain, normalize_cmu_email
 from .config import AUTH_MODES
 from .directory import resolve_directory_entry
 from .db import db
@@ -424,11 +424,11 @@ def register():
     with Google, then set-password).
     """
     data = request.get_json(silent=True) or {}
-    email = normalize_cmu_email(data.get("email") or "")
+    email = andrew_email_from_input(data.get("email") or "")
     if not email:
         return jsonify(
             error="invalid_email",
-            message="Use your @andrew.cmu.edu email to create an account.",
+            message="Use your Andrew ID to create an account.",
         ), 400
     if not _email_allowed(email):
         allowed_domain = current_app.config.get("ALLOWED_EMAIL_DOMAIN") or "andrew.cmu.edu"
@@ -472,10 +472,10 @@ def register():
 def login():
     """Sign in with @andrew.cmu.edu email and password."""
     data = request.get_json(silent=True) or {}
-    email = normalize_cmu_email(data.get("email") or "")
+    email = andrew_email_from_input(data.get("email") or "")
     password = data.get("password") or ""
     if not email:
-        return jsonify(error="invalid_email", message="Enter your @andrew.cmu.edu email."), 400
+        return jsonify(error="invalid_email", message="Enter your Andrew ID."), 400
     if not password:
         return jsonify(error="missing_password", message="Enter your password."), 400
 
@@ -511,9 +511,9 @@ def forgot_password():
     """Start a password reset. Returns a token in dev when EXPOSE_RESET_TOKEN=1
     (never in production: the token would let anyone reset any account)."""
     data = request.get_json(silent=True) or {}
-    email = normalize_cmu_email(data.get("email") or "")
+    email = andrew_email_from_input(data.get("email") or "")
     if not email:
-        return jsonify(error="invalid_email", message="Enter your @andrew.cmu.edu email."), 400
+        return jsonify(error="invalid_email", message="Enter your Andrew ID."), 400
 
     # No email provider configured and no dev token exposure → be honest
     # instead of claiming a mail was sent. Returned for ANY email (existing
