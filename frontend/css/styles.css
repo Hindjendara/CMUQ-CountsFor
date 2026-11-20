@@ -4508,3 +4508,7 @@ button.adm-stat { display: flex; flex-direction: column; justify-content: flex-s
 
 /* Planner header: "All schedules" and the way back to where the planner was opened from. */
 .plan-back-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Saved courses: the code and the name open the course. */
+.wl-view .wl-code, .wl-view .wl-name { cursor: pointer; }
+.wl-view .wl-name:hover, .wl-view .wl-code:hover { text-decoration: underline; text-underline-offset: 2px; }

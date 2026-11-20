@@ -15,13 +15,6 @@ const MINORS_TAB = 'MINORS';
 /** The longest minor name the navbar badge shows; a longer one shows as "1 minor". */
 const BADGE_MINOR_NAME_MAX = 12;
 
-/** Pages the planner can return to (App._rememberPlanReturn), by App._homeView. */
-const PLAN_RETURN_VIEWS = {
-  wishlist: { label: 'Back to saved courses', show: 'showWishlistView' },
-  students: { label: 'Back to students', show: 'showStudentsView' },
-  studentflags: { label: 'Back to flagged courses', show: 'showStudentFlagsView' },
-};
-
 /** A minor note listing renumbered courses ("85-104 is now 85-190"); the app does not show it. */
 const MINOR_RENUMBER_NOTE = /^Old numbers in the official file are shown as their current numbers: (.+)\.$/;
 
@@ -122,6 +115,7 @@ const App = {
   },
 
   _afterAuthed() {
+    this._bindNavHistory();
     if (this.profile && this.profile.primary && this.profile.primary !== 'AS') {
       this.activeMajor = this.profile.primary;
     }
@@ -1133,9 +1127,11 @@ const App = {
         if (major && path) this.toggleNode(major, path);
       }
 
-      // Handle tree course click (not wishlist note rows — those reuse course codes)
+      // A course row opens the course. In Saved courses only the code and the
+      // name do, so typing a note or using Remove does not open it.
       const treeCourse = e.target.closest('[data-course-code]');
-      if (treeCourse && !e.target.closest('[data-action]') && !e.target.closest('.wl-view')) {
+      const inSaved = e.target.closest('.wl-view');
+      if (treeCourse && !e.target.closest('[data-action]') && (!inSaved || e.target.closest('.wl-code, .wl-name'))) {
         this.selectCourseFromTree(treeCourse.dataset.courseCode);
       }
     });
@@ -1502,37 +1498,171 @@ const App = {
     }
   },
 
-  _beginPlanCourseBrowse() {
-    if (this._homeView !== 'plan') return;
-    this._planCourseReturn = { planId: this._planDetailId || null };
+  // ══════════════════════════════════════════════════════════
+  // NAVIGATION HISTORY: Back everywhere in the left panel
+  // ══════════════════════════════════════════════════════════
+  // Each left panel view records itself as a step (_navRecord) once its state is
+  // set: home, a course card, the schedules, one schedule, Saved courses,
+  // Students, Flagged courses, an Admin tab, Flag review. A step is also a
+  // browser history entry (pushState with the step in its state), so the
+  // browser's Back and Forward buttons move through the same steps (popstate,
+  // _navShow). The Back button of every view (_backButtonHtml) names the step
+  // before and goes there. Re-drawing the same view adds no step. Without the
+  // History API (the JS tests) the steps are kept here only.
+  _navEntries: [],
+  _navIdx: -1,
+
+  /** The step the left panel shows now. */
+  _navCurrent() {
+    if (this.selectedCourse) return { v: 'course', code: this.selectedCourse.course_code };
+    switch (this._homeView) {
+      case 'plan': return this._planDetailId ? { v: 'plan', id: this._planDetailId } : { v: 'plans' };
+      case 'wishlist': return { v: 'saved' };
+      case 'students': return { v: 'students' };
+      case 'studentflags': return { v: 'flags' };
+      case 'admin-console': return { v: 'admin', tab: (this._adminConsole && this._adminConsole.tab) || '' };
+      case 'admin': return { v: 'flagreview' };
+      default: return { v: 'home' };
+    }
   },
 
-  _returnFromPlanCourseBrowse() {
-    const ret = this._planCourseReturn;
+  _navSame(a, b) {
+    return !!a && !!b && a.v === b.v && (a.code || '') === (b.code || '')
+      && (a.id || '') === (b.id || '') && (a.tab || '') === (b.tab || '');
+  },
+
+  _navHistoryApi() {
+    return (typeof history !== 'undefined' && history && typeof history.pushState === 'function') ? history : null;
+  },
+
+  /** Record the current view as a step, unless it is the step already shown. */
+  _navRecord() {
+    const d = this._navCurrent();
+    const cur = this._navIdx >= 0 ? this._navEntries[this._navIdx] : null;
+    if (this._navSame(cur, d)) return;
+    const h = this._navHistoryApi();
+    if (!cur) {
+      // First step of this page load. After a reload the browser keeps the
+      // entries of before; continue their numbering.
+      const base = h && h.state && typeof h.state.cfNav === 'number' ? h.state.cfNav : 0;
+      this._navEntries = [];
+      this._navEntries[base] = d;
+      this._navIdx = base;
+      if (h) { try { h.replaceState({ cfNav: base, d }, ''); } catch {} }
+      return;
+    }
+    this._navEntries = this._navEntries.slice(0, this._navIdx + 1);
+    this._navEntries.push(d);
+    this._navIdx += 1;
+    if (h) { try { h.pushState({ cfNav: this._navIdx, d }, ''); } catch {} }
+  },
+
+  /** The step Back goes to: the one before (null when there is none). */
+  _backTarget() {
+    return this._navIdx > 0 ? (this._navEntries[this._navIdx - 1] || { v: 'unknown' }) : null;
+  },
+
+  _navLabel(d) {
+    switch (d && d.v) {
+      case 'course': return `Back to ${d.code}`;
+      case 'plans': return 'Back to schedules';
+      case 'plan': {
+        const plan = this._getPlanRecord(d.id);
+        return plan ? `Back to ${plan.name}` : 'Back to schedules';
+      }
+      case 'saved': return 'Back to saved courses';
+      case 'students': return 'Back to students';
+      case 'flags': return 'Back to flagged courses';
+      case 'admin': {
+        const tab = (this.ADMIN_TABS || []).find(([id]) => id === d.tab);
+        return tab ? `Back to ${tab[1]}` : 'Back to admin';
+      }
+      case 'flagreview': return 'Back to flag review';
+      case 'unknown': return 'Back';
+      default: return 'Back to home';
+    }
+  },
+
+  /** The Back button of a left panel view. */
+  _backButtonHtml() {
+    const target = this._backTarget();
+    return `<button type="button" class="dc-back-link" onclick="App.navBack()">${esc(target ? this._navLabel(target) : 'Back to home')}</button>`;
+  },
+
+  /** Back: the browser's history when there is a step before, else home. */
+  navBack() {
+    const h = this._navHistoryApi();
+    if (this._navIdx > 0 && h) { h.back(); return; }
+    const prev = this._navIdx > 0 ? this._navEntries[this._navIdx - 1] : null;
+    if (prev) {
+      this._navIdx -= 1;
+      this._navShow(prev);
+      return;
+    }
+    this._navShow({ v: 'home' });
+  },
+
+  _bindNavHistory() {
+    if (this._navBound || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    this._navBound = true;
+    window.addEventListener('popstate', e => {
+      const st = e && e.state;
+      if (!st || typeof st.cfNav !== 'number' || !st.d) return;  // not a CountsFor step
+      this._navIdx = st.cfNav;
+      this._navEntries[st.cfNav] = st.d;
+      this._navShow(st.d);
+    });
+  },
+
+  /** Opening Saved courses, Students, Flagged courses or Flag review closes an
+   *  open course card or the planner first (their state would otherwise win). */
+  _closeCourseAndPlan() {
+    const had = this._homeView === 'plan' || !!this.selectedCourse;
+    this.selectedCourse = null;
+    this._planDetailId = null;
+    this._planCourseReturn = null;
+    if (!had) return;
+    this._homeView = 'home';
+    const ta = document.getElementById('typeahead');
+    if (ta) ta.classList.remove('visible');
+    this.renderShell();
+  },
+
+  /** Leave the planner or a course card for another left panel view. */
+  _navLeave() {
+    this._homeView = 'home';
+    this._planDetailId = null;
     this._planCourseReturn = null;
     this.selectedCourse = null;
     const ta = document.getElementById('typeahead');
     if (ta) ta.classList.remove('visible');
-    const input = document.getElementById('courseSearch');
-    if (input) {
-      input.value = '';
-      this._syncSearchClear(input);
-    }
     this.renderShell();
-    if (this._homeView !== 'plan') this._homeView = 'plan';
-    if (ret && ret.planId) this.openPlanDetail(ret.planId);
-    else this.showPlanView();
   },
 
-  _planBackLinkHtml() {
-    if (this._planCourseReturn) {
-      const plan = this._planCourseReturn.planId
-        ? this._getPlanRecord(this._planCourseReturn.planId)
-        : null;
-      const label = plan ? `Back to ${plan.name}` : 'Back to schedules';
-      return `<button type="button" class="dc-back-link" onclick="App._returnFromPlanCourseBrowse()">${esc(label)}</button>`;
+  /** Show a step (from Back, or the browser's Back and Forward). */
+  _navShow(d) {
+    switch (d && d.v) {
+      case 'course': {
+        const course = lookupCourse(this.courseIndex, d.code);
+        if (!course) { this.renderLeftEmpty(); return; }
+        this._navLeave();
+        this._selectCourse(course);
+        return;
+      }
+      case 'plans': this.showPlanView(); return;
+      case 'plan': this.openPlanDetail(d.id); return;
+      case 'saved': this.showWishlistView(); return;
+      case 'students': this.showStudentsView(); return;
+      case 'flags': this.showStudentFlagsView(); return;
+      case 'admin': this.showAdminConsole(d.tab || undefined); return;
+      case 'flagreview': this.showFlagReview(); return;
+      default: this.renderLeftEmpty();
     }
-    return '';
+  },
+
+  _beginPlanCourseBrowse() {
+    if (this._homeView !== 'plan') return;
+    this._planCourseReturn = { planId: this._planDetailId || null };
   },
 
   _selectCourse(course) {
@@ -1800,13 +1930,13 @@ const App = {
   renderLeftEmpty() {
     // No main shell on screen (onboarding or login): leave that screen alone.
     if (!document.getElementById('leftBody')) return;
-    this._planReturn = null;
     const wasPlan = this._homeView === 'plan';
     const hadCourse = !!this.selectedCourse;
     this._homeView = 'home';
     this._planDetailId = null;
     this._planCourseReturn = null;
     this.selectedCourse = null;
+    this._navRecord();
     // renderShell() replaces all of #app, so look #leftBody up only after it.
     // An element captured before it is detached and the panel would stay blank.
     if (wasPlan || hadCourse) this.renderShell();
@@ -2234,6 +2364,7 @@ const App = {
   renderCourseCard(course) {
     const el = document.getElementById('leftBody');
     if (!el) return;
+    this._navRecord();
 
     const deptName = getDeptName(course.course_code);
     // Every semester the course ran in: its SOC sections (also of semesters
@@ -2347,7 +2478,7 @@ const App = {
 
     el.innerHTML = `
       <div class="cc-card">
-        ${this._planBackLinkHtml()}
+        ${this._backButtonHtml()}
         ${dcBannerHtml}
         <div class="cc-head">
           <div class="cc-head-main">
@@ -3059,7 +3190,9 @@ const App = {
 
   showWishlistView() {
     if (!isStudent(this.profile)) return;
+    this._closeCourseAndPlan();
     this._homeView = 'wishlist';
+    this._navRecord();
     const el = document.getElementById('leftBody');
     if (!el) return;
 
@@ -3103,7 +3236,7 @@ const App = {
     el.innerHTML = `
       <div class="wl-view">
         <div class="wl-header">
-          <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
+          ${this._backButtonHtml()}
           <div class="wl-title">Saved courses${courses.length ? ` <span class="wl-count">· ${courses.length}</span>` : ''}</div>
           <p class="wl-hint">Your saved courses and notes are private. Faculty see only how many students saved each course.</p>
         </div>
@@ -3348,7 +3481,7 @@ const App = {
     try {
       const clean = new URL(location.href);
       clean.searchParams.delete('share_plan');
-      history.replaceState(null, '', clean.pathname + clean.search + clean.hash);
+      history.replaceState(history.state, '', clean.pathname + clean.search + clean.hash);
     } catch {}
     if (!r.ok) {
       showToast(r.message || 'Could not import shared schedule.');
@@ -3833,11 +3966,11 @@ const App = {
 
   async showPlanView() {
     if (!canUseSchedulePlan(this.profile)) return;
-    this._rememberPlanReturn();
     this._homeView = 'plan';
     this._planDetailId = null;
     this._planCourseReturn = null;
     this.selectedCourse = null;
+    this._navRecord();
     this.renderShell();
     if (this.authMode === 'authed') await this._loadServerPlans();
     const el = document.getElementById('leftBody');
@@ -3879,7 +4012,7 @@ const App = {
     el.innerHTML = `
       <div class="plan-view plan-view-library">
         <div class="plan-header">
-          ${this._planReturnButtonHtml()}
+          ${this._backButtonHtml()}
           <div class="plan-title-row">
             <h2 class="plan-title">Your schedules</h2>
             <span class="plan-sem">${esc(semLabel)}</span>
@@ -3896,38 +4029,6 @@ const App = {
     this._syncDirectoryFabLayout();
   },
 
-  // Where the planner was opened from, so its header offers the way back there
-  // (a course card, Saved courses, Students, Flagged courses), not only home.
-  // Moving inside the planner keeps it; opening the planner from home clears it.
-  _rememberPlanReturn() {
-    if (this._homeView === 'plan') return;
-    if (this.selectedCourse) this._planReturn = { course: this.selectedCourse.course_code, courseObj: this.selectedCourse };
-    else if (PLAN_RETURN_VIEWS[this._homeView]) this._planReturn = { view: this._homeView };
-    else this._planReturn = null;
-  },
-
-  _planReturnButtonHtml() {
-    const r = this._planReturn;
-    const label = r && r.course ? `Back to ${r.course}`
-      : (r && PLAN_RETURN_VIEWS[r.view] ? PLAN_RETURN_VIEWS[r.view].label : 'Back to home');
-    return `<button class="dc-back-link" onclick="App._returnFromPlan()">${esc(label)}</button>`;
-  },
-
-  _returnFromPlan() {
-    const r = this._planReturn;
-    this._planReturn = null;
-    const course = r && r.course ? (lookupCourse(this.courseIndex, r.course) || r.courseObj || null) : null;
-    const view = r && PLAN_RETURN_VIEWS[r.view];
-    if (!course && !view) { this.renderLeftEmpty(); return; }
-    this._homeView = 'home';
-    this._planDetailId = null;
-    this._planCourseReturn = null;
-    this.selectedCourse = null;
-    this.renderShell();
-    if (course) this._selectCourse(course);
-    else this[view.show]();
-  },
-
   openPlanDetail(planId) {
     if (!canUseSchedulePlan(this.profile)) return;
     const plan = this._getPlanRecord(planId);
@@ -3936,11 +4037,11 @@ const App = {
       return;
     }
     this._setActivePlanId(planId);
-    this._rememberPlanReturn();
     this._homeView = 'plan';
     this._planDetailId = planId;
     this._planCourseReturn = null;
     this.selectedCourse = null;
+    this._navRecord();
     this.renderShell();
     const el = document.getElementById('leftBody');
     if (!el) return;
@@ -3964,8 +4065,8 @@ const App = {
       <div class="plan-view">
         <div class="plan-header">
           <div class="plan-back-row">
-            <button class="dc-back-link" onclick="App.showPlanView()">All schedules</button>
-            ${this._planReturn ? this._planReturnButtonHtml() : ''}
+            ${this._backButtonHtml()}
+            ${(this._backTarget() || {}).v === 'plans' ? '' : '<button class="dc-back-link" onclick="App.showPlanView()">All schedules</button>'}
           </div>
           <div class="plan-title-row">
             <h2 class="plan-title">${esc(plan.name)}</h2>
@@ -4027,7 +4128,9 @@ const App = {
 
   async showStudentFlagsView() {
     if (!isStudent(this.profile) || this.authMode !== 'authed') return;
+    this._closeCourseAndPlan();
     this._homeView = 'studentflags';
+    this._navRecord();
     const el = document.getElementById('leftBody');
     if (!el) return;
     await this._loadServerFlags();
@@ -4044,7 +4147,7 @@ const App = {
     el.innerHTML = `
       <div class="adm-view">
         <div class="adm-header">
-          <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
+          ${this._backButtonHtml()}
           <div class="adm-title">Flagged courses <span class="adm-count">· ${items.length}</span></div>
         </div>
         <p class="adm-hint">Courses that faculty reported for review. Their details may change once a report is resolved.</p>
@@ -4062,14 +4165,16 @@ const App = {
       showToast('Faculty access required.');
       return;
     }
+    this._closeCourseAndPlan();
     this._homeView = 'students';
+    this._navRecord();
     const el = document.getElementById('leftBody');
     if (!el) return;
     this._sfStudents = { found: [] };
     el.innerHTML = `
       <div class="adm-view">
         <div class="adm-header">
-          <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
+          ${this._backButtonHtml()}
           <div class="adm-title">Students</div>
         </div>
         <section class="sf-find" aria-labelledby="sfFindLabel">
@@ -4583,13 +4688,14 @@ const App = {
     }
     this._homeView = 'admin-console';
     if (tab) this._adminConsole.tab = tab;
+    this._navRecord();
     const el = document.getElementById('leftBody');
     if (!el) return;
     const active = this._adminConsole.tab;
     el.innerHTML = `
       <div class="adm-view adm-console">
         <div class="adm-header">
-          <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
+          ${this._backButtonHtml()}
           <div class="adm-title">Admin</div>
         </div>
         <div class="adm-console-tabs" role="tablist" aria-label="Admin sections">
@@ -4605,6 +4711,7 @@ const App = {
 
   async _setAdminTab(tab) {
     this._adminConsole.tab = tab;
+    this._navRecord();
     document.querySelectorAll('.adm-console-tab').forEach(b => {
       const on = b.dataset.tab === tab;
       b.classList.toggle('is-active', on);
@@ -6797,7 +6904,7 @@ const App = {
     el.innerHTML = this._admEmbedded() ? body : `
       <div class="adm-view">
         <div class="adm-header">
-          <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
+          ${this._backButtonHtml()}
           <div class="adm-title">User roles <span class="adm-count">· ${st.total}</span></div>
         </div>
         ${body}
@@ -6945,7 +7052,9 @@ const App = {
       await this.showAdminConsole('flags');
       return;
     }
+    this._closeCourseAndPlan();
     this._homeView = 'admin';
+    this._navRecord();
     const el = document.getElementById('leftBody');
     if (!el) return;
     el.innerHTML = '<div class="empty-state"><div class="spinner"></div><div class="empty-text" style="margin-top:12px">Loading flag review…</div></div>';
@@ -6986,7 +7095,7 @@ const App = {
     el.innerHTML = this._admEmbedded() ? body : `
       <div class="adm-view">
         <div class="adm-header">
-          <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
+          ${this._backButtonHtml()}
           <div class="adm-title">Flag review <span class="adm-count">· ${s.total}</span></div>
         </div>
         ${body}

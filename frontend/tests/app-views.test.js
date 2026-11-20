@@ -169,20 +169,81 @@ test('app views: reset() from the schedule view shows home', () => {
   assertEqual(leftBodyHtml(document), HOME_MARKER);
 });
 
-test('planner: opened from a course, its Back button returns to that course', async () => {
-  const { App, document } = loadApp();
+// Navigation history (Back everywhere): the tests have no History API, so the
+// steps are kept in App._navEntries and Back walks them directly.
+function loadNavApp() {
+  // The real course card (it records its step), on the small catalog of the minors tests.
+  const env = loadApp({ realTree: true, realCard: true });
+  const { App } = env;
+  App.profile = STUDENT('CS', []);
+  App._buildCatalog(minorsCatalog(), [], MINORS_JSON);
+  App.activeSemester = 'F26';
+  App.renderShell();
   App._refreshSemesterOptions = () => {};
-  App._selectCourse(COURSE);
-  await App.showPlanView();
-  let left = document.getElementById('leftBody').innerHTML;
-  assertTrue(left.includes(`Back to ${COURSE.course_code}`) && left.includes('onclick="App._returnFromPlan()"'), 'back to the course');
-  App._returnFromPlan();
-  assertTrue(App.selectedCourse && App.selectedCourse.course_code === COURSE.course_code, 'the course is open again');
-  assertTrue(App._homeView !== 'plan', 'out of the planner');
   App.renderLeftEmpty();
+  return env;
+}
+const backButton = document => {
+  const m = /<button type="button" class="dc-back-link" onclick="App.navBack\(\)">([^<]+)<\/button>/.exec(document.getElementById('leftBody').innerHTML);
+  return m ? m[1] : null;
+};
+
+test('navigation: course to course, Back returns to the course before, then home', () => {
+  const { App, document } = loadNavApp();
+  App.selectCourseFromTree('15-112');
+  assertEqual(backButton(document), 'Back to home');
+  App.selectCourseFromTree('15-122');
+  assertEqual(backButton(document), 'Back to 15-112', 'a course opened from a course');
+  App.navBack();
+  assertEqual(App.selectedCourse.course_code, '15-112');
+  assertEqual(backButton(document), 'Back to home');
+  App.navBack();
+  assertTrue(!App.selectedCourse && App._homeView === 'home', 'home again');
+});
+
+test('navigation: the planner and a schedule return to where they were opened from', async () => {
+  const { App, document } = loadNavApp();
+  App.selectCourseFromTree('15-150');
   await App.showPlanView();
-  left = document.getElementById('leftBody').innerHTML;
-  assertTrue(left.includes('>Back to home</button>'), 'opened from home: Back to home');
+  assertEqual(backButton(document), 'Back to 15-150', 'schedules opened from a course');
+  App.createNewPlan('Fall plan');
+  assertEqual(backButton(document), 'Back to schedules', 'a schedule opened from the list');
+  assertFalse(document.getElementById('leftBody').innerHTML.includes('>All schedules</button>'), 'no second button to the same place');
+  App.selectCourseFromTree('15-112');
+  assertEqual(backButton(document), 'Back to Fall plan', 'a course opened from a schedule');
+  App.navBack();
+  assertEqual([App._homeView, App.selectedCourse], ['plan', null]);
+  assertTrue(document.getElementById('leftBody').innerHTML.includes('Fall plan'));
+  App.navBack();
+  App.navBack();
+  assertEqual(App.selectedCourse && App.selectedCourse.course_code, '15-150', 'back to the course the planner was opened from');
+});
+
+test('navigation: drawing the same view again adds no step; going home from anywhere is a step', async () => {
+  const { App, document } = loadNavApp();
+  App.selectCourseFromTree('15-112');
+  const steps = App._navIdx;
+  App.renderCourseCard(App.selectedCourse);
+  App.renderCourseCard(App.selectedCourse);
+  assertEqual(App._navIdx, steps, 'a redraw is not a step');
+  await App.showPlanView();
+  App.renderLeftEmpty();
+  assertEqual(App._navIdx, steps + 2);
+  App.navBack();
+  assertEqual(App._homeView, 'plan', 'Back from home returns to the schedules');
+});
+
+test('navigation: with the History API every step is a browser entry, and Back is the browser\'s Back', async () => {
+  const { App, ctx } = loadNavApp();
+  const calls = [];
+  ctx.history = { state: null, pushState(st) { calls.push(['push', st.cfNav, st.d.v]); this.state = st; },
+    replaceState(st) { calls.push(['replace', st.cfNav, st.d.v]); this.state = st; }, back() { calls.push(['back']); } };
+  App._navEntries = []; App._navIdx = -1;
+  App.renderLeftEmpty();
+  App.selectCourseFromTree('15-122');
+  await App.showPlanView();
+  App.navBack();
+  assertEqual(calls, [['replace', 0, 'home'], ['push', 1, 'course'], ['push', 2, 'plans'], ['back']]);
 });
 
 test('no arrows on buttons: the onboarding Continue and the landing buttons', () => {
