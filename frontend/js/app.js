@@ -3,7 +3,6 @@
 // ============================================================
 
 const HOME_POPULAR_COURSES = ['15-122', '21-120', '36-200', '67-250', '82-112'];
-const HOME_SEARCH_CHIPS = ['15-122', 'Contextual Thinking', 'Intercultural and Global Inquiry', 'Probability'];
 const HOME_RECENT_MAPPINGS = [
   { courses: '82-101 to 82-142', label: 'Modern Languages: IS, BA, BS and CS Gen Ed', major: 'IS', path: 'GenEd---Foundations---Intercultural and Global Inquiry' },
   { courses: '79-286', label: 'Movers & Shakers: IS Contextual Thinking', major: 'IS', path: 'GenEd---Foundations---Contextual Thinking' },
@@ -1896,15 +1895,6 @@ const App = {
     }
   },
 
-  runHomeSearchChip(text) {
-    const input = document.getElementById('homeSearch');
-    if (!input) return;
-    input.value = text;
-    input.focus();
-    this._setHomeSearchLoading(true);
-    this.handleUnifiedSearch(text);
-  },
-
   toggleHomeDock(kind) {
     const pill = document.querySelector('.home-dock-pill[data-dock="' + kind + '"]');
     if (!pill) return;
@@ -2055,7 +2045,7 @@ const App = {
 
     // Students: CountsFor is a guide, the degree audit is the record.
     const auditNotice = isStudent(this.profile)
-      ? '<p class="home-notice" role="note">CountsFor does not replace your degree audit. Check your plan in Stellic and with your advisor.</p>'
+      ? `<p class="home-notice" role="note"><span class="home-notice-icon" aria-hidden="true">${this._iconInfo()}</span><span><strong>CountsFor does not replace your degree audit.</strong> Check your plan in Stellic and with your advisor.</span></p>`
       : '';
 
     let browseSub;
@@ -2068,12 +2058,6 @@ const App = {
     const browseMajor = (vm === 'cross-program') ? this.activeMajor : (p || this.activeMajor);
     this._unifiedBrowseMajor = browseMajor;
 
-    const chipsHtml = HOME_SEARCH_CHIPS.map(c =>
-      // Single-quote the JS string — JSON.stringify's double quotes would
-      // terminate the double-quoted onclick attribute and kill the handler.
-      `<button type="button" class="home-chip" onclick="App.runHomeSearchChip('${c.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${esc(c)}</button>`
-    ).join('');
-
     const dockHtml = this._renderHomeDock();
     const quickStartHtml = this._renderQuickStart(browseMajor);
 
@@ -2083,7 +2067,7 @@ const App = {
           <div class="home-main-spacer" aria-hidden="true"></div>
           <section class="home-hero" aria-label="Course search">
             <header class="home-hero-head">
-              <h1 class="home-hero-title">Find a course.</h1>
+              <h1 class="home-hero-title">Find a course</h1>
               <span class="home-hero-accent" aria-hidden="true"></span>
             </header>
 
@@ -2095,7 +2079,6 @@ const App = {
               <div class="typeahead home-typeahead" id="homeTypeahead"></div>
             </div>
 
-            <div class="home-chips" aria-label="Example searches">${chipsHtml}</div>
 
             <div class="home-ghost-actions">
               <button type="button" class="home-primary-btn" onclick="App.enterExplorer('${browseMajor}')" title="Browse ${browseSub}">
@@ -2121,7 +2104,6 @@ const App = {
           <a class="home-foot-logo" href="https://www.qatar.cmu.edu/" target="_blank" rel="noopener" aria-label="Carnegie Mellon University Qatar">
             <img src="assets/img/cmuq-wordmark.png" alt="" />
           </a>
-          <span class="home-foot-note">A curriculum explorer for the CMU-Q community.</span>
         </footer>
       </div>
     `;
@@ -3047,6 +3029,10 @@ const App = {
   _iconFlag() {
     return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 2v12"/><path d="M3 2.5h8.5L9.7 5.2 11.5 8H3"/></svg>';
   },
+  _iconInfo() {
+    return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.2v4"/><circle cx="8" cy="4.9" r="0.6" fill="currentColor" stroke="none"/></svg>';
+  },
+
   _iconDownload() {
     return '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7M5 7l3 3 3-3M3 11.5v1.5h10v-1.5"/></svg>';
   },
