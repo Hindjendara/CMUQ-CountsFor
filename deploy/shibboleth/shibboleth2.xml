@@ -7,7 +7,10 @@
     sudo install -m 644 deploy/shibboleth/shibboleth2.xml /etc/shibboleth/shibboleth2.xml
     sudo shibd -t && sudo systemctl restart shibd
 
-  Every CHANGE_ME is a value CMU IT must confirm or provide. The other files this
+  CMU-Q IT confirmed on November 20, 2026: the IdP is CMU-Q's own
+  login.qatar.cmu.edu (login.cmu.edu is the Pittsburgh IdP, for applications that
+  cover all of CMU), and the support address is helpcenter@qatar.cmu.edu. The
+  CHANGE_ME values left belong to the other metadata sources below. The other files this
   one names (attribute-policy.xml, security-policy.xml, protocols.xml) are the
   package's own, left as installed. attribute-map.xml comes from this folder.
 -->
@@ -42,8 +45,9 @@
                   checkAddress="false" handlerURL="/Shibboleth.sso" handlerSSL="true"
                   cookieProps="https" redirectLimit="exact">
 
-            <!-- CHANGE_ME (IT to confirm): CMU's IdP entityID. -->
-            <SSO entityID="https://login.cmu.edu/idp/shibboleth">
+            <!-- CMU-Q's IdP. Its metadata gives eppn the scope qatar.cmu.edu
+                 (andrewid@qatar.cmu.edu); the API maps that to andrewid@andrew.cmu.edu. -->
+            <SSO entityID="https://login.qatar.cmu.edu/idp/shibboleth">
               SAML2
             </SSO>
 
@@ -66,21 +70,22 @@
             <Handler type="DiscoveryFeed" Location="/DiscoFeed"/>
         </Sessions>
 
-        <!-- CHANGE_ME: the address shown on the SP's error pages. -->
-        <Errors supportContact="CHANGE_ME@qatar.cmu.edu" helpLocation="/"/>
+        <!-- The address shown on the SP's error pages: CMU-Q's help center. -->
+        <Errors supportContact="helpcenter@qatar.cmu.edu" helpLocation="/"/>
 
         <!--
-          CHANGE_ME (IT to provide): where the SP reads CMU's IdP metadata.
-          Default here: a file IT hands over, copied to
-          /etc/shibboleth/cmu-idp-metadata.xml.
+          Where the SP reads CMU-Q's IdP metadata. Default here: the metadata the
+          IdP publishes at its entityID URL, https://login.qatar.cmu.edu/idp/shibboleth,
+          saved as /etc/shibboleth/cmu-qatar-idp-metadata.xml (README 15.22). A file
+          from IT goes to the same place.
         -->
-        <MetadataProvider type="XML" validate="true" path="cmu-idp-metadata.xml"/>
+        <MetadataProvider type="XML" validate="true" path="cmu-qatar-idp-metadata.xml"/>
 
         <!--
           Or, if IT says to fetch it from a URL (with the certificate that signs it):
         <MetadataProvider type="XML" validate="true"
-              url="https://CHANGE_ME/idp-metadata.xml"
-              backingFilePath="cmu-idp-metadata.xml" maxRefreshDelay="7200">
+              url="https://login.qatar.cmu.edu/idp/shibboleth"
+              backingFilePath="cmu-qatar-idp-metadata.xml" maxRefreshDelay="7200">
             <MetadataFilter type="Signature" certificate="CHANGE_ME-metadata-signing.pem"/>
         </MetadataProvider>
 

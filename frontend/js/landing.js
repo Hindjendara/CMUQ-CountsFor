@@ -145,7 +145,7 @@
       btn.disabled = true;
       btn.innerHTML =
         '<span class="landing-submit-spinner" aria-hidden="true"></span><span>' +
-        idleLabel.replace(' →', '…') +
+        idleLabel.replace(/…$/, '') + '…' +
         '</span>';
     } else {
       btn.textContent = idleLabel;
@@ -423,7 +423,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'landing-link-btn';
-      btn.textContent = 'Continue to CountsFor →';
+      btn.textContent = 'Continue to CountsFor';
       btn.addEventListener('click', goToApp);
       box.appendChild(btn);
     }
@@ -487,7 +487,7 @@
       inner = panelWrap(
         '<div class="landing-card__top">' +
         '<div class="landing-panel-head">' +
-        '<button type="button" class="landing-back" data-view="signin">← Back to sign in</button>' +
+        '<button type="button" class="landing-back" data-view="signin">Back to sign in</button>' +
         '<h2 class="landing-panel-title" id="panel-title-forgot">Forgot password</h2>' +
         '<p class="landing-panel-lead">We\'ll email you a reset link. Or verify with your <strong>@andrew.cmu.edu</strong> Google account instead, no email needed.</p>' +
         '</div>' +
@@ -498,7 +498,7 @@
         formErrorHtml() +
         emailField('cfForgotEmail', 'Andrew email') +
         '<div class="landing-form-actions">' +
-        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Send reset link →</button>' +
+        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Send reset link</button>' +
         '</div>' +
         '</form>' +
         '<div class="landing-reset-box" id="cfResetLinkBox" hidden></div>' +
@@ -526,7 +526,7 @@
         passwordField('cfResetPass', 'New password', { autocomplete: 'new-password', hint: 'At least 8 characters' }) +
         passwordField('cfResetPass2', 'Confirm password', { autocomplete: 'new-password' }) +
         '<div class="landing-form-actions">' +
-        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Update password →</button>' +
+        '<button type="submit" class="landing-submit" id="cfAuthSubmit" disabled>Update password</button>' +
         '</div>' +
         '</form>' +
         '</div>',
@@ -842,9 +842,9 @@
     setFormError('');
     const email = (document.getElementById('cfForgotEmail')?.value || '').trim();
     if (!validateAndrewField('cfForgotEmail', 'cfForgotEmailMsg')) return;
-    setLoading(true, 'Send reset link →');
+    setLoading(true, 'Send reset link');
     const r = await reach(apiForgotPassword(normalizeCmuEmail(email) || email));
-    setLoading(false, 'Send reset link →');
+    setLoading(false, 'Send reset link');
     if (!r.ok) {
       if (handleAuthNetworkFailure(r)) {
         updateSubmitState('forgot');
@@ -875,7 +875,7 @@
     if (box) {
       let extra = '';
       if (r.data && r.data.reset_url) {
-        extra = '<a class="landing-reset-link" href="' + esc(r.data.reset_url) + '">Reset my password →</a>';
+        extra = '<a class="landing-reset-link" href="' + esc(r.data.reset_url) + '">Reset my password</a>';
         state.resetToken = r.data.reset_token || '';
       } else if (r.data && r.data.reset_token) {
         const url =
@@ -883,7 +883,7 @@
           location.pathname.replace(/[^/]+$/, '') +
           'index.html?token=' +
           encodeURIComponent(r.data.reset_token);
-        extra = '<a class="landing-reset-link" href="' + esc(url) + '">Reset my password →</a>';
+        extra = '<a class="landing-reset-link" href="' + esc(url) + '">Reset my password</a>';
         state.resetToken = r.data.reset_token;
       }
       box.hidden = false;
@@ -901,13 +901,13 @@
       return;
     }
     if (!validatePasswordMatch('cfResetPass', 'cfResetPass2', 'cfResetPass2Msg')) return;
-    setLoading(true, 'Update password →');
+    setLoading(true, 'Update password');
     // Recovery via Google: the user is already authenticated, so set the
     // password directly. The email-link path uses the one-time token.
     const r = state.recovered
       ? await reach(apiSetPassword(password))
       : await reach(apiResetPassword({ token: state.resetToken, password }));
-    setLoading(false, 'Update password →');
+    setLoading(false, 'Update password');
     if (!r.ok) {
       if (handleAuthNetworkFailure(r)) {
         updateSubmitState('reset');

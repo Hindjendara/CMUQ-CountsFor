@@ -169,6 +169,31 @@ test('app views: reset() from the schedule view shows home', () => {
   assertEqual(leftBodyHtml(document), HOME_MARKER);
 });
 
+test('planner: opened from a course, its Back button returns to that course', async () => {
+  const { App, document } = loadApp();
+  App._refreshSemesterOptions = () => {};
+  App._selectCourse(COURSE);
+  await App.showPlanView();
+  let left = document.getElementById('leftBody').innerHTML;
+  assertTrue(left.includes(`Back to ${COURSE.course_code}`) && left.includes('onclick="App._returnFromPlan()"'), 'back to the course');
+  App._returnFromPlan();
+  assertTrue(App.selectedCourse && App.selectedCourse.course_code === COURSE.course_code, 'the course is open again');
+  assertTrue(App._homeView !== 'plan', 'out of the planner');
+  App.renderLeftEmpty();
+  await App.showPlanView();
+  left = document.getElementById('leftBody').innerHTML;
+  assertTrue(left.includes('>Back to home</button>'), 'opened from home: Back to home');
+});
+
+test('no arrows on buttons: the onboarding Continue and the landing buttons', () => {
+  const app = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
+  const landing = fs.readFileSync(path.join(ROOT, 'js/landing.js'), 'utf8');
+  for (const [name, src] of [['js/app.js', app], ['js/landing.js', landing]]) {
+    assertFalse(/[→←⬇]\s*(<\/|'|`)/.test(src) || /(>|')\s*[→←⬇]/.test(src), name + ' has an arrow in a label');
+  }
+  assertTrue(app.includes('onclick="App._finishOnboarding()">Continue</button>'));
+});
+
 test('app.html preloads the catalog and the minors at the exact URLs js/api.js fetches', () => {
   const html = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
   const tag = /<meta name="cf-build" content="([^"]+)"/.exec(html)[1];
@@ -310,7 +335,7 @@ test('minors: a student sees each chosen minor after the major, with its limit a
   const { App, document } = loadMinorsApp(STUDENT('CS', ['psychology', 'math']));
   App.renderTree();
   const html = treeHtml(document);
-  assertTrue(html.includes('class="mn-programs"'), 'the programs bar');
+  assertFalse(html.includes('mn-programs') || html.includes('mnMinorAdd') || html.includes('mnMajorPick'), 'no Major/Minors bar above the tree (the navbar badge edits the programs)');
   const iMajor = html.indexOf('data-tree-major="CS"');
   const iPsych = html.indexOf('id="mn-section-psychology"');
   const iMath = html.indexOf('id="mn-section-math"');
@@ -475,77 +500,6 @@ test('minors: a student adds and removes minors in the tree', () => {
   App.switchMajor('MINORS');
   App.browseMinor('finance');
   assertTrue(treeHtml(document).includes('Not open to BA majors'));
-});
-
-test('minors: on a closed programs dropdown a key only moves the choice; Enter, Tab or a pick in the list applies it', () => {
-  const { App, ctx, document } = loadMinorsApp(STUDENT('CS', []), {});
-  App._refreshSemesterOptions = () => {};
-  App.renderTree();
-  assertTrue(treeHtml(document).includes('id="mnMinorAdd" aria-label="Add a minor" onchange="App._onProgramSelectChange(this)" onkeydown="App._onProgramSelectKey(event, this)"'));
-  const add = { id: 'mnMinorAdd', value: 'arabic' };
-  const key = (k, el, extra = {}) => App._onProgramSelectKey(Object.assign({ key: k, preventDefault() {} }, extra), el);
-  // Three presses of the down arrow (Chrome and Edge fire a change for each) add nothing.
-  for (const code of ['arabic', 'biology', 'business']) {
-    add.value = code;
-    key('ArrowDown', add);
-    App._onProgramSelectChange(add);
-  }
-  assertEqual(App.profile.secondaries, [], 'the arrow keys only move the choice');
-  let prevented = false;
-  key('Enter', add, { preventDefault() { prevented = true; } });
-  assertEqual(App.profile.secondaries, ['business'], 'Enter adds the minor shown');
-  assertTrue(prevented, 'Enter does not also open the list');
-  // Typing moves the choice too, and Escape puts the dropdown back.
-  add.value = 'psychology';
-  key('p', add);
-  App._onProgramSelectChange(add);
-  key('Escape', add);
-  assertEqual([add.value, App.profile.secondaries], ['', ['business']]);
-  // On the major, two presses of the down arrow and a click elsewhere change nothing.
-  const major = { id: 'mnMajorPick', value: 'IS' };
-  key('ArrowDown', major);
-  App._onProgramSelectChange(major);
-  major.value = 'BA';
-  key('ArrowDown', major);
-  App._onProgramSelectChange(major);
-  App._onProgramSelectBlur(major);
-  assertEqual([major.value, App.profile.primary, App.profile.secondaries], ['CS', 'CS', ['business']],
-    'the business minor stays: BA was never applied');
-  // Tab applies the choice once the focus has moved on.
-  ctx.setTimeout = fn => { fn(); return 0; };
-  major.value = 'IS';
-  key('ArrowDown', major);
-  App._onProgramSelectChange(major);
-  key('Tab', major);
-  App._onProgramSelectBlur(major);
-  assertEqual(App.profile.primary, 'IS');
-  // A pick in the open list (the mouse, or Alt with the down arrow) applies at once.
-  App._onProgramSelectPointer(add);
-  add.value = 'psychology';
-  App._onProgramSelectChange(add);
-  assertEqual(App.profile.secondaries, ['business', 'psychology']);
-  key('ArrowDown', add, { altKey: true });
-  add.value = 'math';
-  App._onProgramSelectChange(add);
-  assertEqual(App.profile.secondaries, ['business', 'psychology', 'math']);
-  // Space opens the list, unless it is part of typing a name ("Business A..."): then it only moves the choice.
-  App._programTypedAt -= 1500;  // the last letter typed (the p above) was more than a second ago
-  key(' ', add);
-  add.value = 'economics';
-  App._onProgramSelectChange(add);
-  assertEqual(App.profile.secondaries, ['business', 'psychology', 'math', 'economics'], 'a pick in the list Space opened');
-  key('h', add);
-  key(' ', add);
-  add.value = 'history';
-  App._onProgramSelectChange(add);
-  assertEqual(App.profile.secondaries.length, 4, 'Space while typing waits like a letter');
-  key('Escape', add);
-  // Enter in the open list: when the browser passes the keys on, the change Enter brings applies at once.
-  key('ArrowDown', add);
-  key('Enter', add);
-  add.value = 'writing';
-  App._onProgramSelectChange(add);
-  assertEqual(App.profile.secondaries, ['business', 'psychology', 'math', 'economics', 'writing']);
 });
 
 test('minors: picking in the Minors tab dropdown draws only the minor under it', () => {

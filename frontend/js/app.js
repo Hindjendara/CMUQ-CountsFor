@@ -5,12 +5,22 @@
 const HOME_POPULAR_COURSES = ['15-122', '21-120', '36-200', '67-250', '82-112'];
 const HOME_SEARCH_CHIPS = ['15-122', 'Contextual Thinking', 'Intercultural and Global Inquiry', 'Probability'];
 const HOME_RECENT_MAPPINGS = [
-  { courses: '82-101 to 82-142', label: 'Modern Languages → IS, BA, BS and CS Gen Ed', major: 'IS', path: 'GenEd---Foundations---Intercultural and Global Inquiry' },
-  { courses: '79-286', label: 'Movers & Shakers → IS Contextual Thinking', major: 'IS', path: 'GenEd---Foundations---Contextual Thinking' },
+  { courses: '82-101 to 82-142', label: 'Modern Languages: IS, BA, BS and CS Gen Ed', major: 'IS', path: 'GenEd---Foundations---Intercultural and Global Inquiry' },
+  { courses: '79-286', label: 'Movers & Shakers: IS Contextual Thinking', major: 'IS', path: 'GenEd---Foundations---Contextual Thinking' },
 ];
 
 // The tab of the requirement map that lists every minor (App.activeMajor).
 const MINORS_TAB = 'MINORS';
+
+/** The longest minor name the navbar badge shows; a longer one shows as "1 minor". */
+const BADGE_MINOR_NAME_MAX = 12;
+
+/** Pages the planner can return to (App._rememberPlanReturn), by App._homeView. */
+const PLAN_RETURN_VIEWS = {
+  wishlist: { label: 'Back to saved courses', show: 'showWishlistView' },
+  students: { label: 'Back to students', show: 'showStudentsView' },
+  studentflags: { label: 'Back to flagged courses', show: 'showStudentFlagsView' },
+};
 
 /** A minor note listing renumbered courses ("85-104 is now 85-190"); the app does not show it. */
 const MINOR_RENUMBER_NOTE = /^Old numbers in the official file are shown as their current numbers: (.+)\.$/;
@@ -490,7 +500,7 @@ const App = {
         </div>
       ` : ''}
 
-      <button class="onboarding-continue auth-submit" ${valid ? '' : 'disabled'} onclick="App._finishOnboarding()">Continue →</button>
+      <button class="onboarding-continue auth-submit" ${valid ? '' : 'disabled'} onclick="App._finishOnboarding()">Continue</button>
           </div>
         </main>
         ${cancelHtml}
@@ -705,7 +715,10 @@ const App = {
     const studentMinors = getProfileMinors(p);
     if (p.role === 'student' && studentMinors.length) {
       const cls = 'rb-' + primaryLower + (studentMinors.length === 1 ? '-' + studentMinors[0] : '-multi');
-      if (studentMinors.length === 1) {
+      // One minor shows its name when that fits the navbar ("Psychology minor");
+      // a long one ("Business Analytics and Optimization") shows as "1 minor",
+      // named in the tooltip like two or more.
+      if (studentMinors.length === 1 && getMinorLabel(studentMinors[0]).length <= BADGE_MINOR_NAME_MAX) {
         const minorLabel = getMinorLabel(studentMinors[0]);
         return `
         <button class="role-badge rb-${primaryLower} ${cls}" onclick="App.editRole()" title="Click to change role">
@@ -715,12 +728,12 @@ const App = {
           <span class="rb-edit-hint">Edit</span>
         </button>`;
       }
-      // Two or more minor names do not fit the navbar: show the count, name them in the tooltip.
+      // A long minor name, or two or more minors: show the count, name them in the tooltip.
       return `
         <button class="role-badge rb-${primaryLower} ${cls}" onclick="App.editRole()" title="${esc(this._minorNamesText(studentMinors))}. Click to change">
           <span class="rb-segment rb-primary">${PROGRAM_LABEL[p.primary]}</span>
           <span class="rb-divider"></span>
-          <span class="rb-segment rb-secondary">${studentMinors.length} <span class="rb-suffix">minors</span></span>
+          <span class="rb-segment rb-secondary">${studentMinors.length} <span class="rb-suffix">minor${studentMinors.length === 1 ? '' : 's'}</span></span>
           <span class="rb-edit-hint">Edit</span>
         </button>`;
     }
@@ -1083,10 +1096,9 @@ const App = {
           this.downloadRequirementExcel(actionBtn.dataset.treeMajor, actionBtn.dataset.treePath);
           return;
         }
-        // Adding or removing a minor draws the tree again: the focus moves to the
-        // Minors tab dropdown or to "Add a minor" instead of being lost.
+        // Adding a minor draws the tree again: the focus moves to the Minors
+        // tab dropdown instead of being lost.
         if (action === 'minor-add') { this.addStudentMinor(actionBtn.dataset.minor); this._focusById('mnBrowsePick'); }
-        if (action === 'minor-remove') { this.removeStudentMinor(actionBtn.dataset.minor); this._focusById('mnMinorAdd'); }
         if (action === 'wishlist') this.toggleWishlist(code);
         if (action === 'flag')     this.openFlagModal(code);
         if (action === 'plan-toggle-section') {
@@ -1788,6 +1800,7 @@ const App = {
   renderLeftEmpty() {
     // No main shell on screen (onboarding or login): leave that screen alone.
     if (!document.getElementById('leftBody')) return;
+    this._planReturn = null;
     const wasPlan = this._homeView === 'plan';
     const hadCourse = !!this.selectedCourse;
     this._homeView = 'home';
@@ -1910,7 +1923,6 @@ const App = {
     const p = this.profile && this.profile.primary;
     const studentMinors = isStudent(this.profile) ? getProfileMinors(this.profile) : [];
 
-    const lead = 'See which major requirements and Gen Ed categories a course counts for.';
     // Students: CountsFor is a guide, the degree audit is the record.
     const auditNotice = isStudent(this.profile)
       ? '<p class="home-notice" role="note">CountsFor does not replace your degree audit. Check your plan in Stellic and with your advisor.</p>'
@@ -1943,7 +1955,6 @@ const App = {
             <header class="home-hero-head">
               <h1 class="home-hero-title">Find a course.</h1>
               <span class="home-hero-accent" aria-hidden="true"></span>
-              <p class="home-hero-lead">${lead}</p>
             </header>
 
             <div class="home-hero-search">
@@ -2575,8 +2586,9 @@ const App = {
     const p = this._treeSubject();
     const studentTree = this._isStudentTree() && p.primary === this.activeMajor;
     const filterHint = `<div class="tree-filter-hint" aria-live="polite">Filtered by ${esc(this._activeFilterSummary().join(' · '))}</div>`;
-    let html = this.viewingStudent ? this._viewedStudentBannerHtml()
-      : (studentTree ? this._studentProgramsBarHtml() : '');
+    // A student changes their major and minors from the badge in the navbar
+    // (editRole, the onboarding editor) or adds a minor on the Minors tab.
+    let html = this.viewingStudent ? this._viewedStudentBannerHtml() : '';
     const sections = this.treeSections[this.activeMajor];
     if (!sections) {
       const pending = isProgramDataPending(this.activeMajor);
@@ -2692,7 +2704,7 @@ const App = {
   },
 
   _renderReqDownloadBtn(major, safePath) {
-    return `<button type="button" class="tr-download" data-action="download-req" data-tree-major="${esc(major)}" data-tree-path="${safePath}" title="Download courses for Excel" aria-label="Download courses for Excel">⬇</button>`;
+    return `<button type="button" class="tr-download" data-action="download-req" data-tree-major="${esc(major)}" data-tree-path="${safePath}" title="Download courses for Excel" aria-label="Download courses for Excel">${this._iconDownload()}</button>`;
   },
 
   downloadRequirementExcel(major, path) {
@@ -2904,6 +2916,10 @@ const App = {
   _iconFlag() {
     return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 2v12"/><path d="M3 2.5h8.5L9.7 5.2 11.5 8H3"/></svg>';
   },
+  _iconDownload() {
+    return '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7M5 7l3 3 3-3M3 11.5v1.5h10v-1.5"/></svg>';
+  },
+
   _iconCalendar() {
     return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="3.5" width="11" height="10.5" rx="1.5"/><path d="M5 2v2M11 2v2M2.5 6.5h11"/></svg>';
   },
@@ -3817,6 +3833,7 @@ const App = {
 
   async showPlanView() {
     if (!canUseSchedulePlan(this.profile)) return;
+    this._rememberPlanReturn();
     this._homeView = 'plan';
     this._planDetailId = null;
     this._planCourseReturn = null;
@@ -3862,7 +3879,7 @@ const App = {
     el.innerHTML = `
       <div class="plan-view plan-view-library">
         <div class="plan-header">
-          <button class="dc-back-link" onclick="App.renderLeftEmpty()">Back to home</button>
+          ${this._planReturnButtonHtml()}
           <div class="plan-title-row">
             <h2 class="plan-title">Your schedules</h2>
             <span class="plan-sem">${esc(semLabel)}</span>
@@ -3879,6 +3896,38 @@ const App = {
     this._syncDirectoryFabLayout();
   },
 
+  // Where the planner was opened from, so its header offers the way back there
+  // (a course card, Saved courses, Students, Flagged courses), not only home.
+  // Moving inside the planner keeps it; opening the planner from home clears it.
+  _rememberPlanReturn() {
+    if (this._homeView === 'plan') return;
+    if (this.selectedCourse) this._planReturn = { course: this.selectedCourse.course_code, courseObj: this.selectedCourse };
+    else if (PLAN_RETURN_VIEWS[this._homeView]) this._planReturn = { view: this._homeView };
+    else this._planReturn = null;
+  },
+
+  _planReturnButtonHtml() {
+    const r = this._planReturn;
+    const label = r && r.course ? `Back to ${r.course}`
+      : (r && PLAN_RETURN_VIEWS[r.view] ? PLAN_RETURN_VIEWS[r.view].label : 'Back to home');
+    return `<button class="dc-back-link" onclick="App._returnFromPlan()">${esc(label)}</button>`;
+  },
+
+  _returnFromPlan() {
+    const r = this._planReturn;
+    this._planReturn = null;
+    const course = r && r.course ? (lookupCourse(this.courseIndex, r.course) || r.courseObj || null) : null;
+    const view = r && PLAN_RETURN_VIEWS[r.view];
+    if (!course && !view) { this.renderLeftEmpty(); return; }
+    this._homeView = 'home';
+    this._planDetailId = null;
+    this._planCourseReturn = null;
+    this.selectedCourse = null;
+    this.renderShell();
+    if (course) this._selectCourse(course);
+    else this[view.show]();
+  },
+
   openPlanDetail(planId) {
     if (!canUseSchedulePlan(this.profile)) return;
     const plan = this._getPlanRecord(planId);
@@ -3887,6 +3936,7 @@ const App = {
       return;
     }
     this._setActivePlanId(planId);
+    this._rememberPlanReturn();
     this._homeView = 'plan';
     this._planDetailId = planId;
     this._planCourseReturn = null;
@@ -3913,7 +3963,10 @@ const App = {
     el.innerHTML = `
       <div class="plan-view">
         <div class="plan-header">
-          <button class="dc-back-link" onclick="App.showPlanView()">All schedules</button>
+          <div class="plan-back-row">
+            <button class="dc-back-link" onclick="App.showPlanView()">All schedules</button>
+            ${this._planReturn ? this._planReturnButtonHtml() : ''}
+          </div>
           <div class="plan-title-row">
             <h2 class="plan-title">${esc(plan.name)}</h2>
             <span class="plan-sem">${esc(semLabel)}</span>
@@ -7211,161 +7264,6 @@ const App = {
       }
     }
     return lines.length ? `<div class="mn-node-info">${lines.join('')}</div>` : '';
-  },
-
-  /**
-   * A student's major and minors, above their requirement tree: two labelled
-   * rows (the major dropdown; the chosen minors and the "Add a minor" dropdown).
-   */
-  _studentProgramsBarHtml() {
-    const p = this.profile;
-    const minors = getProfileMinors(p);
-    const majorOpts = STUDENT_PROGRAMS.map(m =>
-      `<option value="${m}" ${p.primary === m ? 'selected' : ''}>${esc(this._programFullName(m))} (${m})</option>`).join('');
-    const chips = minors.map(mc => `
-      <span class="mn-prog-chip">${esc(getMinorLabel(mc))}<button type="button" class="mn-prog-chip-x" data-action="minor-remove" data-minor="${esc(mc)}" title="Remove this minor" aria-label="Remove the ${esc(getMinorLabel(mc))} minor">${this._iconClose()}</button></span>`).join('');
-    const addOpts = MINOR_LIST
-      .filter(m => !minors.includes(m.code) && !isMinorBlockedForMajor(m.code, p.primary))
-      .map(m => `<option value="${esc(m.code)}">${esc(m.label)}</option>`).join('');
-    const addSelect = addOpts
-      ? `<select class="mn-select mn-prog-add" id="mnMinorAdd" aria-label="Add a minor" ${this._programSelectEvents()}><option value="">Add a minor</option>${addOpts}</select>`
-      : '';
-    return `
-      <div class="mn-programs" role="group" aria-label="Your major and minors">
-        <label class="mn-label" for="mnMajorPick">Major</label>
-        <div class="mn-prog-value">
-          <select class="mn-select" id="mnMajorPick" ${this._programSelectEvents()}>${majorOpts}</select>
-        </div>
-        <span class="mn-label" id="mnMinorsLabel">Minors</span>
-        <div class="mn-prog-value" role="group" aria-labelledby="mnMinorsLabel">
-          ${chips}${addSelect || (chips ? '' : '<span class="mn-prog-none">None</span>')}
-        </div>
-      </div>`;
-  },
-
-  // The programs bar dropdowns (#mnMajorPick, #mnMinorAdd) change the student's
-  // programs. On a closed dropdown an arrow key or a typed letter already moves
-  // the choice (Chrome, Edge and Firefox fire a change for each key), so a
-  // choice made that way waits: Enter, or Tab on to the next control, applies
-  // it, and Escape or a click elsewhere puts the dropdown back. A pick in the
-  // open list (mouse, touch, or Enter in the list) applies at once. The tree is
-  // then drawn again, and the focus goes back to the new dropdown, or on to the
-  // control Tab moved to.
-  _programSelectEvents() {
-    return 'onchange="App._onProgramSelectChange(this)" onkeydown="App._onProgramSelectKey(event, this)" '
-      + 'onmousedown="App._onProgramSelectPointer(this)" onblur="App._onProgramSelectBlur(this)"';
-  },
-
-  /** On a Mac an arrow key opens a closed dropdown's list instead of moving the choice. */
-  _arrowsOpenTheList() {
-    const nav = typeof navigator !== 'undefined' ? navigator : null;
-    return !!nav && /Mac|iPhone|iPad|iPod/i.test(nav.platform || nav.userAgent || '');
-  },
-
-  _onProgramSelectKey(event, el) {
-    const key = event && event.key;
-    if (key === 'Enter') {
-      if (this._programPending === el.id) {
-        if (event.preventDefault) event.preventDefault();
-        this._applyProgramPick(el.id, el.value, 'stay');
-      } else {
-        this._programEnter = el.id;  // Enter in the open list: the change it brings applies at once
-      }
-      return;
-    }
-    if (key === 'Escape') {
-      if (this._programPending === el.id) this._revertProgramSelect(el);
-      return;
-    }
-    if (key === 'Tab') {
-      this._programTab = event.shiftKey ? 'prev' : 'next';
-      return;
-    }
-    if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
-    this._programEnter = null;
-    // Alt with an arrow and F4 open the list, and so does Space unless it is part of
-    // typing (a letter typed on this dropdown in the last second); anything else may
-    // move the choice in place.
-    const now = Date.now();
-    const typing = this._programTypedOn === el.id && now - (this._programTypedAt || 0) < 1000;
-    const opens = event.altKey || key === 'F4' || (key === ' ' && !typing)
-      || (this._arrowsOpenTheList() && /^Arrow(Up|Down)$/.test(key || ''));
-    if (key && key.length === 1 && key !== ' ') {
-      this._programTypedOn = el.id;
-      this._programTypedAt = now;
-    }
-    this._programKeyNav = opens ? null : el.id;
-  },
-
-  _onProgramSelectPointer(el) {
-    this._programKeyNav = null;
-    if (this._programPending === el.id) this._revertProgramSelect(el);
-  },
-
-  _onProgramSelectChange(el) {
-    if (this._programKeyNav === el.id && this._programEnter !== el.id) {
-      this._programPending = el.id;  // a key moved the choice: wait for Enter or Tab
-      return;
-    }
-    this._applyProgramPick(el.id, el.value, 'stay');
-  },
-
-  _onProgramSelectBlur(el) {
-    const tab = this._programTab;
-    this._programTab = null;
-    this._programKeyNav = null;
-    this._programEnter = null;
-    if (this._programPending !== el.id) return;
-    if (!tab) {
-      this._revertProgramSelect(el);
-      return;
-    }
-    // Tab applies the choice once the focus has moved on, then follows it.
-    this._programPending = null;
-    const id = el.id;
-    const value = el.value;
-    setTimeout(() => this._applyProgramPick(id, value, tab), 0);
-  },
-
-  /** Put a programs bar dropdown back on the student's current choice. */
-  _revertProgramSelect(el) {
-    this._programPending = null;
-    this._programKeyNav = null;
-    el.value = el.id === 'mnMajorPick' ? ((this.profile && this.profile.primary) || '') : '';
-  },
-
-  /**
-   * Apply a programs bar choice; focus 'stay' puts the focus on the redrawn
-   * dropdown, 'next' or 'prev' on the control after or before it (where Tab
-   * went, unless that control was not drawn again).
-   */
-  _applyProgramPick(id, value, focus) {
-    this._programPending = null;
-    this._programKeyNav = null;
-    this._programEnter = null;
-    const before = typeof document !== 'undefined' ? document.activeElement : null;
-    let saved;
-    if (id === 'mnMajorPick') saved = this.setStudentMajor(value);
-    else if (id === 'mnMinorAdd' && value) saved = this.addStudentMinor(value);
-    if (focus === 'stay') {
-      if (!this._focusById(id)) this._focusById('mnMajorPick');
-    } else if (!(before && before.isConnected && before !== document.body)) {
-      this._focusBeside(id, focus === 'prev' ? -1 : 1);
-    }
-    return saved;
-  },
-
-  /** Focus the control next to (step 1) or before (step -1) a control, by tab order. */
-  _focusBeside(id, step) {
-    if (typeof document === 'undefined' || !document.querySelectorAll) return;
-    const el = document.getElementById(id) || document.getElementById('mnMajorPick');
-    if (!el) return;
-    const controls = Array.from(document.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]'))
-      .filter(c => !c.disabled && c.tabIndex >= 0 && c.offsetParent !== null);
-    const i = controls.indexOf(el);
-    const target = (i >= 0 && controls[i + step]) || el;
-    if (!target.focus) return;
-    try { target.focus({ preventScroll: true }); } catch { target.focus(); }
   },
 
   /** Focus a control by id, e.g. after a re-render replaced the one that was used. True when it was found. */

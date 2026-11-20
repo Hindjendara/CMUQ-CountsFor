@@ -265,7 +265,10 @@ def test_shibboleth_sp_template_names_this_site():
     assert (sessions.get("handlerSSL"), sessions.get("cookieProps"), sessions.get("redirectLimit")) == (
         "true", "https", "exact")
     sso = sessions.find("sp:SSO", _SP_NS)
-    assert sso.get("entityID") == "https://login.cmu.edu/idp/shibboleth"
+    # CMU-Q's own IdP, not the Pittsburgh login.cmu.edu (CMU-Q IT, November 20, 2026).
+    assert sso.get("entityID") == "https://login.qatar.cmu.edu/idp/shibboleth"
+    assert app.find("sp:Errors", _SP_NS).get("supportContact") == "helpcenter@qatar.cmu.edu"
+    assert app.find("sp:MetadataProvider", _SP_NS).get("path") == "cmu-qatar-idp-metadata.xml"
     assert sso.text.split() == ["SAML2"]
     handlers = {h.get("type"): h for h in sessions.findall("sp:Handler", _SP_NS)}
     assert handlers["MetadataGenerator"].get("Location") == "/Metadata"

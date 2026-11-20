@@ -434,3 +434,18 @@ def test_logout_names_the_sp_logout_in_shibboleth_mode(sso):
 def test_logout_in_password_mode_is_unchanged(client, student):
     login(client, student)
     assert client.post("/api/auth/logout").get_json() == {"ok": True}
+
+
+def test_cmu_qatar_eppn_signs_in_to_the_andrew_account(sso_app):
+    """CMU-Q's IdP scopes eppn with qatar.cmu.edu: andrewid@qatar.cmu.edu is the
+    same person as the account and directory entries under andrewid@andrew.cmu.edu."""
+    with sso_app.app_context():
+        user = User(email="qstudent@andrew.cmu.edu", name="Q Student", role="student")
+        db.session.add(user)
+        db.session.commit()
+        uid = user.id
+    c = sso_app.test_client()
+    assert _sign_in(c, eppn="QStudent@qatar.cmu.edu").status_code == 302
+    me = c.get("/api/me").get_json()
+    assert me["email"] == "qstudent@andrew.cmu.edu" and me["id"] == uid
+    assert _users(sso_app) == 1
