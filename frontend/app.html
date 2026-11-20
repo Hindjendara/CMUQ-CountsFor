@@ -8,8 +8,8 @@
   <title>CountsFor: CMU-Q Curriculum Explorer</title>
   <link rel="icon" type="image/png" href="assets/img/scotty-standing.png" />
   <link rel="apple-touch-icon" href="assets/img/scotty-standing.png" />
-  <meta name="cf-build" content="release-2026-11-20a" />
-  <link rel="stylesheet" href="css/styles.css?v=release-2026-11-20a" />
+  <meta name="cf-build" content="release-2026-11-20b" />
+  <link rel="stylesheet" href="css/styles.css?v=release-2026-11-20b" />
   <!-- Start the catalog download with the page, not after sign-in: on a slow or
        distant connection it then overlaps loading the scripts and GET /api/me.
        Each href must equal what _bundledDataUrl() in js/api.js builds (the path
@@ -19,8 +19,8 @@
        this comment: the bump script rewrites every occurrence of it. The 1 MB
        catalog is low priority, so on a narrow connection the scripts still come
        first and the catalog uses the time the page waits for GET /api/me. -->
-  <link rel="preload" href="data/courses.json?v=release-2026-11-20a" as="fetch" crossorigin="anonymous" fetchpriority="low" />
-  <link rel="preload" href="data/minors.json?v=release-2026-11-20a" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="data/courses.json?v=release-2026-11-20b" as="fetch" crossorigin="anonymous" fetchpriority="low" />
+  <link rel="preload" href="data/minors.json?v=release-2026-11-20b" as="fetch" crossorigin="anonymous" />
   <!-- The API is called on this page's own origin (/api/..., see js/api.js). -->
   <!-- Google OAuth web client ID. Its Authorized JavaScript origins must list
        every origin that serves this page. -->
@@ -36,10 +36,10 @@
       <div class="empty-text" style="margin-top:12px">Loading CountsFor…</div>
     </div>
   </div>
-  <script src="js/utils.js?v=release-2026-11-20a"></script>
-  <script src="js/data.js?v=release-2026-11-20a"></script>
-  <script src="js/profile.js?v=release-2026-11-20a"></script>
-  <script src="js/api.js?v=release-2026-11-20a"></script>
-  <script src="js/app.js?v=release-2026-11-20a"></script>
+  <script src="js/utils.js?v=release-2026-11-20b"></script>
+  <script src="js/data.js?v=release-2026-11-20b"></script>
+  <script src="js/profile.js?v=release-2026-11-20b"></script>
+  <script src="js/api.js?v=release-2026-11-20b"></script>
+  <script src="js/app.js?v=release-2026-11-20b"></script>
 </body>
 </html>

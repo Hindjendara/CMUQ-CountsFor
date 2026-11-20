@@ -534,7 +534,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to the data files (`data/courses.json`, `data/minors.json`, and `data/requirement_buckets.json` for the admin course editor). Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-20a`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-20b`). `scripts/bump_cf_build.py` bumps both pages. On the server Apache sends these files with `no-cache`, so a bump is no longer needed for browsers to see a new version. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---
@@ -709,6 +709,8 @@ Token storage: `saveAuthToken(token, true)` puts the token in localStorage ("Kee
 ### 8.6 `js/landing.js` (about 930 lines)
 
 One IIFE. Main parts: `reach()` (wraps every `api.js` call and clears a stale "Could not reach the server" banner as soon as the server answers), validation helpers (`validateAndrewField`, `validatePasswordMatch`), `renderPanel()` (about line 608, renders sign in, register, forgot, reset views), `goToApp()` (preserves `share_plan`), `onLogin`, `onRegister`, `mountGoogleRecover` and `onGoogleRecover` (Google button used for password recovery: sign in with Google, then set a password), `onForgotPassword`, `onResetPassword`, `probeSession()`, `init()`.
+
+**Sign-in help.** Under the card's footer line every view shows "Trouble signing in? Contact helpcenter@qatar.cmu.edu" (`footerHtml()`, `HELP_EMAIL`), CMU-Q IT's help center, which CMU-Q IT named as the support address (also on the Shibboleth SP's error pages, 15.22). Questions about courses and requirements go to the academic advisors, not there.
 
 **CMU sign-in.** `init()` first asks `GET /api/auth/methods` (`loadSsoSettings()`). When the mode is `shibboleth`, the card is the `sso` view: a "Sign in with Andrew ID" link to the login URL with `next` set to `app.html` (plus `share_plan` when a shared plan link is pending, `ssoLoginHref()`), the guest option below the card as always, and no password, register or forgot views. A failed CMU sign-in comes back as `/?sso_error=domain|identity|unavailable`; the view shows a short message once and removes the code from the address. When the methods call fails or answers anything else (no API, as on the GitHub Pages test copy, 15.21), the page behaves as before. The card is drawn after that answer, so the password form never flashes up on a CMU sign-in server.
 

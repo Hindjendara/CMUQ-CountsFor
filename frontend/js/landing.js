@@ -359,8 +359,14 @@
     );
   }
 
+  // CMU-Q IT's help center handles sign-in problems (Andrew ID, Shibboleth). It is
+  // also the support address on the Shibboleth SP's error pages (deploy/shibboleth).
+  const HELP_EMAIL = 'helpcenter@qatar.cmu.edu';
+
   function footerHtml() {
-    return '<div class="landing-card__footer">Carnegie Mellon University · Qatar</div>';
+    return '<div class="landing-card__footer">Carnegie Mellon University · Qatar' +
+      '<p class="landing-help">Trouble signing in? Contact <a href="mailto:' + HELP_EMAIL + '">' + HELP_EMAIL + '</a></p>' +
+      '</div>';
   }
 
   function backendWarnHtml() {

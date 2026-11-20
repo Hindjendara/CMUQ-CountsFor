@@ -357,6 +357,19 @@ body::before{
   color: var(--cf-maroon);
 }
 
+/* Sign-in help, under the footer line: quieter than the line itself. */
+.landing-help {
+  margin: 4px 0 0;
+  font-weight: 400;
+  color: var(--cf-muted, #6b6b6b);
+}
+.landing-help a {
+  color: var(--cf-maroon);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ── Tabs ─────────────────────────────────────────────────── */
 
 .landing-tabs {
