@@ -3486,17 +3486,16 @@ const App = {
     };
   },
 
+  /** Merge the server's plans into the saved ones; resolves to how many were new. */
   async _loadServerPlans() {
-    if (this.authMode !== 'authed' || !canUseSchedulePlan(this.profile)) return;
+    if (this.authMode !== 'authed' || !canUseSchedulePlan(this.profile)) return 0;
     const r = await apiGetPlans();
-    if (!r.ok || !r.data || !Array.isArray(r.data.plans)) return;
+    if (!r.ok || !r.data || !Array.isArray(r.data.plans)) return 0;
     let added = 0;
     for (const sp of r.data.plans) {
       if (this._mergeServerPlan(sp)) added++;
     }
-    if (added && this._homeView === 'plan' && !this._planDetailId) {
-      // Caller re-renders plan library after load when needed.
-    }
+    return added;
   },
 
   _mergeServerPlan(serverPlan) {
@@ -4263,7 +4262,16 @@ const App = {
     this.selectedCourse = null;
     this._navRecord();
     this.renderShell();
-    if (this.authMode === 'authed') await this._loadServerPlans();
+    this._renderPlanLibrary();
+    // Plans shared with you come from the server: draw the saved ones first,
+    // then add any new ones if the list is still open.
+    if (this.authMode === 'authed') {
+      const added = await this._loadServerPlans();
+      if (added && this._homeView === 'plan' && !this._planDetailId && !this.selectedCourse) this._renderPlanLibrary();
+    }
+  },
+
+  _renderPlanLibrary() {
     const el = document.getElementById('leftBody');
     if (!el) return;
 

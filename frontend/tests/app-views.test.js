@@ -219,6 +219,22 @@ test('navigation: the planner and a schedule return to where they were opened fr
   assertEqual(App.selectedCourse && App.selectedCourse.course_code, '15-150', 'back to the course the planner was opened from');
 });
 
+test('the schedules list is drawn at once; plans shared from the server are added when they arrive', async () => {
+  const { App, ctx, document } = loadNavApp();
+  let answer;
+  ctx.apiGetPlans = () => new Promise(r => { answer = r; });
+  App.selectCourseFromTree('15-150');
+  App.authMode = 'authed';
+  const opened = App.showPlanView();
+  const html = () => document.getElementById('leftBody').innerHTML;
+  assertEqual(backButton(document), 'Back to 15-150', 'drawn before the server answers');
+  assertTrue(html().includes('Your schedules'));
+  answer({ ok: true, data: { plans: [{ id: 7, name: 'Shared plan', shared_from: { name: 'Sara' }, items: [] }] } });
+  await opened;
+  assertTrue(html().includes('Shared plan') && html().includes('From Sara'), 'the shared plan is added');
+  assertEqual(backButton(document), 'Back to 15-150', 'still one step');
+});
+
 test('navigation: drawing the same view again adds no step; going home from anywhere is a step', async () => {
   const { App, document } = loadNavApp();
   App.selectCourseFromTree('15-112');
