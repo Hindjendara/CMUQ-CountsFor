@@ -257,7 +257,11 @@ const App = {
     if (mr.ok && mr.data) minorOverrides = mr.data.items || [];
     else if (minorsData) console.warn('[CountsFor] Minor settings unavailable; showing the minor file as it is.', mr.error);
     this._socSemesters = catalog.socSemesters;
+    // catalog.json has no descriptions (they load after the app is up); the
+    // fallback courses.json has them.
+    this._catalogHasDescriptions = !!catalog.hasDescriptions;
     this._buildCatalog(catalog.courses, overrides, minorsData, minorOverrides);
+    if (this._descriptionsMap) this._attachDescriptions(this._descriptionsMap);
   },
 
   /** The synchronous half of _prepareCatalog: edits, index, annotations, trees. */
@@ -327,6 +331,7 @@ const App = {
 
       this.renderLeftEmpty();
       this.renderTree();
+      this._loadDescriptions();
     } catch (err) {
       console.error(err);
       // Without a catalog the semester picker would keep saying it is loading.
@@ -337,6 +342,63 @@ const App = {
       // Look #leftBody up again: renderLeftEmpty() may have re-rendered the shell.
       const failBody = document.getElementById('leftBody');
       if (failBody) failBody.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Failed to load data: ${esc(err.message)}</div></div>`;
+    }
+  },
+
+  // ── Course descriptions (loaded after the app is up) ───────
+  // They are more than half of the catalog's size and only the course card and
+  // the admin course editor show them, so they come from their own file
+  // (data/course_descriptions.json) once the app is drawn. A catalog built
+  // from courses.json carries them already (the default, and the tests).
+  _catalogHasDescriptions: true,
+
+  /** Fetch the descriptions once; resolves true when they are attached. */
+  _loadDescriptions() {
+    if (this._catalogHasDescriptions) return Promise.resolve(true);
+    if (!this._descriptionsPromise) {
+      this._descriptionsPromise = fetchDescriptions()
+        .then(map => {
+          this._descriptionsMap = map || {};
+          this._attachDescriptions(this._descriptionsMap);
+          return true;
+        })
+        .catch(err => {
+          console.warn('[CountsFor] Course descriptions unavailable.', err && err.message);
+          this._descriptionsPromise = null;  // a later course editor may try again
+          return false;
+        });
+    }
+    return this._descriptionsPromise;
+  },
+
+  /** True when the courses carry their descriptions. */
+  _descriptionsReady() {
+    return !!(this._catalogHasDescriptions || this._descriptionsMap);
+  },
+
+  /**
+   * Give every course its description: the scraped courses (a rebuild starts
+   * from them), the edited copies and the archived ones. An admin's edited
+   * description stays; the catalog's own text then goes in _catalog.
+   */
+  _attachDescriptions(map) {
+    const fill = c => {
+      if (!c || !c.course_code) return;
+      const text = map[c.course_code];
+      if (text === undefined) return;
+      if (c._catalog && 'description' in c._catalog) {
+        if (c._catalog.description === undefined) c._catalog.description = text;
+      } else if (c.description === undefined) {
+        c.description = text;
+      }
+    };
+    (this._scrapedCourses || []).forEach(fill);
+    (this.courses || []).forEach(fill);
+    (this._archivedCourses || []).forEach(fill);
+    // A course card opened before the descriptions came: show its description now.
+    const c = this.selectedCourse;
+    if (c && c.description && typeof document !== 'undefined' && !document.querySelector('#leftBody .cc-desc')) {
+      this.renderCourseCard(c);
     }
   },
 
@@ -5352,6 +5414,14 @@ const App = {
   },
 
   _openCourseEditor(key, archived) {
+    // The editor shows the description: wait for them, or a save could compare
+    // against an empty one.
+    if (!this._descriptionsReady()) {
+      const el = document.getElementById('admContent');
+      if (el) el.innerHTML = '<div class="empty-state"><div class="spinner"></div><div class="empty-text" style="margin-top:12px">Loading the course…</div></div>';
+      this._loadDescriptions().then(() => this._openCourseEditor(key, archived));
+      return;
+    }
     const course = this._findCourseByKey(key, archived);
     if (!course) {
       showToast('That course is no longer in the catalog.');

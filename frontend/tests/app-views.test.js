@@ -260,9 +260,37 @@ test('the sign-in page prefetches the app scripts, styles and data at the URLs a
   const landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const prefetch = [...landing.matchAll(/<link rel="prefetch" href="([^"]+)"/g)].map(m => m[1]).sort();
   const used = [...app.matchAll(/<script src="(js\/[^"]+)"/g), ...app.matchAll(/<link rel="stylesheet" href="(css\/[^"]+)"/g),
-    ...app.matchAll(/<link rel="preload" href="([^"]+)"/g)].map(m => m[1]).sort();
-  assertEqual(prefetch, used);
+    ...app.matchAll(/<link rel="preload" href="([^"]+)"/g)].map(m => m[1]);
+  const tag = /<meta name="cf-build" content="([^"]+)"/.exec(app)[1];
+  used.push(`data/course_descriptions.json?v=${tag}`);  // fetched by the app once it is up
+  assertEqual(prefetch, used.sort());
   assertFalse(app.includes('accounts.google.com/gsi/client'), 'the app page does not load Google sign-in');
+});
+
+test('descriptions: they arrive after the catalog, fill every course, keep an admin edit, and show on an open card', () => {
+  const { App, ctx } = loadApp({ realCard: true });
+  const base = [
+    { course_code: '15-112', course_name: 'Fundamentals', units: 12, requirements: {}, offered: ['F26'] },
+    { course_code: '15-122', course_name: 'Imperative', units: 12, requirements: {}, offered: ['F26'] },
+  ];
+  App.profile = STUDENT('CS', []);
+  App._catalogHasDescriptions = false;
+  App._buildCatalog(base, [{ course_code: '15-122', fields: { description: 'Edited by an admin.' } }], null, []);
+  App.renderShell();
+  App.selectCourseFromTree('15-112');
+  assertFalse(App._descriptionsReady());
+  let rendered = 0;
+  const real = App.renderCourseCard.bind(App);
+  App.renderCourseCard = c => { rendered++; return real(c); };
+  App._descriptionsMap = { '15-112': 'Python and problem solving.', '15-122': 'C0 and C.' };
+  App._attachDescriptions(App._descriptionsMap);
+  assertTrue(App._descriptionsReady());
+  const byCode = code => App.courses.find(c => c.course_code === code);
+  assertEqual(byCode('15-112').description, 'Python and problem solving.');
+  assertEqual(byCode('15-122').description, 'Edited by an admin.', 'the edit stays');
+  assertEqual(byCode('15-122')._catalog.description, 'C0 and C.', 'the catalog text goes in _catalog');
+  assertEqual(App._scrapedCourses.find(c => c.course_code === '15-112').description, 'Python and problem solving.', 'a rebuild keeps it');
+  assertEqual(rendered, 1, 'the open card is drawn again with its description');
 });
 
 test('app.html preloads the catalog and the minors at the exact URLs js/api.js fetches', () => {
@@ -274,7 +302,7 @@ test('app.html preloads the catalog and the minors at the exact URLs js/api.js f
     localStorage: new MemoryStorage(), sessionStorage: new MemoryStorage(), console, setTimeout, clearTimeout };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/api.js'), 'utf8'), ctx, { filename: 'js/api.js' });
-  const expected = vm.runInContext('[_bundledDataUrl(LOCAL_DATA), _bundledDataUrl(MINORS_DATA)]', ctx);
+  const expected = vm.runInContext('[_bundledDataUrl(CATALOG_DATA), _bundledDataUrl(MINORS_DATA)]', ctx);
   assertEqual(preloads, expected);
   assertTrue(!/\?v=/.test(html.replace(/(href|src)="[^"]*"/g, '')), 'no version query text outside href and src (the bump script would rewrite it)');
 });

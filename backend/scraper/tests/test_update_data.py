@@ -535,3 +535,36 @@ def test_real_steps_on_repo_data_with_a_fake_scrape(deploy, monkeypatch):
         assert not (deploy.courses.parent / "courses.json.prev").exists()
     # the checkout's own data files are not touched
     assert {rel: (REPO_ROOT / rel).stat().st_mtime_ns for rel in REAL_FILES} == repo_stat
+
+
+def test_the_app_files_are_written_from_the_catalog_and_only_when_they_change(deploy, monkeypatch):
+    """catalog.json (no descriptions, no unused offering fields) and
+    course_descriptions.json, each with its .gz, next to courses.json."""
+    courses = [dict(c) for c in NEW_CATALOG["courses"]]
+    courses[0]["description"] = "Programs and problem solving."
+    courses[1]["description"] = "Data structures in C."
+    courses[0]["offerings"] = [{"semester": "Spring 2027", "semester_code": "S27", "campus": "Qatar", "section": "Lec 1",
+                                "modality": "In Person", "units": "12", "days_times": "UTR 08:30AM-09:45AM",
+                                "instructor": "", "location": "Doha, Qatar", "delivery_mode_raw": "In-person Expectation"}]
+    rich = {"_meta": {}, "courses": courses}
+    deploy.fake_steps(monkeypatch, soc=NEW_SOC, catalog=rich, buckets=BUCKETS)
+    assert update_data.main(["--skip-tests"]) == 0
+    data_dir = deploy.courses.parent
+    catalog = json.loads((data_dir / "catalog.json").read_bytes())
+    descriptions = json.loads((data_dir / "course_descriptions.json").read_bytes())
+    assert [c["course_code"] for c in catalog["courses"]] == [c["course_code"] for c in courses]
+    assert all("description" not in c for c in catalog["courses"])
+    assert descriptions == {"15-100": "Programs and problem solving.", "15-101": "Data structures in C."}
+    assert catalog["courses"][0]["offerings"] == [{"semester_code": "S27", "campus": "Qatar", "section": "Lec 1",
+                                                   "modality": "In Person", "units": "12", "days_times": "UTR 08:30AM-09:45AM"}]
+    for name in ("catalog.json", "course_descriptions.json"):
+        assert gzip.decompress((data_dir / (name + ".gz")).read_bytes()) == (data_dir / name).read_bytes()
+    # A second run with the same catalog leaves them alone.
+    old = 1_600_000_000
+    names = ("catalog.json", "catalog.json.gz", "course_descriptions.json", "course_descriptions.json.gz")
+    for name in names:
+        os.utime(data_dir / name, (old, old))
+    deploy.fake_steps(monkeypatch, soc=make_soc("2026-11-03T12:00:00+00:00", LIVE_COUNTS))
+    assert update_data.main(["--skip-tests"]) == 0
+    for name in names:
+        assert (data_dir / name).stat().st_mtime == old, name

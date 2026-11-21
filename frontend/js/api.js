@@ -6,6 +6,12 @@
 // ============================================================
 
 const LOCAL_DATA = 'data/courses.json';
+// What the app loads first: the catalog without descriptions, written by every
+// update next to courses.json (backend/scraper/update_data.py). Without it (a
+// checkout that never ran an update) the app loads courses.json instead.
+const CATALOG_DATA = 'data/catalog.json';
+// The descriptions, { course_code: text }, loaded after the app is up.
+const DESCRIPTIONS_DATA = 'data/course_descriptions.json';
 const MINORS_DATA = 'data/minors.json';
 // Every bucket path per program, empty buckets too. Written by the daily
 // pipeline; optional (the course editor falls back to the catalog rows).
@@ -41,14 +47,25 @@ async function _get(url) {
 // App.loadData() catches it and shows the "Failed to load data" message.
 async function fetchCatalog() {
   let data;
+  let hasDescriptions = false;
   try {
-    data = await _get(_bundledDataUrl(LOCAL_DATA));
-  } catch (e) {
-    throw new Error(`Could not load ${LOCAL_DATA} (${e.message})`);
+    data = await _get(_bundledDataUrl(CATALOG_DATA));
+  } catch (first) {
+    try {
+      data = await _get(_bundledDataUrl(LOCAL_DATA));
+      hasDescriptions = true;
+    } catch (e) {
+      throw new Error(`Could not load ${LOCAL_DATA} (${e.message})`);
+    }
   }
   const courses = (data && data.courses) || [];
   if (courses.length === 0) throw new Error(`${LOCAL_DATA} has no courses.`);
-  return { courses, socSemesters: Array.isArray(data.soc_semesters) ? data.soc_semesters : null };
+  return { courses, socSemesters: Array.isArray(data.soc_semesters) ? data.soc_semesters : null, hasDescriptions };
+}
+
+// The course descriptions ({ course_code: text }).
+async function fetchDescriptions() {
+  return _get(_bundledDataUrl(DESCRIPTIONS_DATA));
 }
 
 // The minor requirements (data/minors.json). Throws when the file cannot be

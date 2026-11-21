@@ -95,6 +95,10 @@ class Paths:
         self.live_soc = root / "backend" / "data" / "soc.json"
         self.live_courses = root / "frontend" / "data" / "courses.json"
         self.live_gz = self.live_courses.with_name("courses.json.gz")
+        # What the app loads (browser_files): the catalog without descriptions,
+        # and the descriptions, each with its .gz.
+        self.live_catalog = self.live_courses.with_name(CATALOG_NAME)
+        self.live_descriptions = self.live_courses.with_name(DESCRIPTIONS_NAME)
         self.overlays = root / "backend" / "data" / "mapping_overlays.json"
         self.lock = root / "backend" / "var" / "update.lock"
         self.live_buckets = self.live_courses.with_name(BUCKETS_NAME)
@@ -371,6 +375,45 @@ def compact_json(data: bytes) -> bytes:
     return json.dumps(json.loads(data), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
+# The files the app loads first and later (written next to courses.json). The
+# descriptions are more than half of the catalog's size, and only the course
+# card and the admin course editor need them, so the app fetches them after it
+# is up. The offering fields below are never read by the app.
+CATALOG_NAME = "catalog.json"
+DESCRIPTIONS_NAME = "course_descriptions.json"
+UNUSED_OFFERING_FIELDS = ("semester", "delivery_mode_raw", "location", "instructor")
+
+
+def browser_files(data: bytes) -> tuple[bytes, bytes]:
+    """(catalog.json, course_descriptions.json) for this catalog, compact JSON:
+    the catalog without descriptions and unused offering fields, and
+    {course_code: description} for the courses that have one."""
+    catalog = json.loads(data)
+    descriptions: dict[str, str] = {}
+    courses = []
+    for course in catalog.get("courses", []):
+        course = dict(course)
+        text = course.pop("description", None)
+        if text:
+            descriptions[course["course_code"]] = text
+        if isinstance(course.get("offerings"), list):
+            course["offerings"] = [{k: v for k, v in o.items() if k not in UNUSED_OFFERING_FIELDS}
+                                   for o in course["offerings"]]
+        courses.append(course)
+    slim = dict(catalog)
+    slim["courses"] = courses
+    dump = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return dump(slim), dump(descriptions)
+
+
+def _gz_holds(gz_path: Path, data: bytes) -> bool:
+    try:
+        with open(gz_path, "rb") as f:
+            return gzip.decompress(f.read()) == data
+    except (OSError, EOFError, gzip.BadGzipFile):
+        return False
+
+
 def gz_matches(gz_path: Path, data: bytes) -> bool:
     """True when the .gz holds the compact form of this catalog."""
     try:
@@ -408,6 +451,16 @@ def promote(paths: Paths) -> dict[str, bool]:
             swaps.append((_copy_temp(paths.staged_courses, paths.live_courses), paths.live_courses))
         if gz_needed:
             swaps.append((_write_temp(paths.live_gz, gzip_bytes(compact_json(new_catalog))), paths.live_gz))
+        # The app's files, each written only when it changed (stable ETags).
+        browser_written = []
+        for target, body in zip((paths.live_catalog, paths.live_descriptions), browser_files(new_catalog)):
+            if not (target.exists() and target.read_bytes() == body):
+                swaps.append((_write_temp(target, body), target))
+                browser_written.append(target.name)
+            gz_target = target.with_name(target.name + ".gz")
+            if not _gz_holds(gz_target, body):
+                swaps.append((_write_temp(gz_target, gzip_bytes(body)), gz_target))
+                browser_written.append(gz_target.name)
         if buckets_changed:
             swaps.append((_copy_temp(paths.staged_buckets, paths.live_buckets), paths.live_buckets))
         if soc_changed:
@@ -424,6 +477,7 @@ def promote(paths: Paths) -> dict[str, bool]:
     log("courses.json: " + ("updated, previous copy in courses.json.prev" if courses_changed
                             else "unchanged, not rewritten"))
     log("courses.json.gz: " + ("written" if gz_needed else "up to date"))
+    log(f"{CATALOG_NAME}, {DESCRIPTIONS_NAME}: " + (("written: " + ", ".join(browser_written)) if browser_written else "up to date"))
     log(f"{BUCKETS_NAME}: " + ("updated" if buckets_changed
                                else "unchanged" if paths.staged_buckets.exists()
                                else "not written by this run, left as it was"))
