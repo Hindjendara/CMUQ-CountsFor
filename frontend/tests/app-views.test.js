@@ -806,6 +806,81 @@ async function loadSemesterApp(catalog, saved, socSemesters = SOC_SEMESTERS) {
   return env;
 }
 
+// Counts the catalog and admin edit requests; the account check waits until the test answers it.
+function stubCatalogRequests(ctx) {
+  const calls = [];
+  ctx.fetchCatalog = async () => { calls.push('catalog'); return { courses: semesterCatalog(), socSemesters: SOC_SEMESTERS, hasDescriptions: true }; };
+  ctx.fetchMinors = async () => { calls.push('minors'); return MINORS_JSON; };
+  ctx.apiGetCourseOverrides = async () => { calls.push('edits'); return { ok: true, data: { items: [] } }; };
+  ctx.apiGetMinorOverrides = async () => { calls.push('minor settings'); return { ok: true, data: { items: [] } }; };
+  return calls;
+}
+
+test('loading: the catalog, the minors and the admin edits are requested with the account check, not after it', async () => {
+  const { App, ctx } = loadApp();
+  ctx.URLSearchParams = URLSearchParams;
+  const calls = stubCatalogRequests(ctx);
+  let answerMe;
+  ctx.apiGetMe = () => { calls.push('me'); return new Promise(r => { answerMe = r; }); };
+  App.applyTheme = () => {};
+  let redirected = false;
+  App._redirectToLogin = () => { redirected = true; };
+  const started = App.init();
+  assertEqual([...calls].sort(), ['catalog', 'edits', 'me', 'minor settings', 'minors'], 'all asked before /api/me answers');
+  answerMe({ ok: false, status: 401 });
+  await started;
+  assertTrue(redirected, 'no session: the sign-in page, and nothing left unhandled');
+});
+
+test('loading: the app uses the requests already on their way, and an admin save asks again', async () => {
+  const { App, ctx } = loadApp();
+  const calls = stubCatalogRequests(ctx);
+  App._startCatalogLoad();
+  await App.loadData();
+  assertEqual(calls, ['catalog', 'minors', 'edits', 'minor settings'], 'one request each');
+  assertTrue(App.courses.length > 0 && !!App.minorIndex);
+  await App._prepareCatalog();
+  assertEqual(calls.length, 8, 'after a save the edits are asked for again');
+  // A request older than a minute (a first sign-in that went through onboarding) is not used.
+  App._startCatalogLoad();
+  App._catalogLoadAt -= 61000;
+  await App.loadData();
+  assertEqual(calls.length, 16, 'asked again');
+});
+
+test('loading: the descriptions file failing never stops the app', async () => {
+  const { App, ctx, document } = loadApp();
+  stubCatalogRequests(ctx);
+  ctx.fetchCatalog = async () => ({ courses: semesterCatalog(), socSemesters: SOC_SEMESTERS, hasDescriptions: false });
+  ctx.fetchDescriptions = () => { throw new Error('HTTP 404'); };
+  ctx.console = Object.assign({}, console, { warn() {} });
+  await App.loadData();
+  assertTrue(App.courses.length > 0 && !document.getElementById('leftBody').innerHTML.includes('Failed to load data'));
+  assertEqual(await App._loadDescriptions(), false, 'a later course editor may try again');
+});
+
+test('loading: a minors file that fails still lets the app run', async () => {
+  const { App, ctx, document } = loadApp();
+  stubCatalogRequests(ctx);
+  ctx.fetchMinors = async () => { throw new Error('HTTP 404'); };
+  await App.loadData();
+  assertEqual(App._minorsLoadError, 'HTTP 404');
+  assertTrue(App.courses.length > 0 && !document.getElementById('leftBody').innerHTML.includes('Failed to load data'));
+});
+
+test('the fonts never hold up the pages: one non-blocking link, the same on both pages, no @import', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css/styles.css'), 'utf8');
+  assertFalse(/@import/.test(css), 'an @import makes every script wait for Google');
+  const links = ['app.html', 'index.html'].map(f => {
+    const html = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const found = [...html.matchAll(/<link[^>]+href="(https:\/\/fonts\.googleapis\.com\/css2[^"]+)"[^>]*>/g)];
+    assertEqual(found.length, 1, f + ': one font link');
+    assertTrue(found[0][0].includes('media="print" onload="this.media=\'all\'"'), f + ': not render blocking');
+    return found[0][1];
+  });
+  assertEqual(links[0], links[1], 'the same address, so the sign-in page caches it for the app');
+});
+
 const lookupCourseIn = (App, code) => App.courses.find(c => c.course_code === code);
 
 const semesterOptionsShown = document => {

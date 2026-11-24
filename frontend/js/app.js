@@ -76,6 +76,9 @@ const App = {
     // Guest mode is gone: a flag left by an older version must not matter.
     try { sessionStorage.removeItem('cf_guest'); } catch {}
 
+    // The catalog and the admin edits do not depend on the account: ask for
+    // them now, so they arrive while GET /api/me is on its way.
+    this._startCatalogLoad();
     const me = await apiGetMe();
     if (me.ok) {
       this._afterSignIn(me.data);
@@ -240,18 +243,21 @@ const App = {
    * when minors.json cannot be loaded; the minor sections then say so.
    */
   async _prepareCatalog() {
-    const [catalog, minorsData] = await Promise.all([
-      fetchCatalog(),
-      fetchMinors().catch(err => {
-        console.warn('[CountsFor] Minor requirements unavailable.', err.message);
-        this._minorsLoadError = err.message;
-        return null;
-      }),
-    ]);
+    const load = this._startCatalogLoad();
+    this._catalogLoad = null;  // the next call (after an admin save) asks again
+    const [cat, minors, r, mr] = await load;
+    if (cat.error) throw cat.error;
+    const catalog = cat.value;
+    let minorsData = null;
+    if (minors.error) {
+      console.warn('[CountsFor] Minor requirements unavailable.', minors.error.message);
+      this._minorsLoadError = minors.error.message;
+    } else {
+      minorsData = minors.value;
+    }
     // Public routes: admin course edits and minor settings load before sign-in completes too.
     let overrides = [];
     let minorOverrides = [];
-    const [r, mr] = await Promise.all([apiGetCourseOverrides(), apiGetMinorOverrides()]);
     if (r.ok && r.data) overrides = r.data.items || [];
     else console.warn('[CountsFor] Course edits unavailable; showing the scraped catalog.', r.error);
     if (mr.ok && mr.data) minorOverrides = mr.data.items || [];
@@ -263,6 +269,32 @@ const App = {
     this._buildCatalog(catalog.courses, overrides, minorsData, minorOverrides);
     if (this._descriptionsMap) this._attachDescriptions(this._descriptionsMap);
   },
+
+  /**
+   * Ask for the catalog, the minors, the admin course edits and the minor
+   * settings at once. init() starts it before the account check;
+   * _prepareCatalog() uses that one, or starts its own when none is pending
+   * or it is over a minute old (a first sign-in spends time on onboarding).
+   * Resolves to [{value}|{error}, {value}|{error}, apiResult, apiResult].
+   */
+  _startCatalogLoad() {
+    if (!this._catalogLoad || Date.now() - this._catalogLoadAt > 60000) {
+      // Never rejects: a failure is an { error } (the files) or { ok: false } (the API).
+      const run = (start, failed) => { try { return Promise.resolve(start()).catch(failed); } catch (e) { return Promise.resolve(failed(e)); } };
+      const settle = start => run(() => Promise.resolve(start()).then(value => ({ value })), error => ({ error }));
+      const ask = start => run(start, error => ({ ok: false, status: 0, error: error && error.message }));
+      this._catalogLoadAt = Date.now();
+      this._catalogLoad = Promise.all([
+        settle(() => fetchCatalog()),
+        settle(() => fetchMinors()),
+        ask(() => apiGetCourseOverrides()),
+        ask(() => apiGetMinorOverrides()),
+      ]);
+    }
+    return this._catalogLoad;
+  },
+  _catalogLoad: null,
+  _catalogLoadAt: 0,
 
   /** The synchronous half of _prepareCatalog: edits, index, annotations, trees. */
   _buildCatalog(courses, overrides, minorsData, minorOverrides) {
@@ -356,7 +388,8 @@ const App = {
   _loadDescriptions() {
     if (this._catalogHasDescriptions) return Promise.resolve(true);
     if (!this._descriptionsPromise) {
-      this._descriptionsPromise = fetchDescriptions()
+      this._descriptionsPromise = Promise.resolve()
+        .then(() => fetchDescriptions())
         .then(map => {
           this._descriptionsMap = map || {};
           this._attachDescriptions(this._descriptionsMap);

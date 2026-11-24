@@ -3,7 +3,7 @@
    Carnegie Mellon University in Qatar
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap');
+/* The fonts are linked from app.html (not imported here), so they never hold up the scripts. */
 
 /* ---------- CSS Custom Properties (Light Theme) ---------- */
 :root {
