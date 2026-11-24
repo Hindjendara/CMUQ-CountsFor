@@ -60,6 +60,13 @@
   }
 
   function handleAuthNetworkFailure(r) {
+    // The server uses CMU sign-in (a card drawn before it said so): the password
+    // routes answer 403 sso_only, so show the CMU sign-in button instead.
+    if (r && r.status === 403 && r.error === 'sso_only') {
+      applySso({ loginUrl: SSO_LOGIN_PATH }, true);
+      renderPanel();
+      return true;
+    }
     if (!isNetworkError(r)) return false;
     state.backendUnreachable = true;
     setFormError('');
@@ -653,14 +660,47 @@
     return url + (url.indexOf('?') === -1 ? '?' : '&') + 'next=' + encodeURIComponent(next);
   }
 
-  // { loginUrl } when the server uses CMU sign-in, else null. Null also when the
-  // API cannot be reached or answers something else (the GitHub Pages copy
-  // answers 404), so the page then behaves exactly as before.
+  // { sso, answered }: sso is { loginUrl } when the server uses CMU sign-in,
+  // else null (also when the API answers something else: the GitHub Pages copy
+  // answers 404). answered is false when the server could not be reached.
   async function loadSsoSettings() {
     const r = await reach(apiAuthMethods());
     const d = r && r.ok ? r.data : null;
-    if (d && d.mode === 'shibboleth' && isSitePath(d.login_url)) return { loginUrl: d.login_url };
+    const sso = d && d.mode === 'shibboleth' && isSitePath(d.login_url) ? { loginUrl: d.login_url } : null;
+    return { sso, answered: !!r && r.status !== 0 };
+  }
+
+  // The server's last answer, so a returning visitor sees the right card at once
+  // (the new answer still decides, a moment later).
+  const SSO_MEMO_KEY = 'cf_sign_in_mode';
+  const SSO_LOGIN_PATH = '/api/auth/shibboleth';
+  function rememberedSso() {
+    try {
+      const v = JSON.parse(localStorage.getItem(SSO_MEMO_KEY) || 'null');
+      if (v && v.mode === 'shibboleth' && isSitePath(v.login_url)) return { loginUrl: v.login_url };
+    } catch (e) { /* storage blocked or an old value */ }
     return null;
+  }
+  function rememberSso(sso) {
+    try {
+      if (sso) localStorage.setItem(SSO_MEMO_KEY, JSON.stringify({ mode: 'shibboleth', login_url: sso.loginUrl }));
+      else localStorage.setItem(SSO_MEMO_KEY, JSON.stringify({ mode: 'password' }));
+    } catch (e) { /* storage blocked */ }
+  }
+  // CMU sign-in replaces every password view; without it the sign-in view
+  // (or the reset view of a reset link) comes back.
+  function applySso(sso, remember) {
+    state.sso = sso;
+    if (sso) state.view = 'sso';
+    else if (state.view === 'sso') state.view = state.resetToken ? 'reset' : 'signin';
+    if (remember) rememberSso(sso);
+  }
+  // While the first answer is on its way on a slow connection.
+  function renderWaiting() {
+    const card = document.getElementById('landingCard');
+    if (card && !card.querySelector('#authPanel')) {
+      card.innerHTML = '<div class="landing-card__wait" role="status"><span class="landing-wait-spinner" aria-hidden="true"></span>Loading</div>';
+    }
   }
 
   // Shown on the forgot view when sign-in or Create account sends someone there
@@ -998,12 +1038,27 @@
       history.replaceState({}, '', location.pathname + (query ? '?' + query : '') + location.hash);
     }
 
-    // Ask the server which sign-in it uses before drawing the card, so the
-    // password form never flashes up on a CMU sign-in server.
-    state.sso = await loadSsoSettings();
-    if (state.sso) state.view = 'sso';
-
-    renderPanel();
+    // The server's sign-in mode decides the card. The last answer draws it at
+    // once; without one the card waits for the server ("Loading" after a
+    // moment), so a slow connection never gets a password form that would not
+    // work on a CMU sign-in server. With no answer at all, the password form.
+    const remembered = rememberedSso();
+    const asked = loadSsoSettings();
+    let waiting = null;
+    if (remembered) {
+      applySso(remembered, false);
+      renderPanel();
+    } else {
+      waiting = setTimeout(renderWaiting, 300);
+    }
+    const answer = await asked;
+    clearTimeout(waiting);
+    if (answer.answered) rememberSso(answer.sso);
+    const shown = remembered ? !!state.sso : null;
+    if (shown === null || (answer.answered && !!answer.sso !== shown)) {
+      applySso(answer.answered ? answer.sso : state.sso, false);
+      renderPanel({ focus: shown === null });
+    }
     probeSession();
   }
 

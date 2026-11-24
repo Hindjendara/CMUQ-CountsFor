@@ -762,6 +762,25 @@ a.landing-sso-btn:visited {
   text-decoration: none;
 }
 
+.landing-card__wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 240px;
+  color: var(--cf-muted);
+  font-size: 0.95rem;
+}
+
+.landing-wait-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(91, 103, 112, 0.25);
+  border-top-color: var(--cf-muted);
+  border-radius: 50%;
+  animation: landing-spin 0.7s linear infinite;
+}
+
 .landing-submit-spinner {
   width: 16px;
   height: 16px;

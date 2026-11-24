@@ -278,10 +278,11 @@ async function apiLogout()  {
   return r;
 }
 // Which sign-in the server offers: { mode: 'password' | 'shibboleth', methods,
-// login_url, logout_url }. The landing page waits for it before drawing the
-// sign-in card, so the timeout is short; status 0 there means "as before".
+// login_url, logout_url }. A first visit's sign-in card waits for it (showing
+// "Loading"), so it may take a slow connection's time; status 0 there means
+// the password form.
 async function apiAuthMethods() {
-  return apiFetch('/api/auth/methods', { timeoutMs: 4000 });
+  return apiFetch('/api/auth/methods', { timeoutMs: 10000 });
 }
 // True for a path on this site ("/x", not "//host" or "/\host").
 function isSitePath(url) {
