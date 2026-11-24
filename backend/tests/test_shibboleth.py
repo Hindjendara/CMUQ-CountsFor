@@ -436,6 +436,19 @@ def test_logout_in_password_mode_is_unchanged(client, student):
     assert client.post("/api/auth/logout").get_json() == {"ok": True}
 
 
+def test_the_real_name_replaces_the_andrew_id_once_the_idp_releases_it(sso, sso_app):
+    """CMU-Q released only eppn and affiliation at first: the account is named
+    after the Andrew ID, and the name attributes fill it in at a later sign-in."""
+    assert _sign_in(sso, eppn="nameless@qatar.cmu.edu").status_code == 302
+    assert sso.get("/api/me").get_json()["name"] == "nameless"
+    assert _sign_in(sso, eppn="nameless@qatar.cmu.edu", givenName="Noor", sn="Nameless").status_code == 302
+    assert sso.get("/api/me").get_json()["name"] == "Noor Nameless"
+    # From then on the name stays, whatever the IdP sends.
+    assert _sign_in(sso, eppn="nameless@qatar.cmu.edu", displayName="N. Nameless").status_code == 302
+    assert sso.get("/api/me").get_json()["name"] == "Noor Nameless"
+    assert _users(sso_app) == 1
+
+
 def test_cmu_qatar_eppn_signs_in_to_the_andrew_account(sso_app):
     """CMU-Q's IdP scopes eppn with qatar.cmu.edu: andrewid@qatar.cmu.edu is the
     same person as the account and directory entries under andrewid@andrew.cmu.edu."""

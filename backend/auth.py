@@ -387,7 +387,10 @@ def _upsert_user_from_login(
     else:
         if google_sub and not user.google_sub:
             user.google_sub = google_sub
-        if not user.name and name:
+        # A name that is only the Andrew ID (CMU sign-in before the IdP released
+        # names) gives way to the real one; a name the person has is kept.
+        andrew_id = email.split("@", 1)[0]
+        if name and (not user.name or (user.name == andrew_id and name != andrew_id)):
             user.name = name
     if picture_url:
         user.picture_url = picture_url
