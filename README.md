@@ -534,7 +534,7 @@ On the server these go in `/etc/countsfor/scraper.env` (template `deploy/scraper
 |---|---|
 | `<meta name="cf-google-client-id">` in both | Google OAuth client ID (public). |
 | `<meta name="cf-build">` in `app.html` | Cache tag appended to the data files (`data/courses.json`, `data/minors.json`, and `data/requirement_buckets.json` for the admin course editor). Bumped by `scripts/bump_cf_build.py`. |
-| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-24b`). `scripts/bump_cf_build.py` bumps both pages. **Bump it with every change to a JS or CSS file:** since November 20, 2026 Apache tells browsers to keep a tagged script or stylesheet for a year without asking again (15.10), so without a new tag people keep the old file. |
+| `?v=...` on script and CSS tags | Manual cache busting, in `app.html` and `index.html` (today `?v=release-2026-11-25a`). `scripts/bump_cf_build.py` bumps both pages. **Bump it with every change to a JS or CSS file:** since November 20, 2026 Apache tells browsers to keep a tagged script or stylesheet for a year without asking again (15.10), so without a new tag people keep the old file. |
 | `localStorage['cf_backend_override']` | Per-browser backend URL override for debugging (3.3). There is no backend URL in the HTML: the API is on the page's own origin. |
 
 ---

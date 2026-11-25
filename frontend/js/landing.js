@@ -462,7 +462,7 @@
       // the CMU sign-in page and back to the app. No form, nothing to type.
       inner = panelWrap(
         '<div class="landing-card__top">' +
-        '<div class="landing-panel-head landing-panel-head--signin">' +
+        '<div class="landing-panel-head landing-panel-head--signin landing-panel-head--sso">' +
         '<h2 class="landing-panel-title" id="panel-title-sso">Welcome</h2>' +
         '<p class="landing-panel-lead">Use your Andrew ID and password on the CMU sign-in page.</p>' +
         '</div>' +

@@ -751,7 +751,12 @@ body::before{
   pointer-events: none;
 }
 
-/* CMU sign-in (view "sso"): the button is a link to the login URL. */
+/* CMU sign-in (view "sso"): the heading is centered like the button below it;
+   the button is a link to the login URL. */
+.landing-panel-head--sso {
+  text-align: center;
+}
+
 .landing-sso-actions {
   padding-top: clamp(12px, 2vh, 20px);
 }
