@@ -274,13 +274,18 @@ test('no arrows on buttons: the onboarding Continue and the landing buttons', ()
 test('the sign-in page prefetches the app scripts, styles and data at the URLs app.html uses', () => {
   const app = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
   const landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  const prefetch = [...landing.matchAll(/<link rel="prefetch" href="([^"]+)"/g)].map(m => m[1]).sort();
+  // In a template that js/landing.js adds once the card is drawn, never in the head itself.
+  const template = /<template id="cfPrefetch">([\s\S]*?)<\/template>/.exec(landing);
+  assertTrue(!!template, 'the prefetch links are in <template id="cfPrefetch">');
+  assertFalse(/<link rel="prefetch"/.test(landing.replace(template[0], '')), 'no prefetch link outside the template');
+  const prefetch = [...template[1].matchAll(/<link rel="prefetch" href="([^"]+)"/g)].map(m => m[1]).sort();
   const used = [...app.matchAll(/<script src="(js\/[^"]+)"/g), ...app.matchAll(/<link rel="stylesheet" href="(css\/[^"]+)"/g),
     ...app.matchAll(/<link rel="preload" href="([^"]+)"/g)].map(m => m[1]);
   const tag = /<meta name="cf-build" content="([^"]+)"/.exec(app)[1];
   used.push(`data/course_descriptions.json?v=${tag}`);  // fetched by the app once it is up
   assertEqual(prefetch, used.sort());
   assertFalse(app.includes('accounts.google.com/gsi/client'), 'the app page does not load Google sign-in');
+  assertFalse(landing.includes('accounts.google.com/gsi/client'), 'nor the sign-in page on every visit (js/landing.js loads it for its button)');
 });
 
 test('descriptions: they arrive after the catalog, fill every course, keep an admin edit, and show on an open card', () => {

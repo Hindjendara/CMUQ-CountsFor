@@ -835,6 +835,28 @@
     goToApp();
   }
 
+  // Google's sign-in script, loaded only for its button (password recovery in
+  // password mode), not on every visit.
+  function loadGoogleScript() {
+    if (document.getElementById('cfGoogleScript')) return;
+    const s = document.createElement('script');
+    s.id = 'cfGoogleScript';
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    document.head.appendChild(s);
+  }
+
+  // The app's files (the <template id="cfPrefetch"> of index.html), fetched in
+  // the background once the card is drawn, or when the CMU sign-in button is
+  // clicked: the browser finishes a prefetch after leaving the page.
+  let prefetched = false;
+  function prefetchApp() {
+    const t = document.getElementById('cfPrefetch');
+    if (prefetched || !t || !t.content) return;
+    prefetched = true;
+    document.head.appendChild(t.content.cloneNode(true));
+  }
+
   function mountGoogleRecover() {
     const slot = document.getElementById('cfGoogleRecover');
     if (!slot) return;
@@ -843,10 +865,11 @@
       setFormError('Google sign-in isn\'t configured, so password recovery is unavailable. Contact an admin.');
       return;
     }
+    loadGoogleScript();
     let tries = 0;
     const mount = function () {
       if (!(window.google && window.google.accounts && window.google.accounts.id)) {
-        if (tries++ > 40) {  // ~6s
+        if (tries++ > 70) {  // ~10 s
           setFormError('Couldn\'t load Google sign-in. Check your connection and refresh.');
           return;
         }
@@ -1008,7 +1031,7 @@
     if (me.ok) {
       if (!userIsEngaged()) {
         goToApp();
-        return;
+        return 'left';
       }
       setBackendAlert("You're already signed in.", { continueLink: true });
       return;
@@ -1059,7 +1082,10 @@
       applySso(answer.answered ? answer.sso : state.sso, false);
       renderPanel({ focus: shown === null });
     }
-    probeSession();
+    document.addEventListener('click', e => {
+      if (e.target && e.target.closest && e.target.closest('#cfSsoBtn')) prefetchApp();
+    });
+    probeSession().then(went => { if (went !== 'left') prefetchApp(); }, prefetchApp);
   }
 
   if (document.readyState === 'loading') {

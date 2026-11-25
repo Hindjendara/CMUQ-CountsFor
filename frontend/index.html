@@ -7,8 +7,6 @@
   <meta name="theme-color" content="#C41230" />
   <!-- The API is called on this page's own origin (/api/..., see js/api.js). -->
   <meta name="cf-google-client-id" content="378923997481-bgnvhg3gsgka5ptijjjsb80q4k7kc2vg.apps.googleusercontent.com" />
-  <!-- Google Identity Services — used on the landing for Google-based password recovery. -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <title>CountsFor: CMU-Q Curriculum Explorer</title>
   <link rel="icon" type="image/png" href="assets/img/scotty-portrait.png" />
   <link rel="apple-touch-icon" href="assets/img/scotty-portrait.png" />
@@ -18,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="css/landing.css?v=release-2026-11-24a" />
+  <link rel="stylesheet" href="css/landing.css?v=release-2026-11-24b" />
   <style>
     /* Critical layout: keeps the landing page sized correctly even if css/landing.css loads late or from a stale cache */
     html, body { margin: 0; min-height: 100%; overflow-x: hidden; }
@@ -42,18 +40,23 @@
       max-width: 400px;
     }
   </style>
-  <!-- Fetched in the background while the person signs in, so app.html opens
-       with its scripts and the catalog already in the browser cache. The
-       catalog hrefs must equal the preloads of app.html (tests/app-views.test.js). -->
-  <link rel="prefetch" href="css/styles.css?v=release-2026-11-24a" as="style" />
-  <link rel="prefetch" href="js/utils.js?v=release-2026-11-24a" as="script" />
-  <link rel="prefetch" href="js/data.js?v=release-2026-11-24a" as="script" />
-  <link rel="prefetch" href="js/profile.js?v=release-2026-11-24a" as="script" />
-  <link rel="prefetch" href="js/api.js?v=release-2026-11-24a" as="script" />
-  <link rel="prefetch" href="js/app.js?v=release-2026-11-24a" as="script" />
-  <link rel="prefetch" href="data/catalog.json?v=release-2026-11-24a" as="fetch" crossorigin="anonymous" />
-  <link rel="prefetch" href="data/course_descriptions.json?v=release-2026-11-24a" as="fetch" crossorigin="anonymous" />
-  <link rel="prefetch" href="data/minors.json?v=release-2026-11-24a" as="fetch" crossorigin="anonymous" />
+  <!-- The app's files, fetched in the background once the sign-in card is
+       drawn (js/landing.js, prefetchApp()), so app.html opens with its
+       scripts and the catalog in the browser cache. Not at once: on a slow
+       connection these 1 MB held up the card's own small request for up to
+       10 s. The catalog hrefs must equal the preloads of app.html
+       (tests/app-views.test.js). -->
+  <template id="cfPrefetch">
+  <link rel="prefetch" href="css/styles.css?v=release-2026-11-24b" as="style" />
+  <link rel="prefetch" href="js/utils.js?v=release-2026-11-24b" as="script" />
+  <link rel="prefetch" href="js/data.js?v=release-2026-11-24b" as="script" />
+  <link rel="prefetch" href="js/profile.js?v=release-2026-11-24b" as="script" />
+  <link rel="prefetch" href="js/api.js?v=release-2026-11-24b" as="script" />
+  <link rel="prefetch" href="js/app.js?v=release-2026-11-24b" as="script" />
+  <link rel="prefetch" href="data/catalog.json?v=release-2026-11-24b" as="fetch" crossorigin="anonymous" />
+  <link rel="prefetch" href="data/course_descriptions.json?v=release-2026-11-24b" as="fetch" crossorigin="anonymous" />
+  <link rel="prefetch" href="data/minors.json?v=release-2026-11-24b" as="fetch" crossorigin="anonymous" />
+  </template>
 </head>
 <body>
   <div class="auth-shell wrap">
@@ -99,8 +102,8 @@
     </main>
 
   </div>
-  <script src="js/utils.js?v=release-2026-11-24a"></script>
-  <script src="js/api.js?v=release-2026-11-24a"></script>
-  <script src="js/landing.js?v=release-2026-11-24a"></script>
+  <script src="js/utils.js?v=release-2026-11-24b"></script>
+  <script src="js/api.js?v=release-2026-11-24b"></script>
+  <script src="js/landing.js?v=release-2026-11-24b"></script>
 </body>
 </html>

@@ -8,14 +8,14 @@
   <title>CountsFor: CMU-Q Curriculum Explorer</title>
   <link rel="icon" type="image/png" href="assets/img/scotty-standing.png" />
   <link rel="apple-touch-icon" href="assets/img/scotty-standing.png" />
-  <meta name="cf-build" content="release-2026-11-24a" />
+  <meta name="cf-build" content="release-2026-11-24b" />
   <!-- Fonts: one address for both pages (the sign-in page caches it for the app).
        media="print" until loaded, so the page and its scripts never wait for
        Google; the text shows in the fallback font until then (display=swap). -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="css/styles.css?v=release-2026-11-24a" />
+  <link rel="stylesheet" href="css/styles.css?v=release-2026-11-24b" />
   <!-- Start the catalog download with the page, not after sign-in: on a slow or
        distant connection it then overlaps loading the scripts and GET /api/me.
        Each href must equal what _bundledDataUrl() in js/api.js builds (the path
@@ -25,8 +25,8 @@
        this comment: the bump script rewrites every occurrence of it. The
        catalog is low priority, so on a narrow connection the scripts still come
        first and the catalog uses the time the page waits for GET /api/me. -->
-  <link rel="preload" href="data/catalog.json?v=release-2026-11-24a" as="fetch" crossorigin="anonymous" fetchpriority="low" />
-  <link rel="preload" href="data/minors.json?v=release-2026-11-24a" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="data/catalog.json?v=release-2026-11-24b" as="fetch" crossorigin="anonymous" fetchpriority="low" />
+  <link rel="preload" href="data/minors.json?v=release-2026-11-24b" as="fetch" crossorigin="anonymous" />
   <!-- The API is called on this page's own origin (/api/..., see js/api.js). -->
   <!-- Google OAuth web client ID. Its Authorized JavaScript origins must list
        every origin that serves this page. -->
@@ -41,10 +41,10 @@
       <div class="empty-text" style="margin-top:12px">Loading CountsFor…</div>
     </div>
   </div>
-  <script src="js/utils.js?v=release-2026-11-24a"></script>
-  <script src="js/data.js?v=release-2026-11-24a"></script>
-  <script src="js/profile.js?v=release-2026-11-24a"></script>
-  <script src="js/api.js?v=release-2026-11-24a"></script>
-  <script src="js/app.js?v=release-2026-11-24a"></script>
+  <script src="js/utils.js?v=release-2026-11-24b"></script>
+  <script src="js/data.js?v=release-2026-11-24b"></script>
+  <script src="js/profile.js?v=release-2026-11-24b"></script>
+  <script src="js/api.js?v=release-2026-11-24b"></script>
+  <script src="js/app.js?v=release-2026-11-24b"></script>
 </body>
 </html>
